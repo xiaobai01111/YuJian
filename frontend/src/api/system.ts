@@ -186,6 +186,10 @@ export function updateUserRole(userId: number, roleIds: number[]) {
     return request.put(`/v1/console/users/${userId}/role`, { roleIds })
 }
 
+export function batchUpdateUserRole(userIds: number[], roleIds: number[]) {
+    return request.put('/v1/console/users/batch-role', { userIds, roleIds })
+}
+
 export function banUser(userId: number, status: number) {
     return request.put(`/v1/console/users/${userId}/ban`, { status })
 }

@@ -44,24 +44,6 @@
             <input type="email" v-model="form.email" class="input input-bordered input-sm" placeholder="请输入邮箱" />
           </div>
           
-          <!-- 部门 -->
-          <div class="form-control">
-            <label class="label"><span class="label-text">归属部门</span></label>
-            <select v-model="form.deptId" class="select select-bordered select-sm">
-              <option :value="undefined">请选择部门</option>
-              <option v-for="dept in deptList" :key="dept.id" :value="dept.id">{{ dept.deptName }}</option>
-            </select>
-          </div>
-          
-          <!-- 分配岗位 -->
-          <div class="form-control">
-            <label class="label"><span class="label-text">分配岗位</span></label>
-            <select v-model="form.postId" class="select select-bordered select-sm">
-              <option :value="undefined">请选择岗位</option>
-              <option v-for="post in postList" :key="post.id" :value="post.id">{{ post.postName }}</option>
-            </select>
-          </div>
-          
           <!-- 分配角色（单选） -->
           <div class="form-control">
             <label class="label"><span class="label-text">分配角色</span></label>
@@ -145,16 +127,6 @@ import { ref, reactive } from 'vue'
 import type { UserVO, RoleVO } from '@/api/system'
 import { createUser, editUser } from '@/api/system'
 
-interface DeptVO {
-  id: number
-  deptName: string
-}
-
-interface PostVO {
-  id: number
-  postName: string
-}
-
 interface UserForm {
   id?: number
   username: string
@@ -163,8 +135,6 @@ interface UserForm {
   confirmPassword: string
   email: string
   phone: string
-  deptId?: number
-  postId?: number
   roleId?: number
   sex: number
   status: number
@@ -173,8 +143,6 @@ interface UserForm {
 }
 
 const props = defineProps<{
-  deptList: DeptVO[]
-  postList: PostVO[]
   roleList: RoleVO[]
 }>()
 
@@ -193,8 +161,6 @@ const initialForm: UserForm = {
   confirmPassword: '',
   email: '',
   phone: '',
-  deptId: undefined,
-  postId: undefined,
   roleId: undefined,
   sex: 0,
   status: 0,
@@ -215,8 +181,6 @@ const open = (user?: UserVO) => {
       confirmPassword: '',
       email: user.email || '',
       phone: user.phone || '',
-      deptId: user.deptId,
-      postId: user.postId,
       roleId: user.roleIds?.[0],
       sex: user.sex || 0,
       status: user.status,
@@ -250,7 +214,6 @@ const handleSubmit = async () => {
         nickname: form.nickname,
         email: form.email || undefined,
         phone: form.phone || undefined,
-        deptId: form.deptId,
         roleId: form.roleId,
         sex: form.sex,
         status: form.status,
@@ -264,7 +227,6 @@ const handleSubmit = async () => {
         nickname: form.nickname,
         email: form.email || undefined,
         phone: form.phone || undefined,
-        deptId: form.deptId,
         roleId: form.roleId,
         sex: form.sex,
         status: form.status,

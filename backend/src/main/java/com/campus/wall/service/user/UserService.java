@@ -58,6 +58,11 @@ public interface UserService {
     void assignRoles(Long userId, List<Long> roleIds);
 
     /**
+     * 批量分配用户角色
+     */
+    void batchAssignRoles(List<Long> userIds, List<Long> roleIds);
+
+    /**
      * 更新用户信用分
      */
     void updateCreditScore(Long userId, int delta, String reason);

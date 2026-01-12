@@ -245,7 +245,16 @@ public class AuthServiceImpl implements AuthService {
 
         // 获取角色和权限
         List<String> roles = roleMapper.selectRoleKeysByUserId(user.getId());
-        List<String> permissions = menuMapper.selectPermsByUserId(user.getId());
+        List<String> permissions;
+        
+        // 超级管理员拥有所有权限
+        if (roles.contains("admin")) {
+            permissions = new java.util.ArrayList<>();
+            permissions.add("*");
+        } else {
+            permissions = menuMapper.selectPermsByUserId(user.getId());
+        }
+        
         vo.setRoles(roles);
         vo.setPermissions(permissions);
 

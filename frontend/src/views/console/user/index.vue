@@ -2,6 +2,57 @@
   <div class="h-full flex flex-col">
     <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 flex flex-col">
       <div class="card-body p-4 flex-1 flex flex-col overflow-hidden">
+        <!-- Search Panel -->
+        <div class="collapse collapse-arrow bg-base-200/50 rounded-lg mb-4 flex-none" :class="{ 'collapse-open': showSearch }">
+          <input type="checkbox" v-model="showSearch" />
+          <div class="collapse-title text-sm font-medium py-2 min-h-0">
+            <span class="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              搜索
+            </span>
+          </div>
+          <div class="collapse-content">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
+              <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">登录账号</span></label>
+                <input type="text" v-model="queryParams.username" placeholder="请输入登录账号" class="input input-bordered input-sm" />
+              </div>
+              <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">用户名称</span></label>
+                <input type="text" v-model="queryParams.nickname" placeholder="请输入用户名称" class="input input-bordered input-sm" />
+              </div>
+              <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">手机号</span></label>
+                <input type="text" v-model="queryParams.phone" placeholder="请输入手机号" class="input input-bordered input-sm" />
+              </div>
+              <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">登录时间</span></label>
+                <input type="date" v-model="queryParams.loginDateStart" class="input input-bordered input-sm" />
+              </div>
+              <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">至</span></label>
+                <input type="date" v-model="queryParams.loginDateEnd" class="input input-bordered input-sm" />
+              </div>
+            </div>
+            <div class="flex gap-2 mt-3">
+              <button class="btn btn-primary btn-sm" @click="handleSearch">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                搜索
+              </button>
+              <button class="btn btn-ghost btn-sm" @click="resetSearch">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                重置
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Toolbar -->
         <div class="flex flex-wrap justify-between items-center mb-4 gap-4 flex-none">
           <div class="flex flex-wrap gap-2">
@@ -23,11 +74,11 @@
               </svg>
               删除
             </button>
-            <button v-if="userStore.hasPermission('system:user:role')" class="btn btn-info btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleAssignRole">
+            <button v-if="userStore.hasPermission('system:user:role')" class="btn btn-info btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length === 0" @click="handleBatchAssignRole">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              分配角色
+              批量分配角色
             </button>
             <button v-if="userStore.hasPermission('system:user:export')" class="btn btn-warning btn-sm text-white gap-2 font-normal" @click="handleExport">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -44,18 +95,6 @@
           </div>
           
           <div class="flex gap-2">
-            <div class="dropdown dropdown-end">
-              <div tabindex="0" role="button" class="btn btn-circle btn-ghost btn-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <div tabindex="0" class="dropdown-content z-[1] menu p-4 shadow bg-base-100 rounded-box w-64 border border-base-200">
-                <div class="form-control">
-                  <input type="text" v-model="queryParams.username" placeholder="搜索用户名..." class="input input-bordered input-sm w-full" @keyup.enter="handleSearch" />
-                </div>
-              </div>
-            </div>
             <button class="btn btn-circle btn-ghost btn-sm" @click="fetchData">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -76,7 +115,6 @@
                 </th>
                 <th class="w-16">序号</th>
                 <th>登录账号</th>
-                <th>部门名称</th>
                 <th>头像</th>
                 <th>用户名称</th>
                 <th>邮箱</th>
@@ -90,12 +128,12 @@
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="13" class="text-center py-10">
+                <td colspan="12" class="text-center py-10">
                   <span class="loading loading-spinner loading-lg text-primary"></span>
                 </td>
               </tr>
               <tr v-else-if="userList.length === 0">
-                <td colspan="13" class="text-center py-10 text-base-content/60">暂无数据</td>
+                <td colspan="12" class="text-center py-10 text-base-content/60">暂无数据</td>
               </tr>
               <tr v-else v-for="(user, index) in userList" :key="user.id" class="hover border-b border-base-100 last:border-0">
                 <th>
@@ -105,7 +143,6 @@
                 </th>
                 <td class="text-base-content/60">{{ index + 1 }}</td>
                 <td class="font-medium">{{ user.username }}</td>
-                <td class="text-base-content/60">{{ user.deptName || '-' }}</td>
                 <td>
                   <div class="avatar placeholder">
                     <div v-if="user.avatar" class="w-8 h-8 rounded-lg ring-1 ring-base-300">
@@ -128,22 +165,22 @@
                   <span class="badge badge-sm badge-ghost">{{ getSexLabel(user.sex) }}</span>
                 </td>
                 <td>
-                  <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="user.status === 0" @change="handleStatusChange(user)" />
+                  <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="user.status === 0" :disabled="user.username === 'admin'" @change="handleStatusChange(user)" />
                 </td>
                 <td class="text-sm text-base-content/60">{{ user.loginDate ? formatDate(user.loginDate) : '-' }}</td>
                 <td>
                   <div class="flex justify-center gap-2">
-                    <button v-if="userStore.hasPermission('system:user:edit')" class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" @click="handleEditSingle(user)" title="编辑">
+                    <button v-if="userStore.hasPermission('system:user:edit') && user.username !== 'admin'" class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" @click="handleEditSingle(user)" title="编辑">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button v-if="userStore.hasPermission('system:user:ban')" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" @click="handleBan(user)" title="封禁">
+                    <button v-if="userStore.hasPermission('system:user:ban') && user.username !== 'admin'" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" @click="handleBan(user)" title="封禁">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                       </svg>
                     </button>
-                    <button v-if="userStore.hasPermission('system:user:role')" class="btn btn-square btn-xs bg-amber-50 text-amber-600 border-none hover:bg-amber-100" @click="openRoleModal(user)" title="分配角色">
+                    <button v-if="userStore.hasPermission('system:user:role') && user.username !== 'admin'" class="btn btn-square btn-xs bg-amber-50 text-amber-600 border-none hover:bg-amber-100" @click="openRoleModal(user)" title="分配角色">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
@@ -184,7 +221,7 @@
     </div>
 
     <!-- Modals -->
-    <UserFormModal ref="userFormModalRef" :dept-list="deptList" :post-list="postList" :role-list="allRoles" @success="fetchData" />
+    <UserFormModal ref="userFormModalRef" :role-list="allRoles" @success="fetchData" />
     <RoleAssignModal ref="roleAssignModalRef" :role-list="allRoles" @success="fetchData" />
     <DeleteConfirmModal ref="deleteConfirmModalRef" @confirm="confirmDelete" />
     <ImportModal ref="importModalRef" @success="fetchData" />
@@ -203,27 +240,20 @@ import ImportModal from './components/ImportModal.vue'
 
 const userStore = useUserStore()
 
-interface DeptVO {
-  id: number
-  deptName: string
-}
-
-interface PostVO {
-  id: number
-  postName: string
-}
-
 const loading = ref(false)
+const showSearch = ref(false)
 const userList = ref<UserVO[]>([])
 const allRoles = ref<RoleVO[]>([])
-const deptList = ref<DeptVO[]>([])
-const postList = ref<PostVO[]>([])
 const total = ref(0)
 
 const queryParams = reactive({
   page: 1,
   size: 10,
-  username: ''
+  username: '',
+  nickname: '',
+  phone: '',
+  loginDateStart: '',
+  loginDateEnd: ''
 })
 
 const selectedIds = ref<number[]>([])
@@ -251,8 +281,6 @@ const pageNumbers = computed(() => {
 onMounted(() => {
   fetchData()
   fetchRoles()
-  fetchDepts()
-  fetchPosts()
 })
 
 const fetchData = async () => {
@@ -278,25 +306,17 @@ const fetchRoles = async () => {
   }
 }
 
-const fetchDepts = async () => {
-  // TODO: Fetch from backend API
-  deptList.value = [
-    { id: 1, deptName: '总部' },
-    { id: 2, deptName: '技术部' },
-    { id: 3, deptName: '运营部' }
-  ]
-}
-
-const fetchPosts = async () => {
-  // TODO: Fetch from backend API
-  postList.value = [
-    { id: 1, postName: '董事长' },
-    { id: 2, postName: '项目经理' },
-    { id: 3, postName: '普通员工' }
-  ]
-}
-
 const handleSearch = () => {
+  queryParams.page = 1
+  fetchData()
+}
+
+const resetSearch = () => {
+  queryParams.username = ''
+  queryParams.nickname = ''
+  queryParams.phone = ''
+  queryParams.loginDateStart = ''
+  queryParams.loginDateEnd = ''
   queryParams.page = 1
   fetchData()
 }
@@ -372,10 +392,10 @@ const confirmDelete = async (ids: number[]) => {
   }
 }
 
-const handleAssignRole = () => {
-  const user = userList.value.find(u => u.id === selectedIds.value[0])
-  if (user) {
-    roleAssignModalRef.value?.open(user)
+const handleBatchAssignRole = () => {
+  const users = userList.value.filter(u => selectedIds.value.includes(u.id))
+  if (users.length > 0) {
+    roleAssignModalRef.value?.openBatch(selectedIds.value, users.map(u => u.nickname || u.username))
   }
 }
 

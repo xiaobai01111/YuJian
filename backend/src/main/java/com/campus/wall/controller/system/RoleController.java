@@ -44,7 +44,7 @@ public class RoleController {
     @PutMapping("/{id}")
     public R<Void> update(@PathVariable Long id, @RequestBody @Valid RoleDTO dto) {
         roleService.updateRole(id, dto.getRoleName(), dto.getStatus(), dto.getSortOrder(), 
-                dto.getDataScope(), dto.getRemark(), dto.getMenuIds());
+                dto.getRemark(), dto.getMenuIds());
         return R.ok();
     }
 
@@ -61,14 +61,6 @@ public class RoleController {
     @PutMapping("/{id}/menus")
     public R<Void> assignMenus(@PathVariable Long id, @RequestBody List<Long> menuIds) {
         roleService.assignMenus(id, menuIds);
-        return R.ok();
-    }
-
-    @Operation(summary = "分配数据权限")
-    @SaCheckPermission("system:role:edit")
-    @PutMapping("/{id}/depts")
-    public R<Void> assignDepts(@PathVariable Long id, @RequestBody RoleDTO dto) {
-        roleService.assignDepts(id, dto.getDeptIds(), dto.getDataScope());
         return R.ok();
     }
 }

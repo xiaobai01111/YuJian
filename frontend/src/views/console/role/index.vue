@@ -29,12 +29,6 @@
               </svg>
               分配菜单
             </button>
-            <button class="btn btn-info btn-outline btn-sm gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleAssignDept">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              分配数据权限
-            </button>
           </div>
 
           <div class="flex gap-2">
@@ -60,7 +54,6 @@
                 <th>角色名称</th>
                 <th>角色编号</th>
                 <th>角色状态</th>
-                <th>数据范围</th>
                 <th>角色排序</th>
                 <th>角色备注</th>
                 <th>创建时间</th>
@@ -69,7 +62,7 @@
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="10" class="text-center py-10">
+                <td colspan="9" class="text-center py-10">
                    <span class="loading loading-spinner loading-lg text-primary"></span>
                 </td>
               </tr>
@@ -83,43 +76,28 @@
                 <td class="font-medium">{{ role.roleName }}</td>
                 <td>{{ role.roleKey }}</td>
                 <td>
-                  <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="role.status === 0" @change="handleStatusChange(role)" />
-                </td>
-                <td>
-                   <div class="badge badge-outline text-xs" :class="getDataScopeClass(role.dataScope)">
-                     {{ getDataScopeLabel(role.dataScope) }}
-                   </div>
+                  <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="role.status === 0" :disabled="isAdminRole(role)" @change="handleStatusChange(role)" />
                 </td>
                 <td>{{ role.sortOrder }}</td>
                 <td class="text-base-content/60 max-w-xs truncate" :title="role.remark">{{ role.remark || '-' }}</td>
                 <td class="text-base-content/60 text-sm">{{ formatDate(role.createdAt) }}</td>
                 <td>
                    <div class="flex justify-center gap-2">
-                    <template v-if="isAdminRole(role)">
-                      <span class="badge badge-ghost text-xs">管理员不可修改</span>
-                    </template>
-                    <template v-else>
                       <button class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" title="编辑" @click="openFormModal(role)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-                      <button class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" title="删除" @click="handleDelete(role)">
+                      <button v-if="!isAdminRole(role)" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" title="删除" @click="handleDelete(role)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
-                      <button class="btn btn-square btn-xs bg-green-50 text-green-600 border-none hover:bg-green-100" title="菜单权限" @click="openMenuModal(role)">
+                      <button v-if="!isAdminRole(role)" class="btn btn-square btn-xs bg-green-50 text-green-600 border-none hover:bg-green-100" title="菜单权限" @click="openMenuModal(role)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </button>
-                      <button class="btn btn-square btn-xs bg-purple-50 text-purple-600 border-none hover:bg-purple-100" title="部门权限" @click="openDeptModal(role)">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
-                      </button>
-                    </template>
                   </div>
                 </td>
               </tr>
@@ -208,55 +186,13 @@
       </div>
     </dialog>
 
-    <!-- Dept Permission Modal -->
-    <dialog id="dept_perm_modal" class="modal">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg">分配数据权限 - <span class="text-primary">{{ currentRole?.roleName }}</span></h3>
-        <div class="py-4">
-          <div class="form-control w-full">
-            <label class="label"><span class="label-text font-medium">数据范围</span></label>
-            <select class="select select-bordered w-full" v-model="currentDataScope">
-              <option :value="1">全部数据权限</option>
-              <option :value="2">自定义数据权限</option>
-              <option :value="3">本部门数据权限</option>
-              <option :value="4">本部门及以下数据权限</option>
-              <option :value="5">仅本人数据权限</option>
-            </select>
-          </div>
-          
-          <div v-if="currentDataScope === 2" class="mt-4">
-            <label class="label"><span class="label-text font-medium">数据权限</span></label>
-            <div class="h-64 overflow-y-auto border border-base-200 rounded-lg p-4 bg-base-50">
-               <div v-if="loadingDepts" class="flex justify-center items-center h-full">
-                <span class="loading loading-spinner text-primary"></span>
-              </div>
-              <div v-else class="space-y-1">
-                 <DeptTreeItem 
-                    v-for="dept in deptTree" 
-                    :key="dept.id" 
-                    :dept="dept" 
-                    :selected-ids="selectedDeptIds"
-                    @toggle="toggleDeptSelection"
-                 />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-action">
-          <form method="dialog">
-            <button class="btn btn-ghost">取消</button>
-            <button class="btn btn-primary ml-2" @click.prevent="submitDeptPerms" :disabled="submitting">保存</button>
-          </form>
-        </div>
-      </div>
-    </dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getDeptTree, assignRoleDepts } from '@/api/system'
-import type { RoleVO, RoleDTO, MenuVO, DeptVO } from '@/api/system'
+import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus } from '@/api/system'
+import type { RoleVO, RoleDTO, MenuVO } from '@/api/system'
 import { defineComponent, h, type PropType } from 'vue'
 
 // --- Components ---
@@ -343,57 +279,12 @@ const MenuTreeItem: ReturnType<typeof defineComponent> = defineComponent({
   }
 })
 
-const DeptTreeItem: ReturnType<typeof defineComponent> = defineComponent({
-  name: 'DeptTreeItem',
-  props: {
-    dept: { type: Object as PropType<DeptVO>, required: true },
-    selectedIds: { type: Array as PropType<number[]>, required: true },
-    defaultCollapsed: { type: Boolean, default: false }
-  },
-  emits: ['toggle'],
-  setup(props, { emit }): () => ReturnType<typeof h> {
-    const collapsed = ref(props.defaultCollapsed)
-    
-    return (): ReturnType<typeof h> => {
-      const isChecked = props.selectedIds.includes(props.dept.id)
-      const hasChildren = props.dept.children && props.dept.children.length > 0
-      
-      return h('div', { class: 'pl-2' }, [
-        h('div', { class: 'flex items-center gap-1 py-1 hover:bg-base-200/50 rounded px-1' }, [
-          hasChildren ? h('button', {
-            type: 'button',
-            class: 'btn btn-ghost btn-xs p-0 min-h-0 h-4 w-4',
-            onClick: (e: Event) => { e.stopPropagation(); collapsed.value = !collapsed.value }
-          }, collapsed.value ? '▶' : '▼') : h('span', { class: 'w-4' }),
-          h('input', { 
-            type: 'checkbox', 
-            class: 'checkbox checkbox-xs rounded-sm checkbox-primary', 
-            checked: isChecked,
-            onChange: () => emit('toggle', props.dept.id)
-          }),
-          h('span', { class: 'text-sm' }, props.dept.deptName)
-        ]),
-        hasChildren && !collapsed.value ? h('div', { class: 'pl-4' }, 
-          props.dept.children!.map((child: DeptVO) => h(DeptTreeItem, {
-            dept: child,
-            selectedIds: props.selectedIds,
-            defaultCollapsed: false,
-            onToggle: (id: number) => emit('toggle', id)
-          }))
-        ) : null
-      ])
-    }
-  }
-})
-
 // --- State ---
 const loading = ref(false)
 const submitting = ref(false)
 const roleList = ref<RoleVO[]>([])
 const menuTree = ref<MenuVO[]>([])
-const deptTree = ref<DeptVO[]>([])
 const loadingMenus = ref(false)
-const loadingDepts = ref(false)
 
 const form = reactive<RoleDTO>({
   roleName: '',
@@ -401,15 +292,12 @@ const form = reactive<RoleDTO>({
   sortOrder: 0,
   status: 0,
   remark: '',
-  menuIds: [],
-  dataScope: 1
+  menuIds: []
 })
 const isEdit = ref(false)
 const currentId = ref<number>(0)
 const currentRole = ref<RoleVO | null>(null)
 const selectedMenuIds = ref<number[]>([])
-const selectedDeptIds = ref<number[]>([])
-const currentDataScope = ref<number>(1)
 const selectedIds = ref<number[]>([])
 
 const isAllSelected = computed(() => {
@@ -425,10 +313,8 @@ const fetchRoles = async () => {
   selectedIds.value = []
   try {
     const res: any = await getRoleList()
-    // Mock data expansion if fields missing
     roleList.value = (res || []).map((role: RoleVO) => ({
         ...role,
-        dataScope: role.dataScope || 1, // Default to All
         remark: role.remark || '暂无备注'
     }))
   } catch (error) {
@@ -447,7 +333,6 @@ const openFormModal = (role?: RoleVO) => {
     form.sortOrder = role.sortOrder
     form.status = role.status
     form.remark = role.remark
-    form.dataScope = role.dataScope
   } else {
     isEdit.value = false
     form.roleName = ''
@@ -455,7 +340,6 @@ const openFormModal = (role?: RoleVO) => {
     form.sortOrder = 0
     form.status = 0
     form.remark = ''
-    form.dataScope = 1
   }
   const modal = document.getElementById('role_form_modal') as HTMLDialogElement
   modal.showModal()
@@ -555,57 +439,6 @@ const handleAssignMenu = () => {
     if (role) openMenuModal(role)
 }
 
-const handleAssignDept = () => {
-    const role = roleList.value.find(r => r.id === selectedIds.value[0])
-    if (role) openDeptModal(role)
-}
-
-const openDeptModal = async (role: RoleVO) => {
-  currentRole.value = role
-  currentDataScope.value = role.dataScope || 1
-  selectedDeptIds.value = role.deptIds || []
-  const modal = document.getElementById('dept_perm_modal') as HTMLDialogElement
-  modal.showModal()
-  
-  // Always reload dept tree when opening modal
-  loadingDepts.value = true
-  try {
-    const res: any = await getDeptTree()
-    deptTree.value = res || []
-    console.log('deptTree loaded:', deptTree.value)
-  } catch (error) {
-    console.error('Failed to load dept tree:', error)
-  } finally {
-    loadingDepts.value = false
-  }
-}
-
-const toggleDeptSelection = (id: number) => {
-  const index = selectedDeptIds.value.indexOf(id)
-  if (index === -1) {
-    selectedDeptIds.value.push(id)
-  } else {
-    selectedDeptIds.value.splice(index, 1)
-  }
-}
-
-const submitDeptPerms = async () => {
-  if (!currentRole.value) return
-  submitting.value = true
-  try {
-    await assignRoleDepts(currentRole.value.id, selectedDeptIds.value, currentDataScope.value)
-    currentRole.value.deptIds = [...selectedDeptIds.value]
-    currentRole.value.dataScope = currentDataScope.value
-    
-    const modal = document.getElementById('dept_perm_modal') as HTMLDialogElement
-    modal.close()
-  } catch (error) {
-    console.error(error)
-  } finally {
-    submitting.value = false
-  }
-}
-
 const toggleSelection = (id: number) => {
   if (selectedIds.value.includes(id)) {
     selectedIds.value = selectedIds.value.filter(i => i !== id)
@@ -637,35 +470,13 @@ const handleStatusChange = async (role: RoleVO) => {
       roleKey: role.roleKey,
       sortOrder: role.sortOrder,
       status: newStatus,
-      remark: role.remark,
-      dataScope: role.dataScope
+      remark: role.remark
     })
     role.status = newStatus
   } catch (error) {
     console.error(error)
     fetchRoles()
   }
-}
-
-const getDataScopeLabel = (scope?: number) => {
-    switch(scope) {
-        case 1: return '全部数据权限'
-        case 2: return '自定义数据权限'
-        case 3: return '本部门数据权限'
-        case 4: return '本部门及以下数据权限'
-        case 5: return '仅本人数据权限'
-        default: return '未知'
-    }
-}
-
-const getDataScopeClass = (scope?: number) => {
-     switch(scope) {
-        case 1: return 'badge-success text-white border-none bg-green-500' // Green
-        case 2: return 'badge-warning text-white border-none bg-orange-400' // Orange
-        case 3: return 'badge-info text-white border-none bg-blue-400' // Blue
-        case 4: return 'badge-primary text-white border-none bg-indigo-500' // Purple/Indigo
-        default: return 'badge-ghost'
-    }
 }
 
 const formatDate = (dateStr: string) => {

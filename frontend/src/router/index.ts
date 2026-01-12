@@ -82,24 +82,6 @@ const router = createRouter({
                     meta: { title: '角色管理', icon: 'role' }
                 },
                 {
-                    path: 'dict',
-                    name: 'DictManagement',
-                    component: () => import('@/views/console/dict/index.vue'),
-                    meta: { title: '字典管理', icon: 'dict' }
-                },
-                {
-                    path: 'dept',
-                    name: 'DeptManagement',
-                    component: () => import('@/views/console/dept/index.vue'),
-                    meta: { title: '部门管理', icon: 'tree' }
-                },
-                {
-                    path: 'post',
-                    name: 'PostManagement',
-                    component: () => import('@/views/console/post-manage/index.vue'),
-                    meta: { title: '岗位管理', icon: 'post' }
-                },
-                {
                     path: 'login-log',
                     name: 'LoginLog',
                     component: () => import('@/views/console/login-log/index.vue'),

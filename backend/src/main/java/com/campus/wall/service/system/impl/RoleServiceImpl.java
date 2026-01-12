@@ -8,7 +8,6 @@ import com.campus.wall.entity.system.SysRole;
 import com.campus.wall.entity.system.SysRoleMenu;
 import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
-import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMenuMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.service.system.RoleService;
@@ -31,7 +30,6 @@ public class RoleServiceImpl implements RoleService {
 
     private final SysRoleMapper sysRoleMapper;
     private final SysRoleMenuMapper sysRoleMenuMapper;
-    private final SysRoleDeptMapper sysRoleDeptMapper;
     private final SysMenuMapper sysMenuMapper;
     private final SysUserRoleMapper sysUserRoleMapper;
 
@@ -76,36 +74,43 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     @Transactional
-    public void updateRole(Long roleId, String roleName, Integer status, Integer sortOrder, Integer dataScope, String remark, List<Long> menuIds) {
+    public void updateRole(Long roleId, String roleName, Integer status, Integer sortOrder, String remark, List<Long> menuIds) {
         SysRole role = sysRoleMapper.selectById(roleId);
         if (role == null) {
             throw new RuntimeException("角色不存在");
         }
 
-        // 禁止修改管理员角色
-        if (isAdminRole(role)) {
-            throw new RuntimeException("管理员角色不允许修改");
+        boolean isAdmin = isAdminRole(role);
+        
+        // 管理员角色只允许修改备注和排序
+        if (isAdmin) {
+            if (roleName != null && !roleName.equals(role.getRoleName())) {
+                throw new RuntimeException("管理员角色名称不允许修改");
+            }
+            if (status != null && !status.equals(role.getStatus())) {
+                throw new RuntimeException("管理员角色状态不允许修改");
+            }
+            if (menuIds != null) {
+                throw new RuntimeException("管理员角色权限不允许修改");
+            }
         }
 
-        if (roleName != null) {
+        if (roleName != null && !isAdmin) {
             role.setRoleName(roleName);
         }
-        if (status != null) {
+        if (status != null && !isAdmin) {
             role.setStatus(status);
         }
         if (sortOrder != null) {
             role.setSortOrder(sortOrder);
-        }
-        if (dataScope != null) {
-            role.setDataScope(dataScope);
         }
         if (remark != null) {
             role.setRemark(remark);
         }
         sysRoleMapper.updateById(role);
 
-        // 更新菜单分配
-        if (menuIds != null) {
+        // 更新菜单分配（管理员角色不允许修改菜单）
+        if (menuIds != null && !isAdmin) {
             sysRoleMenuMapper.deleteByRoleId(roleId);
             assignMenus(roleId, menuIds);
         }
@@ -162,34 +167,6 @@ public class RoleServiceImpl implements RoleService {
      */
     private boolean isAdminRole(SysRole role) {
         return role.getId() == 1L || "admin".equals(role.getRoleKey());
-    }
-
-    @Override
-    @Transactional
-    public void assignDepts(Long roleId, List<Long> deptIds, Integer dataScope) {
-        SysRole role = sysRoleMapper.selectById(roleId);
-        if (role == null) {
-            throw new RuntimeException("角色不存在");
-        }
-        
-        // 禁止修改管理员角色
-        if (isAdminRole(role)) {
-            throw new RuntimeException("管理员角色不允许修改");
-        }
-        
-        // 更新数据范围
-        if (dataScope != null) {
-            role.setDataScope(dataScope);
-            sysRoleMapper.updateById(role);
-        }
-        
-        // 更新角色部门关联（仅在自定义数据权限时需要）
-        sysRoleDeptMapper.deleteByRoleId(roleId);
-        if (dataScope != null && dataScope == 2 && deptIds != null && !deptIds.isEmpty()) {
-            for (Long deptId : deptIds) {
-                sysRoleDeptMapper.insert(roleId, deptId);
-            }
-        }
     }
 
     private RoleVO toRoleVO(SysRole role) {

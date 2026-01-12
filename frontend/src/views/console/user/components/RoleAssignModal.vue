@@ -4,8 +4,15 @@
       <form method="dialog">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
       </form>
-      <h3 class="font-bold text-lg mb-2">分配角色</h3>
-      <p class="text-sm text-base-content/60 mb-4">为用户 <span class="font-semibold text-primary">{{ currentUser?.nickname || currentUser?.username }}</span> 分配角色</p>
+      <h3 class="font-bold text-lg mb-2">{{ isBatch ? '批量分配角色' : '分配角色' }}</h3>
+      <p class="text-sm text-base-content/60 mb-4">
+        <template v-if="isBatch">
+          为 <span class="font-semibold text-primary">{{ batchUserNames.join('、') }}</span> 等 {{ batchUserIds.length }} 个用户分配角色
+        </template>
+        <template v-else>
+          为用户 <span class="font-semibold text-primary">{{ currentUser?.nickname || currentUser?.username }}</span> 分配角色
+        </template>
+      </p>
       
       <div class="border border-base-200 rounded-lg p-3 max-h-60 overflow-y-auto">
         <div v-if="enabledRoles.length === 0" class="text-center text-base-content/60 py-4">
@@ -37,7 +44,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { UserVO, RoleVO } from '@/api/system'
-import { updateUserRole } from '@/api/system'
+import { updateUserRole, batchUpdateUserRole } from '@/api/system'
 
 const props = defineProps<{
   roleList: RoleVO[]
@@ -54,9 +61,15 @@ const modalRef = ref<HTMLDialogElement>()
 const loading = ref(false)
 const currentUser = ref<UserVO | null>(null)
 const selectedRoleIds = ref<number[]>([])
+const isBatch = ref(false)
+const batchUserIds = ref<number[]>([])
+const batchUserNames = ref<string[]>([])
 
 const open = (user: UserVO) => {
+  isBatch.value = false
   currentUser.value = user
+  batchUserIds.value = []
+  batchUserNames.value = []
   // 匹配用户现有角色（按角色名匹配，移除可能的"(已禁用)"后缀）
   selectedRoleIds.value = enabledRoles.value
     .filter(r => user.roles?.some(ur => ur.replace('(已禁用)', '') === r.roleName))
@@ -64,17 +77,31 @@ const open = (user: UserVO) => {
   modalRef.value?.showModal()
 }
 
+const openBatch = (userIds: number[], userNames: string[]) => {
+  isBatch.value = true
+  currentUser.value = null
+  batchUserIds.value = userIds
+  batchUserNames.value = userNames.slice(0, 3) // 只显示前3个名字
+  selectedRoleIds.value = []
+  modalRef.value?.showModal()
+}
+
 const close = () => {
   modalRef.value?.close()
   currentUser.value = null
+  isBatch.value = false
+  batchUserIds.value = []
+  batchUserNames.value = []
 }
 
 const handleSubmit = async () => {
-  if (!currentUser.value) return
-  
   loading.value = true
   try {
-    await updateUserRole(currentUser.value.id, selectedRoleIds.value)
+    if (isBatch.value) {
+      await batchUpdateUserRole(batchUserIds.value, selectedRoleIds.value)
+    } else if (currentUser.value) {
+      await updateUserRole(currentUser.value.id, selectedRoleIds.value)
+    }
     emit('success')
     close()
   } catch (error) {
@@ -85,5 +112,5 @@ const handleSubmit = async () => {
   }
 }
 
-defineExpose({ open, close })
+defineExpose({ open, openBatch, close })
 </script>

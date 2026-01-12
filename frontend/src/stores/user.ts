@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { login as loginApi, register as registerApi, type LoginDTO, type RegisterDTO, type UserInfoVO } from '@/api/auth'
-
 export const useUserStore = defineStore('user', () => {
     const token = ref<string | null>(localStorage.getItem('token'))
     const userInfo = ref<UserInfoVO | null>(null)
@@ -52,9 +51,10 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
-    function logout() {
+    async function logout() {
         clearToken()
-        // Optional: Call logout API
+        try { await logout() } catch {}
+        clearToken()
     }
 
     // 检查用户是否拥有指定权限

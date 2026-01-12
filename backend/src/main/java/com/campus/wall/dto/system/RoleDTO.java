@@ -24,15 +24,9 @@ public class RoleDTO {
     @Schema(description = "排序")
     private Integer sortOrder = 0;
 
-    @Schema(description = "数据范围：1全部 2自定义 3本部门 4本部门及以下 5仅本人")
-    private Integer dataScope = 1;
-
     @Schema(description = "备注")
     private String remark;
 
     @Schema(description = "菜单ID列表")
     private List<Long> menuIds;
-
-    @Schema(description = "部门ID列表")
-    private List<Long> deptIds;
 }

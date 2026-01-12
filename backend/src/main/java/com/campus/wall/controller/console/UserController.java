@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
+import com.campus.wall.dto.user.BatchUserRoleDTO;
 import com.campus.wall.dto.user.UserBanDTO;
 import com.campus.wall.dto.user.UserCreateDTO;
 import com.campus.wall.dto.user.UserEditDTO;
@@ -75,6 +76,14 @@ public class UserController {
     @PutMapping("/{id}/role")
     public R<Void> assignRole(@PathVariable Long id, @RequestBody @Valid UserRoleDTO dto) {
         userService.assignRoles(id, dto.getRoleIds());
+        return R.ok();
+    }
+
+    @Operation(summary = "批量分配角色", description = "为多个用户批量分配角色")
+    @SaCheckPermission("system:user:role")
+    @PutMapping("/batch-role")
+    public R<Void> batchAssignRole(@RequestBody @Valid BatchUserRoleDTO dto) {
+        userService.batchAssignRoles(dto.getUserIds(), dto.getRoleIds());
         return R.ok();
     }
 

@@ -9,10 +9,8 @@ import com.campus.wall.dto.user.UserCreateDTO;
 import com.campus.wall.dto.user.UserEditDTO;
 import com.campus.wall.dto.user.UserQueryDTO;
 import com.campus.wall.dto.user.UserUpdateDTO;
-import com.campus.wall.entity.system.SysDept;
 import com.campus.wall.entity.system.SysUserRole;
 import com.campus.wall.entity.user.User;
-import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
@@ -49,7 +47,6 @@ public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
     private final SysUserRoleMapper userRoleMapper;
-    private final SysDeptMapper sysDeptMapper;
     private final SysRoleMapper sysRoleMapper;
 
     @Override
@@ -123,6 +120,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void updateUserStatus(Long userId, Integer status) {
+        // 禁止禁用管理员账号
+        User user = userMapper.selectById(userId);
+        if (user != null && "admin".equals(user.getUsername())) {
+            throw new RuntimeException("管理员账号不允许禁用");
+        }
         userMapper.updateStatus(userId, status);
     }
 
@@ -138,6 +140,22 @@ public class UserServiceImpl implements UserService {
             userRole.setUserId(userId);
             userRole.setRoleId(roleId);
             userRoleMapper.insert(userRole);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void batchAssignRoles(List<Long> userIds, List<Long> roleIds) {
+        for (Long userId : userIds) {
+            // 删除原有角色
+            userRoleMapper.deleteByUserId(userId);
+            // 添加新角色
+            for (Long roleId : roleIds) {
+                SysUserRole userRole = new SysUserRole();
+                userRole.setUserId(userId);
+                userRole.setRoleId(roleId);
+                userRoleMapper.insert(userRole);
+            }
         }
     }
 
@@ -242,13 +260,6 @@ public class UserServiceImpl implements UserService {
             row.put("nickname", user.getNickname());
             row.put("email", user.getEmail());
             row.put("phone", user.getPhone());
-            // 获取部门名称
-            String deptName = "";
-            if (user.getDeptId() != null) {
-                SysDept dept = sysDeptMapper.selectById(user.getDeptId());
-                if (dept != null) deptName = dept.getDeptName();
-            }
-            row.put("deptName", deptName);
             row.put("userType", user.getUserType() == 1 ? "管理员" : "普通用户");
             row.put("sex", user.getSex() == 1 ? "男" : (user.getSex() == 2 ? "女" : "未知"));
             row.put("status", user.getStatus() == 0 ? "正常" : "停用");
@@ -361,14 +372,6 @@ public class UserServiceImpl implements UserService {
         Objects.requireNonNull(user, "用户不能为空");
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user, vo);
-        
-        // 获取部门名称
-        if (user.getDeptId() != null) {
-            SysDept dept = sysDeptMapper.selectById(user.getDeptId());
-            if (dept != null) {
-                vo.setDeptName(dept.getDeptName());
-            }
-        }
         
         // 获取用户所有角色（包含禁用的），禁用角色显示后缀
         List<SysRole> roles = sysRoleMapper.selectAllRolesByUserId(user.getId());
