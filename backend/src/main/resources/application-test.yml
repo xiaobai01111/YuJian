@@ -1,0 +1,23 @@
+# Test Environment Configuration
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/campus_wall_test
+    username: test
+    password: test
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+
+  flyway:
+    clean-disabled: false
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+logging:
+  level:
+    com.campus.wall: info

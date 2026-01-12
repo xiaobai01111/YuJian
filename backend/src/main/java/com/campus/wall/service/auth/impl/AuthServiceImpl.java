@@ -1,0 +1,254 @@
+package com.campus.wall.service.auth.impl;
+
+import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.crypto.digest.BCrypt;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.campus.wall.common.BusinessException;
+import com.campus.wall.common.ResultCode;
+import cn.hutool.core.util.RandomUtil;
+import cn.hutool.crypto.SecureUtil;
+import com.campus.wall.dto.auth.*;
+import com.campus.wall.entity.user.IdentityVerification;
+import com.campus.wall.entity.user.User;
+import com.campus.wall.mapper.user.IdentityVerificationMapper;
+import com.campus.wall.mapper.system.SysMenuMapper;
+import com.campus.wall.mapper.system.SysRoleMapper;
+import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.service.auth.AuthService;
+import com.campus.wall.vo.auth.LoginVO;
+import com.campus.wall.vo.auth.UserInfoVO;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class AuthServiceImpl implements AuthService {
+
+    private final UserMapper userMapper;
+    private final SysRoleMapper roleMapper;
+    private final SysMenuMapper menuMapper;
+    private final IdentityVerificationMapper verificationMapper;
+    private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+
+    private static final String EMAIL_CODE_PREFIX = "campus:verify:email:";
+    private static final long EMAIL_CODE_TTL = 5 * 60; // 5分钟
+
+    @Override
+    @Transactional
+    public Long register(RegisterDTO dto) {
+        // 验证密码
+        if (!dto.getPassword().equals(dto.getConfirmPassword())) {
+            throw new BusinessException("两次密码输入不一致");
+        }
+
+        // 检查用户名是否存在
+        Long count = userMapper.selectCount(
+            new LambdaQueryWrapper<User>().eq(User::getUsername, dto.getUsername())
+        );
+        if (count > 0) {
+            throw new BusinessException("用户名已存在");
+        }
+
+        // 创建用户
+        User user = new User();
+        user.setUsername(dto.getUsername());
+        user.setPassword(BCrypt.hashpw(dto.getPassword()));
+        user.setNickname(dto.getNickname() != null ? dto.getNickname() : dto.getUsername());
+        user.setEmail(dto.getEmail());
+        user.setVerifyStatus(0);
+        user.setStatus(0);
+        user.setCreditScore(100);
+
+        userMapper.insert(user);
+        return user.getId();
+    }
+
+    @Override
+    public LoginVO login(LoginDTO dto) {
+        // 查询用户
+        User user = userMapper.selectOne(
+            new LambdaQueryWrapper<User>().eq(User::getUsername, dto.getUsername())
+        );
+        if (user == null) {
+            throw new BusinessException(ResultCode.LOGIN_FAILED);
+        }
+
+        // 验证密码
+        if (!BCrypt.checkpw(dto.getPassword(), user.getPassword())) {
+            throw new BusinessException(ResultCode.LOGIN_FAILED);
+        }
+
+        // 检查封禁状态
+        if (user.getStatus() == 1) {
+            throw new BusinessException(ResultCode.USER_BANNED);
+        }
+
+        // 执行登录
+        StpUtil.login(user.getId());
+
+        // 构建响应
+        LoginVO vo = new LoginVO();
+        vo.setToken(StpUtil.getTokenValue());
+        vo.setUserInfo(buildUserInfoVO(user));
+
+        return vo;
+    }
+
+    @Override
+    public void logout() {
+        StpUtil.logout();
+    }
+
+    @Override
+    public UserInfoVO getCurrentUserInfo() {
+        Long userId = StpUtil.getLoginIdAsLong();
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+        return buildUserInfoVO(user);
+    }
+
+    @Override
+    public void updatePassword(UpdatePasswordDTO dto) {
+        if (!dto.getNewPassword().equals(dto.getConfirmPassword())) {
+            throw new BusinessException("两次密码输入不一致");
+        }
+
+        Long userId = StpUtil.getLoginIdAsLong();
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+
+        if (!BCrypt.checkpw(dto.getOldPassword(), user.getPassword())) {
+            throw new BusinessException("原密码错误");
+        }
+
+        user.setPassword(BCrypt.hashpw(dto.getNewPassword()));
+        userMapper.updateById(user);
+
+        // 修改密码后登出
+        StpUtil.logout();
+    }
+
+    @Override
+    public void sendEmailCode(String eduEmail) {
+        // 验证EDU邮箱格式
+        if (!eduEmail.endsWith(".edu.cn")) {
+            throw new BusinessException("请使用EDU邮箱");
+        }
+
+        Long userId = StpUtil.getLoginIdAsLong();
+
+        // 生成6位验证码
+        String code = RandomUtil.randomNumbers(6);
+
+        // 存储到Redis，5分钟有效
+        String key = EMAIL_CODE_PREFIX + userId;
+        redisTemplate.opsForValue().set(key, eduEmail + ":" + code, 
+            EMAIL_CODE_TTL, java.util.concurrent.TimeUnit.SECONDS);
+
+        // 实际发送邮件
+        // emailService.sendVerificationCode(eduEmail, code);
+        
+        // 开发环境下打印验证码
+        System.out.println("[DEV] 邮箱验证码: " + code + " -> " + eduEmail);
+    }
+
+    @Override
+    @Transactional
+    public void confirmEmailCode(String code) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        String key = EMAIL_CODE_PREFIX + userId;
+
+        String cached = redisTemplate.opsForValue().get(key);
+        if (cached == null) {
+            throw new BusinessException("验证码已过期，请重新获取");
+        }
+
+        String[] parts = cached.split(":");
+        if (parts.length != 2) {
+            throw new BusinessException("验证码无效");
+        }
+
+        String eduEmail = parts[0];
+        String savedCode = parts[1];
+
+        if (!savedCode.equals(code)) {
+            throw new BusinessException("验证码错误");
+        }
+
+        // 更新用户验证状态
+        User user = userMapper.selectById(userId);
+        user.setEduEmail(eduEmail);
+        user.setVerifyStatus(2); // 已验证
+        user.setVerifyMethod("EDU_EMAIL");
+        userMapper.updateById(user);
+
+        // 删除验证码
+        redisTemplate.delete(key);
+    }
+
+    @Override
+    @Transactional
+    public Long submitIdCard(SubmitIdCardDTO dto) {
+        Long userId = StpUtil.getLoginIdAsLong();
+
+        // 检查是否有待审核的记录
+        Long pendingCount = verificationMapper.selectCount(
+            new LambdaQueryWrapper<IdentityVerification>()
+                .eq(IdentityVerification::getUserId, userId)
+                .eq(IdentityVerification::getStatus, 0)
+        );
+        if (pendingCount > 0) {
+            throw new BusinessException("您已有待审核的申请，请耐心等待");
+        }
+
+        // 如果提供了学号，检查唯一性
+        if (dto.getStudentId() != null && !dto.getStudentId().isEmpty()) {
+            String studentIdHash = SecureUtil.sha256(dto.getStudentId());
+            Long existCount = userMapper.selectCount(
+                new LambdaQueryWrapper<User>()
+                    .eq(User::getStudentIdHash, studentIdHash)
+                    .ne(User::getId, userId)
+            );
+            if (existCount > 0) {
+                throw new BusinessException(ResultCode.STUDENT_ID_EXISTS);
+            }
+        }
+
+        // 创建审核记录
+        IdentityVerification verification = new IdentityVerification();
+        verification.setUserId(userId);
+        verification.setImageUrl(dto.getImageUrl());
+        verification.setStatus(0); // 待审核
+        verificationMapper.insert(verification);
+
+        return verification.getId();
+    }
+
+    private UserInfoVO buildUserInfoVO(User user) {
+        UserInfoVO vo = new UserInfoVO();
+        vo.setId(user.getId());
+        vo.setUsername(user.getUsername());
+        vo.setNickname(user.getNickname());
+        vo.setAvatar(user.getAvatar());
+        vo.setEmail(user.getEmail());
+        vo.setVerifyStatus(user.getVerifyStatus());
+        vo.setVerifyMethod(user.getVerifyMethod());
+        vo.setCreditScore(user.getCreditScore());
+        vo.setCreatedAt(user.getCreatedAt());
+
+        // 获取角色和权限
+        List<String> roles = roleMapper.selectRoleKeysByUserId(user.getId());
+        List<String> permissions = menuMapper.selectPermsByUserId(user.getId());
+        vo.setRoles(roles);
+        vo.setPermissions(permissions);
+
+        return vo;
+    }
+}

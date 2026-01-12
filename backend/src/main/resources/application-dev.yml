@@ -1,0 +1,21 @@
+# Development Environment Configuration
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/campus_wall
+    username: postgres
+    password: postgres
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+
+# Enable SQL logging in development
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+logging:
+  level:
+    com.campus.wall: debug

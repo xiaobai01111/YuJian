@@ -1,0 +1,100 @@
+package com.campus.wall.service.system.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.campus.wall.entity.system.SysMenu;
+import com.campus.wall.mapper.system.SysMenuMapper;
+import com.campus.wall.service.system.MenuService;
+import com.campus.wall.vo.system.MenuVO;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+/**
+ * 菜单服务实现
+ */
+@Service
+@RequiredArgsConstructor
+public class MenuServiceImpl implements MenuService {
+
+    private final SysMenuMapper sysMenuMapper;
+
+    @Override
+    public List<MenuVO> getMenuTree() {
+        List<SysMenu> allMenus = sysMenuMapper.selectList(
+                new LambdaQueryWrapper<SysMenu>()
+                        .orderByAsc(SysMenu::getSortOrder)
+        );
+        return buildMenuTree(allMenus, 0L);
+    }
+
+    @Override
+    public List<MenuVO> getUserMenus(Long userId) {
+        // 超级管理员返回所有菜单
+        if (userId == 1L) {
+            List<SysMenu> allMenus = sysMenuMapper.selectList(
+                    new LambdaQueryWrapper<SysMenu>()
+                            .in(SysMenu::getType, 0, 1)
+                            .eq(SysMenu::getVisible, true)
+                            .orderByAsc(SysMenu::getSortOrder)
+            );
+            return buildMenuTree(allMenus, 0L);
+        }
+        
+        // 普通用户根据角色查询菜单
+        List<SysMenu> userMenus = sysMenuMapper.selectMenusByUserId(userId);
+        return buildMenuTree(userMenus, 0L);
+    }
+
+    @Override
+    public Long createMenu(MenuVO menuVO) {
+        Objects.requireNonNull(menuVO, "菜单信息不能为空");
+        SysMenu menu = new SysMenu();
+        BeanUtils.copyProperties(menuVO, menu);
+        sysMenuMapper.insert(menu);
+        return menu.getId();
+    }
+
+    @Override
+    public void updateMenu(Long menuId, MenuVO menuVO) {
+        Objects.requireNonNull(menuVO, "菜单信息不能为空");
+        SysMenu menu = sysMenuMapper.selectById(menuId);
+        if (menu == null) {
+            throw new RuntimeException("菜单不存在");
+        }
+        BeanUtils.copyProperties(menuVO, menu);
+        menu.setId(menuId);
+        sysMenuMapper.updateById(menu);
+    }
+
+    @Override
+    public void deleteMenu(Long menuId) {
+        // 检查是否有子菜单
+        Long childCount = sysMenuMapper.selectCount(
+                new LambdaQueryWrapper<SysMenu>()
+                        .eq(SysMenu::getParentId, menuId)
+        );
+        if (childCount > 0) {
+            throw new RuntimeException("存在子菜单，无法删除");
+        }
+        sysMenuMapper.deleteById(menuId);
+    }
+
+    /**
+     * 构建菜单树
+     */
+    private List<MenuVO> buildMenuTree(List<SysMenu> menus, Long parentId) {
+        return menus.stream()
+                .filter(menu -> Objects.equals(menu.getParentId(), parentId))
+                .map(menu -> {
+                    MenuVO vo = new MenuVO();
+                    BeanUtils.copyProperties(menu, vo);
+                    vo.setChildren(buildMenuTree(menus, menu.getId()));
+                    return vo;
+                })
+                .collect(Collectors.toList());
+    }
+}
