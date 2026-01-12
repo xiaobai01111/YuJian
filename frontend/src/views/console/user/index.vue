@@ -1,57 +1,69 @@
 <template>
-  <div class="p-4">
-    <div class="card bg-base-100 shadow-sm border border-base-200">
-      <div class="card-body p-4">
+  <div class="h-full flex flex-col">
+    <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 flex flex-col">
+      <div class="card-body p-4 flex-1 flex flex-col overflow-hidden">
         <!-- Toolbar -->
-        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-4 flex-none">
           <div class="flex flex-wrap gap-2">
-            <button class="btn btn-primary btn-sm gap-2" @click="() => {}">
+            <button class="btn btn-primary btn-sm gap-2 font-normal" @click="() => {}">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
               添加
             </button>
-            <button class="btn btn-success btn-sm text-white gap-2" :disabled="!hasSelection" @click="() => {}">
+            <button class="btn btn-success btn-sm text-white gap-2 font-normal" :disabled="!hasSelection" @click="() => {}">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               修改
             </button>
-            <button class="btn btn-error btn-sm text-white gap-2" :disabled="!hasSelection" @click="() => {}">
+            <button class="btn btn-error btn-sm text-white gap-2 font-normal" :disabled="!hasSelection" @click="() => {}">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
               删除
             </button>
-            <button class="btn btn-info btn-sm text-white gap-2" :disabled="!hasSelection" @click="openRoleModal(selectedUsers[0])">
+            <button class="btn btn-info btn-sm text-white gap-2 font-normal" :disabled="!hasSelection" @click="selectedUsers[0] && openRoleModal(selectedUsers[0])">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               分配角色
             </button>
-            <button class="btn btn-warning btn-sm text-white gap-2">
+            <button class="btn btn-success btn-outline btn-sm gap-2 font-normal" :disabled="!hasSelection">
+               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              分配岗位
+            </button>
+            <button class="btn btn-warning btn-sm text-white gap-2 font-normal">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               导出
+            </button>
+            <button class="btn btn-ghost btn-sm border-base-300 gap-2 bg-base-200 font-normal">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m14-10l4 4m0 0l-4 4m4-4H6" />
+              </svg>
+              导入
             </button>
           </div>
           
           <div class="flex gap-2">
             <div class="dropdown dropdown-end">
               <div tabindex="0" role="button" class="btn btn-circle btn-ghost btn-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <div tabindex="0" class="dropdown-content z-[1] menu p-4 shadow bg-base-100 rounded-box w-64">
+              <div tabindex="0" class="dropdown-content z-[1] menu p-4 shadow bg-base-100 rounded-box w-64 border border-base-200">
                 <div class="form-control">
                   <input type="text" v-model="queryParams.username" placeholder="搜索用户名..." class="input input-bordered input-sm w-full" @keyup.enter="handleSearch" />
                 </div>
               </div>
             </div>
             <button class="btn btn-circle btn-ghost btn-sm" @click="fetchData">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
@@ -59,76 +71,84 @@
         </div>
 
         <!-- Table -->
-        <div class="overflow-x-auto min-h-[500px]">
-          <table class="table table-md">
-            <thead class="bg-base-200/50">
+        <div class="overflow-auto flex-1 min-h-0">
+          <table class="table table-md table-pin-rows">
+            <thead class="bg-base-200/30 text-base-content/70">
               <tr>
-                <th>
+                <th class="w-10">
                   <label>
-                    <input type="checkbox" class="checkbox checkbox-sm" :checked="isAllSelected" @change="toggleSelectAll" />
+                    <input type="checkbox" class="checkbox checkbox-sm rounded-sm" :checked="isAllSelected" @change="toggleSelectAll" />
                   </label>
                 </th>
-                <th>序号</th>
+                <th class="w-16">序号</th>
                 <th>登录账号</th>
+                <th>部门名称</th>
                 <th>头像</th>
                 <th>用户名称</th>
                 <th>邮箱</th>
-                <th>角色</th>
+                <th>手机号</th>
+                <th>用户类型</th>
+                <th>用户性别</th>
                 <th>用户状态</th>
-                <th>创建时间</th>
-                <th class="text-center">操作</th>
+                <th>登录时间</th>
+                <th class="text-center w-32">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="10" class="text-center py-10">
+                <td colspan="13" class="text-center py-10">
                   <span class="loading loading-spinner loading-lg text-primary"></span>
                 </td>
               </tr>
               <tr v-else-if="userList.length === 0">
-                <td colspan="10" class="text-center py-10 text-base-content/60">暂无数据</td>
+                <td colspan="13" class="text-center py-10 text-base-content/60">暂无数据</td>
               </tr>
-              <tr v-else v-for="(user, index) in userList" :key="user.id" class="hover">
+              <tr v-else v-for="(user, index) in userList" :key="user.id" class="hover border-b border-base-100 last:border-0">
                 <th>
                   <label>
-                    <input type="checkbox" class="checkbox checkbox-sm" :checked="selectedIds.includes(user.id)" @change="toggleSelection(user.id)" />
+                    <input type="checkbox" class="checkbox checkbox-sm rounded-sm" :checked="selectedIds.includes(user.id)" @change="toggleSelection(user.id)" />
                   </label>
                 </th>
-                <td>{{ index + 1 }}</td>
-                <td>{{ user.username }}</td>
+                <td class="text-base-content/60">{{ index + 1 }}</td>
+                <td class="font-medium">{{ user.username }}</td>
+                <td class="text-base-content/60">{{ user.deptName || '-' }}</td>
                 <td>
                   <div class="avatar">
-                    <div class="w-8 rounded-full">
+                    <div class="w-8 h-8 rounded-lg ring-1 ring-base-300">
                       <img :src="user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username" alt="Avatar" />
                     </div>
                   </div>
                 </td>
                 <td>{{ user.nickname }}</td>
-                <td>{{ user.email || '-' }}</td>
+                <td class="text-base-content/60">{{ user.email || '-' }}</td>
+                <td class="text-base-content/60">{{ user.phone || '-' }}</td>
                 <td>
-                  <div class="flex flex-wrap gap-1">
-                     <span v-for="role in user.roles" :key="role" class="badge badge-primary badge-outline badge-sm">{{ role }}</span>
-                  </div>
+                  <span :class="['badge badge-sm', user.userType === 1 ? 'badge-primary' : 'badge-ghost']">
+                    {{ user.userType === 1 ? '管理员' : '普通用户' }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge badge-sm badge-ghost">{{ getSexLabel(user.sex) }}</span>
                 </td>
                 <td>
                   <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="user.status === 0" @change="handleStatusChange(user)" />
                 </td>
-                <td class="text-sm text-base-content/70">{{ formatDate(user.createTime) }}</td>
+                <td class="text-sm text-base-content/60">{{ user.loginDate ? formatDate(user.loginDate) : '-' }}</td>
                 <td>
                   <div class="flex justify-center gap-2">
-                    <button class="btn btn-circle btn-xs btn-ghost text-primary bg-primary/10 hover:bg-primary/20" title="编辑">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <button class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" title="编辑">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button class="btn btn-circle btn-xs btn-ghost text-error bg-error/10 hover:bg-error/20" @click="handleBan(user)" title="删除/封禁">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <button class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" @click="handleBan(user)" title="删除/封禁">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
-                    <button class="btn btn-circle btn-xs btn-ghost text-warning bg-warning/10 hover:bg-warning/20" @click="openRoleModal(user)" title="分配角色">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    <button class="btn btn-square btn-xs bg-amber-50 text-amber-600 border-none hover:bg-amber-100" @click="openRoleModal(user)" title="分配角色">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
                     </button>
                   </div>
@@ -139,7 +159,7 @@
         </div>
         
         <!-- Pagination -->
-        <div class="flex justify-between items-center mt-6 border-t border-base-200 pt-4">
+        <div class="flex justify-between items-center mt-6 border-t border-base-200 pt-4 flex-none">
           <div class="text-sm text-base-content/60">
             共 {{ total }} 条
           </div>
@@ -241,7 +261,7 @@ const fetchData = async () => {
   selectedIds.value = [] // Reset selection on reload
   try {
     const res: any = await getUserList(queryParams)
-    userList.value = res.rows || []
+    userList.value = res.records || []
     total.value = res.total || 0
   } catch (error) {
     console.error(error)
@@ -347,5 +367,11 @@ const submitRoleAssign = async () => {
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleString()
+}
+
+const getSexLabel = (sex?: number) => {
+  if (sex === 1) return '男'
+  if (sex === 2) return '女'
+  return '未知'
 }
 </script>

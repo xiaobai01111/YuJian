@@ -10,6 +10,8 @@ import com.campus.wall.dto.user.UserUpdateDTO;
 import com.campus.wall.entity.system.SysUserRole;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
+import com.campus.wall.entity.system.SysDept;
+import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.user.UserService;
 import com.campus.wall.vo.user.UserDetailVO;
@@ -30,6 +32,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
     private final SysUserRoleMapper userRoleMapper;
+    private final SysDeptMapper sysDeptMapper;
 
     @Override
     public PageResult<UserVO> queryUsers(UserQueryDTO query) {
@@ -135,6 +138,14 @@ public class UserServiceImpl implements UserService {
         Objects.requireNonNull(user, "用户不能为空");
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user, vo);
+        
+        // 获取部门名称
+        if (user.getDeptId() != null) {
+            SysDept dept = sysDeptMapper.selectById(user.getDeptId());
+            if (dept != null) {
+                vo.setDeptName(dept.getDeptName());
+            }
+        }
         return vo;
     }
 }

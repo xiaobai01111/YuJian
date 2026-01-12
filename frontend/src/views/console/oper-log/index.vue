@@ -130,9 +130,9 @@ const fetchData = async () => {
   loading.value = true
   setTimeout(() => {
     logList.value = [
-      { id: 1, title: '用户管理', businessType: '新增', method: 'POST', operUrl: '/api/v1/users', operName: 'admin', operIp: '127.0.0.1', operParam: '{"username":"test"}', jsonResult: '{"code":200}', status: 0, operTime: '2026-01-12 19:00:00' },
-      { id: 2, title: '角色管理', businessType: '修改', method: 'PUT', operUrl: '/api/v1/roles/1', operName: 'admin', operIp: '127.0.0.1', operParam: '{"roleName":"管理员"}', jsonResult: '{"code":200}', status: 0, operTime: '2026-01-12 18:30:00' },
-      { id: 3, title: '菜单管理', businessType: '删除', method: 'DELETE', operUrl: '/api/v1/menus/5', operName: 'admin', operIp: '127.0.0.1', operParam: '{}', jsonResult: '{"code":500}', status: 1, operTime: '2026-01-12 18:00:00' },
+      { id: 1, title: '用户管理', businessType: '新增', method: 'POST', operUrl: '/v1/users', operName: 'admin', operIp: '127.0.0.1', operParam: '{"username":"test"}', jsonResult: '{"code":200}', status: 0, operTime: '2026-01-12 19:00:00' },
+      { id: 2, title: '角色管理', businessType: '修改', method: 'PUT', operUrl: '/v1/roles/1', operName: 'admin', operIp: '127.0.0.1', operParam: '{"roleName":"管理员"}', jsonResult: '{"code":200}', status: 0, operTime: '2026-01-12 18:30:00' },
+      { id: 3, title: '菜单管理', businessType: '删除', method: 'DELETE', operUrl: '/v1/menus/5', operName: 'admin', operIp: '127.0.0.1', operParam: '{}', jsonResult: '{"code":500}', status: 1, operTime: '2026-01-12 18:00:00' },
     ]
     loading.value = false
   }, 500)

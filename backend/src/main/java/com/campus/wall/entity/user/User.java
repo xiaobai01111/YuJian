@@ -42,6 +42,16 @@ public class User implements Serializable {
 
     private Integer creditScore;
 
+    private String phone;
+
+    private Long deptId;
+
+    private Integer userType;
+
+    private Integer sex;
+
+    private LocalDateTime loginDate;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

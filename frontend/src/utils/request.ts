@@ -3,7 +3,7 @@ import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'a
 import { useUserStore } from '@/stores/user'
 
 const service: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
     timeout: 10000,
 })
 

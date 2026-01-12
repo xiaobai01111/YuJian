@@ -41,7 +41,11 @@
 /* Apply smooth transition to all elements for theme-related properties */
 :root,
 html,
-body {
+body,
+#app {
+    height: 100%;
+    margin: 0;
+    padding: 0;
     transition: background-color 0.5s ease, color 0.5s ease !important;
 }
 

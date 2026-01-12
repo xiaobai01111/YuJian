@@ -1,9 +1,9 @@
 <template>
-  <div class="drawer lg:drawer-open font-sans bg-base-200 min-h-screen">
+  <div class="drawer lg:drawer-open font-sans bg-base-200 h-screen overflow-hidden">
     <input id="console-drawer" type="checkbox" class="drawer-toggle" />
-    <div class="drawer-content flex flex-col">
+    <div class="drawer-content flex flex-col h-full overflow-hidden">
       <!-- Navbar -->
-      <div class="navbar bg-base-100 shadow-sm sticky top-0 z-30">
+      <div class="navbar bg-base-100 shadow-sm sticky top-0 z-30 flex-none">
         <div class="flex-none lg:hidden">
           <label for="console-drawer" aria-label="open sidebar" class="btn btn-square btn-ghost">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
@@ -35,10 +35,10 @@
       </div>
       
       <!-- Page Content -->
-      <main class="p-6">
+      <main class="flex-1 p-6 flex flex-col overflow-hidden">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-             <component :is="Component" />
+             <component :is="Component" class="h-full" />
           </transition>
         </router-view>
       </main>

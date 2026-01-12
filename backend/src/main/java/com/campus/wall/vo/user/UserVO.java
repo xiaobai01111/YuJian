@@ -13,8 +13,15 @@ public class UserVO {
     private String username;
     private String nickname;
     private String avatar;
+    private String email;
+    private String phone;
+    private Long deptId;
+    private String deptName;
+    private Integer userType;
+    private Integer sex;
     private Integer verifyStatus;
     private Integer status;
     private Integer creditScore;
+    private LocalDateTime loginDate;
     private LocalDateTime createdAt;
 }
