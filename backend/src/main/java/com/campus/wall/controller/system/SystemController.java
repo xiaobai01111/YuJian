@@ -3,8 +3,6 @@ package com.campus.wall.controller.system;
 import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.R;
 import com.campus.wall.mapper.system.SysMenuMapper;
-import com.campus.wall.service.system.MenuService;
-import com.campus.wall.vo.system.MenuVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,19 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SystemController {
 
-    private final MenuService menuService;
     private final SysMenuMapper sysMenuMapper;
-
-    /**
-     * 获取当前用户的动态路由（菜单树）
-     */
-    @Operation(summary = "获取动态路由", description = "根据当前用户角色返回菜单树状结构")
-    @GetMapping("/menu/routes")
-    public R<List<MenuVO>> getRoutes() {
-        Long userId = StpUtil.getLoginIdAsLong();
-        List<MenuVO> routes = menuService.getUserMenus(userId);
-        return R.ok(routes);
-    }
 
     /**
      * 获取当前用户的权限标识列表

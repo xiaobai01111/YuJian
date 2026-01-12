@@ -28,7 +28,7 @@ public interface RoleService {
     /**
      * 更新角色
      */
-    void updateRole(Long roleId, String roleName, List<Long> menuIds);
+    void updateRole(Long roleId, String roleName, Integer status, Integer sortOrder, Integer dataScope, String remark, List<Long> menuIds);
 
     /**
      * 删除角色
@@ -39,4 +39,9 @@ public interface RoleService {
      * 分配角色菜单
      */
     void assignMenus(Long roleId, List<Long> menuIds);
+
+    /**
+     * 分配角色数据权限
+     */
+    void assignDepts(Long roleId, List<Long> deptIds, Integer dataScope);
 }

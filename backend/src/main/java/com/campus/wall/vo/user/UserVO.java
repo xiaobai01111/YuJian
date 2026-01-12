@@ -24,4 +24,5 @@ public class UserVO {
     private Integer creditScore;
     private LocalDateTime loginDate;
     private LocalDateTime createdAt;
+    private java.util.List<String> roles;
 }

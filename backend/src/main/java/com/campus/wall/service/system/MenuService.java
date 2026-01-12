@@ -1,6 +1,7 @@
 package com.campus.wall.service.system;
 
 import com.campus.wall.vo.system.MenuVO;
+import com.campus.wall.vo.system.RouterVO;
 
 import java.util.List;
 
@@ -18,6 +19,11 @@ public interface MenuService {
      * 获取用户菜单（动态路由）
      */
     List<MenuVO> getUserMenus(Long userId);
+
+    /**
+     * 获取当前用户路由
+     */
+    List<RouterVO> getUserRoutes();
 
     /**
      * 创建菜单

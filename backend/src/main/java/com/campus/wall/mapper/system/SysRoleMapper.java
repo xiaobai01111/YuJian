@@ -29,4 +29,12 @@ public interface SysRoleMapper extends BaseMapper<SysRole> {
         WHERE ur.user_id = #{userId} AND r.status = 0
         """)
     List<SysRole> selectRolesByUserId(@Param("userId") Long userId);
+
+    @Select("""
+        SELECT r.*
+        FROM sys_roles r
+        INNER JOIN sys_user_roles ur ON r.id = ur.role_id
+        WHERE ur.user_id = #{userId}
+        """)
+    List<SysRole> selectAllRolesByUserId(@Param("userId") Long userId);
 }

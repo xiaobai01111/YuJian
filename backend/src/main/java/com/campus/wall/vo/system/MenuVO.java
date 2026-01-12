@@ -3,6 +3,7 @@ package com.campus.wall.vo.system;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -18,8 +19,23 @@ public class MenuVO {
     private String icon;
     private Integer type;
     private Boolean visible;
+    private Integer status;
+    private Boolean isFrame;
+    private Boolean isCache;
     private Integer sortOrder;
+    private LocalDateTime createdAt;
 
     @Schema(description = "子菜单")
     private List<MenuVO> children;
+
+    @Schema(description = "菜单类型: M=目录, C=菜单, F=按钮")
+    public String getMenuType() {
+        if (type == null) return "M";
+        return switch (type) {
+            case 0 -> "M";
+            case 1 -> "C";
+            case 2 -> "F";
+            default -> "M";
+        };
+    }
 }

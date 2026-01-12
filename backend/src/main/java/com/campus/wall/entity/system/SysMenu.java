@@ -34,6 +34,8 @@ public class SysMenu implements Serializable {
 
     private Boolean visible;
 
+    private Integer status;
+
     private Integer sortOrder;
 
     @TableField(fill = FieldFill.INSERT)

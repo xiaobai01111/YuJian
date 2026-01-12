@@ -82,12 +82,6 @@ const router = createRouter({
                     meta: { title: '角色管理', icon: 'role' }
                 },
                 {
-                    path: 'menu',
-                    name: 'MenuManagement',
-                    component: () => import('@/views/console/menu/index.vue'),
-                    meta: { title: '菜单管理', icon: 'menu' }
-                },
-                {
                     path: 'dict',
                     name: 'DictManagement',
                     component: () => import('@/views/console/dict/index.vue'),

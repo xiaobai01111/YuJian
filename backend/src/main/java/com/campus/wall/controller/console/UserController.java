@@ -5,6 +5,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.user.UserBanDTO;
+import com.campus.wall.dto.user.UserCreateDTO;
+import com.campus.wall.dto.user.UserEditDTO;
 import com.campus.wall.dto.user.UserQueryDTO;
 import com.campus.wall.dto.user.UserRoleDTO;
 import com.campus.wall.service.user.UserService;
@@ -12,9 +14,13 @@ import com.campus.wall.vo.user.UserDetailVO;
 import com.campus.wall.vo.user.UserVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 /**
  * 用户管理接口（后台）
@@ -41,8 +47,31 @@ public class UserController {
         return R.ok(userService.getUserDetail(id));
     }
 
-    @Operation(summary = "分配角色", description = "为用户分配角色")
+    @Operation(summary = "新增用户", description = "创建新用户")
+    @SaCheckPermission("system:user:add")
+    @PostMapping
+    public R<Long> create(@RequestBody @Valid UserCreateDTO dto) {
+        return R.ok(userService.createUser(dto));
+    }
+
+    @Operation(summary = "修改用户", description = "修改用户信息")
     @SaCheckPermission("system:user:edit")
+    @PutMapping("/{id}")
+    public R<Void> edit(@PathVariable Long id, @RequestBody @Valid UserEditDTO dto) {
+        userService.editUser(id, dto);
+        return R.ok();
+    }
+
+    @Operation(summary = "删除用户", description = "批量删除用户")
+    @SaCheckPermission("system:user:delete")
+    @DeleteMapping
+    public R<Void> delete(@RequestBody List<Long> ids) {
+        userService.deleteUsers(ids);
+        return R.ok();
+    }
+
+    @Operation(summary = "分配角色", description = "为用户分配角色")
+    @SaCheckPermission("system:user:role")
     @PutMapping("/{id}/role")
     public R<Void> assignRole(@PathVariable Long id, @RequestBody @Valid UserRoleDTO dto) {
         userService.assignRoles(id, dto.getRoleIds());
@@ -50,7 +79,7 @@ public class UserController {
     }
 
     @Operation(summary = "封禁/解封用户", description = "封禁或解封用户，封禁时强制下线")
-    @SaCheckPermission("system:user:edit")
+    @SaCheckPermission("system:user:ban")
     @PutMapping("/{id}/ban")
     public R<Void> ban(@PathVariable Long id, @RequestBody @Valid UserBanDTO dto) {
         userService.updateUserStatus(id, dto.getStatus());
@@ -59,5 +88,26 @@ public class UserController {
             StpUtil.kickout(id);
         }
         return R.ok();
+    }
+
+    @Operation(summary = "导出用户", description = "导出用户列表到Excel")
+    @SaCheckPermission("system:user:export")
+    @GetMapping("/export")
+    public void export(UserQueryDTO query, HttpServletResponse response) {
+        userService.exportUsers(query, response);
+    }
+
+    @Operation(summary = "导入用户", description = "从Excel导入用户")
+    @SaCheckPermission("system:user:import")
+    @PostMapping("/import")
+    public R<String> importUsers(@RequestParam("file") MultipartFile file,
+                                 @RequestParam(value = "updateExisting", defaultValue = "false") boolean updateExisting) {
+        return R.ok(userService.importUsers(file, updateExisting));
+    }
+
+    @Operation(summary = "下载导入模板", description = "下载用户导入Excel模板")
+    @GetMapping("/template")
+    public void downloadTemplate(HttpServletResponse response) {
+        userService.downloadTemplate(response);
     }
 }

@@ -5,45 +5,39 @@
         <!-- Toolbar -->
         <div class="flex flex-wrap justify-between items-center mb-4 gap-4 flex-none">
           <div class="flex flex-wrap gap-2">
-            <button class="btn btn-primary btn-sm gap-2 font-normal" @click="() => {}">
+            <button v-if="userStore.hasPermission('system:user:add')" class="btn btn-primary btn-sm gap-2 font-normal" @click="handleAdd">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
               添加
             </button>
-            <button class="btn btn-success btn-sm text-white gap-2 font-normal" :disabled="!hasSelection" @click="() => {}">
+            <button v-if="userStore.hasPermission('system:user:edit')" class="btn btn-success btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleEdit">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               修改
             </button>
-            <button class="btn btn-error btn-sm text-white gap-2 font-normal" :disabled="!hasSelection" @click="() => {}">
+            <button v-if="userStore.hasPermission('system:user:delete')" class="btn btn-error btn-sm text-white gap-2 font-normal" :disabled="!hasSelection" @click="handleDelete">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
               删除
             </button>
-            <button class="btn btn-info btn-sm text-white gap-2 font-normal" :disabled="!hasSelection" @click="selectedUsers[0] && openRoleModal(selectedUsers[0])">
+            <button v-if="userStore.hasPermission('system:user:role')" class="btn btn-info btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleAssignRole">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               分配角色
             </button>
-            <button class="btn btn-success btn-outline btn-sm gap-2 font-normal" :disabled="!hasSelection">
-               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              分配岗位
-            </button>
-            <button class="btn btn-warning btn-sm text-white gap-2 font-normal">
+            <button v-if="userStore.hasPermission('system:user:export')" class="btn btn-warning btn-sm text-white gap-2 font-normal" @click="handleExport">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               导出
             </button>
-            <button class="btn btn-ghost btn-sm border-base-300 gap-2 bg-base-200 font-normal">
+            <button v-if="userStore.hasPermission('system:user:import')" class="btn btn-ghost btn-sm border-base-300 gap-2 bg-base-200 font-normal" @click="handleImport">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m14-10l4 4m0 0l-4 4m4-4H6" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
               导入
             </button>
@@ -87,7 +81,7 @@
                 <th>用户名称</th>
                 <th>邮箱</th>
                 <th>手机号</th>
-                <th>用户类型</th>
+                <th>角色</th>
                 <th>用户性别</th>
                 <th>用户状态</th>
                 <th>登录时间</th>
@@ -113,9 +107,12 @@
                 <td class="font-medium">{{ user.username }}</td>
                 <td class="text-base-content/60">{{ user.deptName || '-' }}</td>
                 <td>
-                  <div class="avatar">
-                    <div class="w-8 h-8 rounded-lg ring-1 ring-base-300">
-                      <img :src="user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username" alt="Avatar" />
+                  <div class="avatar placeholder">
+                    <div v-if="user.avatar" class="w-8 h-8 rounded-lg ring-1 ring-base-300">
+                      <img :src="user.avatar" alt="Avatar" />
+                    </div>
+                    <div v-else class="bg-primary text-primary-content rounded-lg w-8 h-8">
+                      <span class="text-sm">{{ getAvatarText(user.nickname || user.username) }}</span>
                     </div>
                   </div>
                 </td>
@@ -123,8 +120,8 @@
                 <td class="text-base-content/60">{{ user.email || '-' }}</td>
                 <td class="text-base-content/60">{{ user.phone || '-' }}</td>
                 <td>
-                  <span :class="['badge badge-sm', user.userType === 1 ? 'badge-primary' : 'badge-ghost']">
-                    {{ user.userType === 1 ? '管理员' : '普通用户' }}
+                  <span class="badge badge-sm badge-primary">
+                    {{ user.roles?.[0] || '未分配' }}
                   </span>
                 </td>
                 <td>
@@ -136,17 +133,17 @@
                 <td class="text-sm text-base-content/60">{{ user.loginDate ? formatDate(user.loginDate) : '-' }}</td>
                 <td>
                   <div class="flex justify-center gap-2">
-                    <button class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" title="编辑">
+                    <button v-if="userStore.hasPermission('system:user:edit')" class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" @click="handleEditSingle(user)" title="编辑">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" @click="handleBan(user)" title="删除/封禁">
+                    <button v-if="userStore.hasPermission('system:user:ban')" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" @click="handleBan(user)" title="封禁">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                       </svg>
                     </button>
-                    <button class="btn btn-square btn-xs bg-amber-50 text-amber-600 border-none hover:bg-amber-100" @click="openRoleModal(user)" title="分配角色">
+                    <button v-if="userStore.hasPermission('system:user:role')" class="btn btn-square btn-xs bg-amber-50 text-amber-600 border-none hover:bg-amber-100" @click="openRoleModal(user)" title="分配角色">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
@@ -186,40 +183,42 @@
       </div>
     </div>
 
-    <!-- Role Assignment Modal -->
-    <dialog id="role_modal" class="modal">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg">分配角色</h3>
-        <p class="py-4">为用户 <span class="font-bold text-primary">{{ currentUser?.username }}</span> 分配角色</p>
-        
-        <div class="form-control max-h-60 overflow-y-auto border border-base-200 rounded-lg p-2">
-          <label class="label cursor-pointer justify-start gap-4 hover:bg-base-200 rounded px-2" v-for="role in allRoles" :key="role.id">
-            <input type="checkbox" class="checkbox checkbox-primary checkbox-sm" :value="role.id" v-model="selectedRoleIds" />
-            <span class="label-text">{{ role.roleName }} ({{ role.roleKey }})</span>
-          </label>
-        </div>
-
-        <div class="modal-action">
-          <form method="dialog">
-            <button class="btn btn-ghost" @click="currentUser = null">取消</button>
-            <button class="btn btn-primary ml-2" @click.prevent="submitRoleAssign" :disabled="submitting">确定</button>
-          </form>
-        </div>
-      </div>
-    </dialog>
+    <!-- Modals -->
+    <UserFormModal ref="userFormModalRef" :dept-list="deptList" :post-list="postList" :role-list="allRoles" @success="fetchData" />
+    <RoleAssignModal ref="roleAssignModalRef" :role-list="allRoles" @success="fetchData" />
+    <DeleteConfirmModal ref="deleteConfirmModalRef" @confirm="confirmDelete" />
+    <ImportModal ref="importModalRef" @success="fetchData" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getUserList, banUser, updateUserRole, getRoleList } from '@/api/system'
+import { getUserList, banUser, getRoleList, deleteUsers, exportUsers } from '@/api/system'
 import type { UserVO, RoleVO } from '@/api/system'
+import { useUserStore } from '@/stores/user'
+import UserFormModal from './components/UserFormModal.vue'
+import RoleAssignModal from './components/RoleAssignModal.vue'
+import DeleteConfirmModal from './components/DeleteConfirmModal.vue'
+import ImportModal from './components/ImportModal.vue'
+
+const userStore = useUserStore()
+
+interface DeptVO {
+  id: number
+  deptName: string
+}
+
+interface PostVO {
+  id: number
+  postName: string
+}
 
 const loading = ref(false)
-const submitting = ref(false)
 const userList = ref<UserVO[]>([])
 const allRoles = ref<RoleVO[]>([])
-const total = ref(0) // Mock total for now as getUserList might not return it in current simplified mock logic
+const deptList = ref<DeptVO[]>([])
+const postList = ref<PostVO[]>([])
+const total = ref(0)
 
 const queryParams = reactive({
   page: 1,
@@ -227,24 +226,22 @@ const queryParams = reactive({
   username: ''
 })
 
-const currentUser = ref<UserVO | null>(null)
-const selectedRoleIds = ref<number[]>([])
 const selectedIds = ref<number[]>([])
+
+const userFormModalRef = ref<InstanceType<typeof UserFormModal>>()
+const roleAssignModalRef = ref<InstanceType<typeof RoleAssignModal>>()
+const deleteConfirmModalRef = ref<InstanceType<typeof DeleteConfirmModal>>()
+const importModalRef = ref<InstanceType<typeof ImportModal>>()
 
 const isAllSelected = computed(() => {
   return userList.value.length > 0 && selectedIds.value.length === userList.value.length
 })
 
 const hasSelection = computed(() => selectedIds.value.length > 0)
-const selectedUsers = computed(() => userList.value.filter(u => selectedIds.value.includes(u.id)))
 
 const pageNumbers = computed(() => {
-  // Simple pagination logic, showing mostly 1 page for now or +/- 2 around current
   const pages = []
   const current = queryParams.page
-  // Mock max page 5 for visual if we don't have total. If we have total, calculate.
-  // Assuming infinite scroll style API or unknown total, just show current and next/prev logic
-  // But let's show at least current
   if (current > 1) pages.push(current - 1)
   pages.push(current)
   if (userList.value.length >= queryParams.size) pages.push(current + 1)
@@ -254,11 +251,13 @@ const pageNumbers = computed(() => {
 onMounted(() => {
   fetchData()
   fetchRoles()
+  fetchDepts()
+  fetchPosts()
 })
 
 const fetchData = async () => {
   loading.value = true
-  selectedIds.value = [] // Reset selection on reload
+  selectedIds.value = []
   try {
     const res: any = await getUserList(queryParams)
     userList.value = res.records || []
@@ -277,6 +276,24 @@ const fetchRoles = async () => {
   } catch (error) {
     console.error(error)
   }
+}
+
+const fetchDepts = async () => {
+  // TODO: Fetch from backend API
+  deptList.value = [
+    { id: 1, deptName: '总部' },
+    { id: 2, deptName: '技术部' },
+    { id: 3, deptName: '运营部' }
+  ]
+}
+
+const fetchPosts = async () => {
+  // TODO: Fetch from backend API
+  postList.value = [
+    { id: 1, postName: '董事长' },
+    { id: 2, postName: '项目经理' },
+    { id: 3, postName: '普通员工' }
+  ]
 }
 
 const handleSearch = () => {
@@ -310,12 +327,7 @@ const handleStatusChange = async (user: UserVO) => {
   const actionName = newStatus === 1 ? '封禁' : '解封'
   
   if (!confirm(`确定要${actionName}用户 ${user.username} 吗？`)) {
-    // Revert visual toggle if cancelled (needs force update or key change, simplest is fetch)
-    // For now simple alert and we might not see immediate revert without refresh unless we use v-model. 
-    // Using :checked prop so it should persist state unless we change it manually.
-    // Ideally we should revert UI state.
-    // Better to use v-model with a local copy or just refresh.
-    fetchData() 
+    fetchData()
     return
   }
 
@@ -324,44 +336,75 @@ const handleStatusChange = async (user: UserVO) => {
     user.status = newStatus
   } catch (error) {
     console.error(error)
-    fetchData() // Revert on error
+    fetchData()
   }
+}
+
+const handleAdd = () => {
+  userFormModalRef.value?.open()
+}
+
+const handleEdit = () => {
+  const user = userList.value.find(u => u.id === selectedIds.value[0])
+  if (user) {
+    userFormModalRef.value?.open(user)
+  }
+}
+
+const handleEditSingle = (user: UserVO) => {
+  userFormModalRef.value?.open(user)
+}
+
+const handleDelete = () => {
+  const names = userList.value
+    .filter(u => selectedIds.value.includes(u.id))
+    .map(u => u.nickname || u.username)
+  deleteConfirmModalRef.value?.open(selectedIds.value, names)
+}
+
+const confirmDelete = async (ids: number[]) => {
+  try {
+    await deleteUsers(ids)
+    fetchData()
+  } catch (error: any) {
+    console.error(error)
+    alert(error?.response?.data?.msg || '删除失败')
+  }
+}
+
+const handleAssignRole = () => {
+  const user = userList.value.find(u => u.id === selectedIds.value[0])
+  if (user) {
+    roleAssignModalRef.value?.open(user)
+  }
+}
+
+const handleExport = async () => {
+  try {
+    const res = await exportUsers(queryParams)
+    const blob = new Blob([res as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '用户列表.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error(error)
+    alert('导出失败')
+  }
+}
+
+const handleImport = () => {
+  importModalRef.value?.open()
+}
+
+const openRoleModal = (user: UserVO) => {
+  roleAssignModalRef.value?.open(user)
 }
 
 const handleBan = (user: UserVO) => {
   handleStatusChange(user)
-}
-
-const openRoleModal = (user: UserVO) => {
-  if (!user) return
-  currentUser.value = user
-  selectedRoleIds.value = allRoles.value
-    .filter(r => user.roles.includes(r.roleKey))
-    .map(r => r.id)
-    
-  const modal = document.getElementById('role_modal') as HTMLDialogElement
-  modal.showModal()
-}
-
-const submitRoleAssign = async () => {
-  if (!currentUser.value) return
-  submitting.value = true
-  try {
-    await updateUserRole(currentUser.value.id, selectedRoleIds.value)
-    // Update local state
-    const roleKeys = allRoles.value
-        .filter(r => selectedRoleIds.value.includes(r.id))
-        .map(r => r.roleKey)
-    currentUser.value.roles = roleKeys
-    
-    const modal = document.getElementById('role_modal') as HTMLDialogElement
-    modal.close()
-    currentUser.value = null
-  } catch (error) {
-    console.error(error)
-  } finally {
-    submitting.value = false
-  }
 }
 
 const formatDate = (dateStr: string) => {
@@ -373,5 +416,10 @@ const getSexLabel = (sex?: number) => {
   if (sex === 1) return '男'
   if (sex === 2) return '女'
   return '未知'
+}
+
+const getAvatarText = (name: string) => {
+  if (!name) return '?'
+  return name.charAt(0).toUpperCase()
 }
 </script>

@@ -57,12 +57,21 @@ export const useUserStore = defineStore('user', () => {
         // Optional: Call logout API
     }
 
+    // 检查用户是否拥有指定权限
+    function hasPermission(perm: string): boolean {
+        if (!userInfo.value?.permissions) return false
+        // 超级管理员拥有所有权限
+        if (userInfo.value.permissions.includes('*')) return true
+        return userInfo.value.permissions.includes(perm)
+    }
+
     return {
         token,
         userInfo,
         setToken,
         logout,
         login,
-        register
+        register,
+        hasPermission
     }
 })

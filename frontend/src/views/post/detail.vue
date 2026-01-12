@@ -120,7 +120,7 @@
               </div>
               <div>
                 <div class="font-bold">{{ post.isAnonymous ? '匿名用户' : (post.author?.nickname || post.author?.username || '用户') }}</div>
-                <div class="text-xs text-base-content/60">加入于 {{ formatDate(post.author?.createTime || post.createdAt) }}</div>
+                <div class="text-xs text-base-content/60">加入于 {{ formatDate(post.author?.createdAt || post.createdAt) }}</div>
               </div>
             </div>
             <button class="btn btn-outline btn-sm w-full" :disabled="post.isAnonymous">查看主页</button>

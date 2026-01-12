@@ -1,10 +1,25 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useUserStore } from './user'
+import { getRoutes } from '@/api/system'
+
+export interface RouteItem {
+    name: string
+    path: string
+    component?: string
+    meta?: {
+        title: string
+        icon?: string
+        hidden?: boolean
+        perms?: string
+        keepAlive?: boolean
+    }
+    children?: RouteItem[]
+}
 
 export const usePermissionStore = defineStore('permission', () => {
     const permissions = ref<string[]>([])
-    const routes = ref<any[]>([])
+    const routes = ref<RouteItem[]>([])
 
     function fetchPermissions() {
         // 从用户信息中获取权限（登录时已返回）
@@ -18,71 +33,65 @@ export const usePermissionStore = defineStore('permission', () => {
 
     function hasPermission(value: string | string[]): boolean {
         if (!value) return true
+        // 超级管理员拥有所有权限
+        const userStore = useUserStore()
+        if (userStore.userInfo?.roles?.includes('admin')) {
+            return true
+        }
         const required = Array.isArray(value) ? value : [value]
         return required.some(p => permissions.value.includes(p))
     }
 
     async function generateRoutes() {
-        // 控制台路由，包含父子级菜单结构
-        const consoleRoutes = [
+        try {
+            // 从后端获取用户可访问的路由
+            const backendRoutes: any = await getRoutes()
+            
+            if (backendRoutes && backendRoutes.length > 0) {
+                // 转换后端路由格式为前端路由格式
+                routes.value = transformRoutes(backendRoutes)
+            } else {
+                // 如果后端没有返回路由，使用默认路由（仅仪表盘和个人中心）
+                routes.value = getDefaultRoutes()
+            }
+        } catch (error) {
+            console.error('Failed to fetch routes:', error)
+            // 出错时使用默认路由
+            routes.value = getDefaultRoutes()
+        }
+        
+        return routes.value
+    }
+
+    // 转换后端路由格式
+    function transformRoutes(backendRoutes: any[]): RouteItem[] {
+        return backendRoutes.map(route => {
+            const item: RouteItem = {
+                name: route.name,
+                path: route.path || '',
+                component: route.component,
+                meta: {
+                    title: route.meta?.title || route.name,
+                    icon: route.meta?.icon,
+                    hidden: route.meta?.hidden,
+                    perms: route.meta?.perms,
+                    keepAlive: route.meta?.keepAlive
+                }
+            }
+            if (route.children && route.children.length > 0) {
+                item.children = transformRoutes(route.children)
+            }
+            return item
+        })
+    }
+
+    // 默认路由（所有用户都能访问）
+    function getDefaultRoutes(): RouteItem[] {
+        return [
             {
                 path: '/console/dashboard',
                 name: 'ConsoleDashboard',
                 meta: { title: '仪表盘', icon: 'dashboard' }
-            },
-            {
-                path: '/console/system',
-                name: 'SystemManagement',
-                meta: { title: '系统管理', icon: 'setting' },
-                children: [
-                    {
-                        path: '/console/user',
-                        name: 'UserManagement',
-                        meta: { title: '用户管理', icon: 'user' }
-                    },
-                    {
-                        path: '/console/role',
-                        name: 'RoleManagement',
-                        meta: { title: '角色管理', icon: 'peoples' }
-                    },
-                    {
-                        path: '/console/menu',
-                        name: 'MenuManagement',
-                        meta: { title: '菜单管理', icon: 'tree-table' }
-                    },
-                    {
-                        path: '/console/dict',
-                        name: 'DictManagement',
-                        meta: { title: '字典管理', icon: 'dict' }
-                    },
-                    {
-                        path: '/console/dept',
-                        name: 'DeptManagement',
-                        meta: { title: '部门管理', icon: 'tree' }
-                    },
-                    {
-                        path: '/console/post',
-                        name: 'PostManagement',
-                        meta: { title: '岗位管理', icon: 'post' }
-                    }
-                ]
-            },
-            {
-                path: '/console/log',
-                name: 'LogManagement',
-                meta: { title: '日志管理', icon: 'log' },
-                children: [
-                    {
-                        path: '/console/login-log',
-                        name: 'LoginLog',
-                        meta: { title: '登录日志', icon: 'logininfor' }
-                    },
-                    {
-                        path: '/console/oper-log',
-                        name: 'OperLog',
-                        meta: { title: '操作日志', icon: 'form' }
-                    }
-                ]
             },
             {
                 path: '/console/profile',
@@ -90,10 +99,11 @@ export const usePermissionStore = defineStore('permission', () => {
                 meta: { title: '个人中心', icon: 'user' }
             }
         ]
-        
-        // Update the store state
-        routes.value = consoleRoutes
-        return consoleRoutes
+    }
+
+    function clearPermissions() {
+        permissions.value = []
+        routes.value = []
     }
 
     return {
@@ -101,6 +111,7 @@ export const usePermissionStore = defineStore('permission', () => {
         routes,
         fetchPermissions,
         hasPermission,
-        generateRoutes
+        generateRoutes,
+        clearPermissions
     }
 })

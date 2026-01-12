@@ -23,6 +23,11 @@ service.interceptors.request.use(
 
 service.interceptors.response.use(
     (response: AxiosResponse) => {
+        // Handle blob responses (for file downloads)
+        if (response.config.responseType === 'blob') {
+            return response.data
+        }
+        
         const res = response.data
         // Handle backend R wrapper format
         if (res.code === 200) {

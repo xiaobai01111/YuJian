@@ -72,6 +72,9 @@ dependencies {
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
     implementation("cn.hutool:hutool-all:$hutoolVersion")
+    
+    // POI for Excel import/export
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
 
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")

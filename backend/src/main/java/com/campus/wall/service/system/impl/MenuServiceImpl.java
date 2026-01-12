@@ -1,10 +1,12 @@
 package com.campus.wall.service.system.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.wall.entity.system.SysMenu;
 import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.service.system.MenuService;
 import com.campus.wall.vo.system.MenuVO;
+import com.campus.wall.vo.system.RouterVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -47,6 +49,58 @@ public class MenuServiceImpl implements MenuService {
         // 普通用户根据角色查询菜单
         List<SysMenu> userMenus = sysMenuMapper.selectMenusByUserId(userId);
         return buildMenuTree(userMenus, 0L);
+    }
+
+    @Override
+    public List<RouterVO> getUserRoutes() {
+        Long userId = StpUtil.getLoginIdAsLong();
+        
+        List<SysMenu> menus;
+        // 超级管理员返回所有启用的菜单
+        if (userId == 1L) {
+            menus = sysMenuMapper.selectList(
+                    new LambdaQueryWrapper<SysMenu>()
+                            .in(SysMenu::getType, 0, 1)
+                            .eq(SysMenu::getVisible, true)
+                            .eq(SysMenu::getStatus, 0)  // 只返回启用的菜单
+                            .orderByAsc(SysMenu::getSortOrder)
+            );
+        } else {
+            // 普通用户根据角色查询菜单（已在mapper中过滤status）
+            menus = sysMenuMapper.selectMenusByUserId(userId);
+        }
+        
+        return buildRouterTree(menus, 0L);
+    }
+
+    /**
+     * 构建路由树
+     */
+    private List<RouterVO> buildRouterTree(List<SysMenu> menus, Long parentId) {
+        return menus.stream()
+                .filter(menu -> Objects.equals(menu.getParentId(), parentId))
+                .map(menu -> {
+                    RouterVO router = new RouterVO();
+                    router.setName(menu.getName());
+                    router.setPath(menu.getPath());
+                    router.setComponent(menu.getComponent());
+                    
+                    RouterVO.MetaVO meta = new RouterVO.MetaVO();
+                    meta.setTitle(menu.getName());
+                    meta.setIcon(menu.getIcon());
+                    meta.setHidden(!menu.getVisible());
+                    meta.setPerms(menu.getPerms());
+                    meta.setKeepAlive(false);
+                    router.setMeta(meta);
+                    
+                    List<RouterVO> children = buildRouterTree(menus, menu.getId());
+                    if (!children.isEmpty()) {
+                        router.setChildren(children);
+                    }
+                    
+                    return router;
+                })
+                .collect(Collectors.toList());
     }
 
     @Override

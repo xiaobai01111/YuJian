@@ -6,6 +6,7 @@ import com.campus.wall.mapper.system.SysRoleMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,8 +31,11 @@ public class StpInterfaceImpl implements StpInterface {
         Long userId = Long.valueOf(loginId.toString());
 
         // 超级管理员 (userId == 1) 拥有所有权限
+        // 返回所有权限标识，确保能匹配任何权限检查
         if (userId == 1L) {
-            return List.of("*");
+            List<String> allPerms = new ArrayList<>(menuMapper.selectAllPerms());
+            allPerms.add("*"); // 同时保留通配符
+            return allPerms;
         }
 
         // 从数据库查询该用户的权限列表

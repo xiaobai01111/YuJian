@@ -15,6 +15,9 @@ public class RoleVO {
     private String roleKey;
     private Integer status;
     private Integer sortOrder;
+    private Integer dataScope;
+    private String remark;
     private List<Long> menuIds;
+    private List<Long> deptIds;
     private LocalDateTime createdAt;
 }
