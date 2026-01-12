@@ -1,19 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import request from '@/utils/request'
+import { useUserStore } from './user'
 
 export const usePermissionStore = defineStore('permission', () => {
     const permissions = ref<string[]>([])
     const routes = ref<any[]>([])
 
-    async function fetchPermissions() {
-        try {
-            const data: any = await request.get('/system/user/permissions')
-            permissions.value = data || []
-        } catch (e) {
-            console.error('Failed to fetch permissions', e)
-            // Mock permissions for dev
-            permissions.value = ['system:user:list', 'system:user:add', 'system:user:edit', 'system:user:remove', 'system:role:list', 'system:menu:list']
+    function fetchPermissions() {
+        // 从用户信息中获取权限（登录时已返回）
+        const userStore = useUserStore()
+        if (userStore.userInfo?.permissions) {
+            permissions.value = userStore.userInfo.permissions
+        } else {
+            permissions.value = []
         }
     }
 
@@ -24,8 +23,7 @@ export const usePermissionStore = defineStore('permission', () => {
     }
 
     async function generateRoutes() {
-        // For now, we return the static routes defined for console to ensure Sidebar works
-        // In real app, this would merge static + dynamic routes
+        // 控制台路由，包含父子级菜单结构
         const consoleRoutes = [
             {
                 path: '/console/dashboard',
@@ -33,19 +31,63 @@ export const usePermissionStore = defineStore('permission', () => {
                 meta: { title: '仪表盘', icon: 'dashboard' }
             },
             {
-                path: '/console/user',
-                name: 'UserManagement',
-                meta: { title: '用户管理', icon: 'user' }
+                path: '/console/system',
+                name: 'SystemManagement',
+                meta: { title: '系统管理', icon: 'setting' },
+                children: [
+                    {
+                        path: '/console/user',
+                        name: 'UserManagement',
+                        meta: { title: '用户管理', icon: 'user' }
+                    },
+                    {
+                        path: '/console/role',
+                        name: 'RoleManagement',
+                        meta: { title: '角色管理', icon: 'peoples' }
+                    },
+                    {
+                        path: '/console/menu',
+                        name: 'MenuManagement',
+                        meta: { title: '菜单管理', icon: 'tree-table' }
+                    },
+                    {
+                        path: '/console/dict',
+                        name: 'DictManagement',
+                        meta: { title: '字典管理', icon: 'dict' }
+                    },
+                    {
+                        path: '/console/dept',
+                        name: 'DeptManagement',
+                        meta: { title: '部门管理', icon: 'tree' }
+                    },
+                    {
+                        path: '/console/post',
+                        name: 'PostManagement',
+                        meta: { title: '岗位管理', icon: 'post' }
+                    }
+                ]
             },
             {
-                path: '/console/role',
-                name: 'RoleManagement',
-                meta: { title: '角色管理', icon: 'user' }
+                path: '/console/log',
+                name: 'LogManagement',
+                meta: { title: '日志管理', icon: 'log' },
+                children: [
+                    {
+                        path: '/console/login-log',
+                        name: 'LoginLog',
+                        meta: { title: '登录日志', icon: 'logininfor' }
+                    },
+                    {
+                        path: '/console/oper-log',
+                        name: 'OperLog',
+                        meta: { title: '操作日志', icon: 'form' }
+                    }
+                ]
             },
             {
-                path: '/console/menu',
-                name: 'MenuManagement',
-                meta: { title: '菜单管理', icon: 'dashboard' }
+                path: '/console/profile',
+                name: 'ConsoleProfile',
+                meta: { title: '个人中心', icon: 'user' }
             }
         ]
         

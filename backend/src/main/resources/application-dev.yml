@@ -9,7 +9,7 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password: 20020626Bx/
+      password: 20040226Bx/
 
 # Enable SQL logging in development
 mybatis-plus:

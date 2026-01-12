@@ -67,60 +67,60 @@ export interface RoleDTO {
 
 // --- Menu & Router ---
 export function getRoutes() {
-    return request.get('/system/menu/routes')
+    return request.get('/api/v1/system/menu/routes')
 }
 
 export function getMenuList(params?: any) {
-    return request.get('/system/menu/list', { params })
+    return request.get('/api/v1/system/menu/list', { params })
 }
 
 export function getMenuTree() {
-    return request.get('/system/menu/list')
+    return request.get('/api/v1/system/menu/list')
 }
 
 export function createMenu(data: MenuDTO) {
-    return request.post('/system/menu', data)
+    return request.post('/api/v1/system/menu', data)
 }
 
 export function updateMenu(id: number, data: MenuDTO) {
-    return request.put(`/system/menu/${id}`, data)
+    return request.put(`/api/v1/system/menu/${id}`, data)
 }
 
 export function deleteMenu(id: number) {
-    return request.delete(`/system/menu/${id}`)
+    return request.delete(`/api/v1/system/menu/${id}`)
 }
 
 // --- User ---
 export function getUserList(params?: any) {
-    return request.get('/console/users', { params })
+    return request.get('/api/v1/console/users', { params })
 }
 
 export function updateUserRole(userId: number, roleIds: number[]) {
-    return request.put(`/console/users/${userId}/role`, { roleIds })
+    return request.put(`/api/v1/console/users/${userId}/role`, { roleIds })
 }
 
 export function banUser(userId: number, status: number) {
     // status: 1 = ban, 0 = unban (normal)
-    return request.put(`/console/users/${userId}/ban`, { status })
+    return request.put(`/api/v1/console/users/${userId}/ban`, { status })
 }
 
 // --- Role ---
 export function getRoleList(params?: any) {
-    return request.get('/system/role/list', { params })
+    return request.get('/api/v1/system/role/list', { params })
 }
 
 export function createRole(data: RoleDTO) {
-    return request.post('/system/role', data)
+    return request.post('/api/v1/system/role', data)
 }
 
 export function updateRole(id: number, data: RoleDTO) {
-    return request.put(`/system/role/${id}`, data)
+    return request.put(`/api/v1/system/role/${id}`, data)
 }
 
 export function deleteRole(roleId: number) {
-    return request.delete(`/system/role/${roleId}`)
+    return request.delete(`/api/v1/system/role/${roleId}`)
 }
 
 export function assignRoleMenus(roleId: number, menuIds: number[]) {
-    return request.put(`/system/role/${roleId}/menus`, menuIds)
+    return request.put(`/api/v1/system/role/${roleId}/menus`, menuIds)
 }

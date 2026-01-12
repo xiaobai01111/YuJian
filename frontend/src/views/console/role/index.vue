@@ -111,16 +111,17 @@ import { ref, reactive, onMounted } from 'vue'
 import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus } from '@/api/system'
 import type { RoleVO, RoleDTO, MenuVO } from '@/api/system'
 // Simple Tree Item Component (Inline)
-import { defineComponent, h, PropType } from 'vue'
+import { defineComponent, h, type PropType } from 'vue'
 
-const MenuTreeItem = defineComponent({
+const MenuTreeItem: ReturnType<typeof defineComponent> = defineComponent({
+  name: 'MenuTreeItem',
   props: {
     menu: { type: Object as PropType<MenuVO>, required: true },
     selectedIds: { type: Array as PropType<number[]>, required: true }
   },
   emits: ['toggle'],
-  setup(props, { emit }) {
-    return () => {
+  setup(props, { emit }): () => ReturnType<typeof h> {
+    return (): ReturnType<typeof h> => {
       const isChecked = props.selectedIds.includes(props.menu.id)
       const hasChildren = props.menu.children && props.menu.children.length > 0
       
@@ -134,7 +135,7 @@ const MenuTreeItem = defineComponent({
           }),
           h('span', props.menu.name)
         ]),
-        hasChildren ? props.menu.children!.map(child => h(MenuTreeItem, {
+        hasChildren ? props.menu.children!.map((child: MenuVO) => h(MenuTreeItem, {
           menu: child,
           selectedIds: props.selectedIds,
           onToggle: (id: number) => emit('toggle', id)
