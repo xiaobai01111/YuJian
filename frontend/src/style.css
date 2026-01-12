@@ -39,10 +39,16 @@
 
 /* Global Theme Transition */
 /* Apply smooth transition to all elements for theme-related properties */
+:root,
+html,
+body {
+    transition: background-color 0.5s ease, color 0.5s ease !important;
+}
+
 *,
 *::before,
 *::after {
-    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 300ms;
+    transition-duration: 500ms !important;
 }

@@ -9,7 +9,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -25,8 +28,6 @@ public class SensitiveWordServiceImpl implements SensitiveWordService {
 
     // DFA 状态机
     private volatile Map<Character, Object> sensitiveWordMap = new ConcurrentHashMap<>();
-
-    private static final Character END_FLAG = '$';
 
     @PostConstruct
     public void init() {

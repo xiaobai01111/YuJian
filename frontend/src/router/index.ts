@@ -36,6 +36,28 @@ const router = createRouter({
             component: () => import('@/views/board/index.vue')
         },
         {
+            path: '/posts/:id',
+            name: 'PostDetail',
+            component: () => import('@/views/post/detail.vue')
+        },
+        {
+            path: '/publish',
+            name: 'PublishPost',
+            component: () => import('@/views/post/publish.vue'),
+            meta: { requiresAuth: true }
+        },
+        {
+            path: '/search',
+            name: 'Search',
+            component: () => import('@/views/search/index.vue')
+        },
+        {
+            path: '/user/:id',
+            name: 'UserProfile',
+            component: () => import('@/views/user/profile.vue'),
+            meta: { requiresAuth: true }
+        },
+        {
             path: '/console',
             component: () => import('@/views/console/layout/ConsoleLayout.vue'),
             redirect: '/console/dashboard',

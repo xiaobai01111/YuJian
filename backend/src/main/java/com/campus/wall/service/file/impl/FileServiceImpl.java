@@ -8,7 +8,11 @@ import com.campus.wall.entity.file.FileRecord;
 import com.campus.wall.mapper.file.FileRecordMapper;
 import com.campus.wall.service.file.FileService;
 import com.campus.wall.vo.file.FileVO;
-import io.minio.*;
+import io.minio.BucketExistsArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -18,7 +22,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Set;
+import java.util.UUID;
+import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -60,12 +67,6 @@ public class FileServiceImpl implements FileService {
                         .contentType(file.getContentType())
                         .build());
             }
-
-            // 生成访问 URL
-            String fileUrl = String.format("%s/%s/%s",
-                    minioConfig.getEndpoint(),
-                    minioConfig.getBucketName(),
-                    objectName);
 
             // 保存文件记录
             FileRecord record = new FileRecord();

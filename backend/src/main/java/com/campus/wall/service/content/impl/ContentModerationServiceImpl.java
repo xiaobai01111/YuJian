@@ -22,8 +22,7 @@ public class ContentModerationServiceImpl implements ContentModerationService {
     private final SensitiveWordService sensitiveWordService;
     private final FileRecordMapper fileRecordMapper;
 
-    // 审核状态：0待审核 1审核通过 2审核不通过
-    private static final int AUDIT_PENDING = 0;
+    // 审核状态：1审核通过 2审核不通过
     private static final int AUDIT_PASSED = 1;
     private static final int AUDIT_REJECTED = 2;
 

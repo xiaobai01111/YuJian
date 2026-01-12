@@ -1,9 +1,16 @@
 package com.campus.wall.property;
 
-import net.jqwik.api.*;
-import net.jqwik.api.constraints.*;
+import net.jqwik.api.Property;
+import net.jqwik.api.Assume;
+import net.jqwik.api.Example;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Provide;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.Arbitraries;
 
-import java.util.*;
+
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,8 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Property 16: 敏感词拦截
  */
 class SensitiveWordPropertyTest {
-
-    private static final Character END_FLAG = '$';
 
     /**
      * Property 16: 包含敏感词的文本应被检测到

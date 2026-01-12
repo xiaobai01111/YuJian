@@ -1,5 +1,5 @@
 <template>
-  <div class="hero min-h-screen bg-gradient-to-br from-primary/5 via-base-100 to-secondary/5 relative overflow-hidden">
+  <div class="hero min-h-screen bg-base-100 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 relative overflow-hidden">
     <!-- Background Elements -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
       <div class="absolute -top-[20%] -left-[10%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[100px] animate-pulse-soft"></div>
