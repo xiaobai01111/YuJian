@@ -11,7 +11,8 @@ service.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const userStore = useUserStore()
         if (userStore.token) {
-            config.headers['Authorization'] = `Bearer ${userStore.token}`
+            // Sa-Token expects token directly without Bearer prefix
+            config.headers['Authorization'] = userStore.token
         }
         return config
     },
@@ -22,7 +23,13 @@ service.interceptors.request.use(
 
 service.interceptors.response.use(
     (response: AxiosResponse) => {
-        return response.data
+        const res = response.data
+        // Handle backend R wrapper format
+        if (res.code === 200) {
+            return res.data
+        } else {
+            return Promise.reject(new Error(res.message || '请求失败'))
+        }
     },
     (error: any) => {
         // Handle auth errors (401)

@@ -33,4 +33,8 @@ public class PageResult<T> implements Serializable {
     public static <T> PageResult<T> of(List<T> records, long total, long size, long current) {
         return new PageResult<>(records, total, size, current);
     }
+
+    public static <T> PageResult<T> empty() {
+        return new PageResult<>(java.util.Collections.emptyList(), 0, 10, 1);
+    }
 }

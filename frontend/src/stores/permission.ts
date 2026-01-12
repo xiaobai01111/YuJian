@@ -1,13 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import request from '@/utils/request'
-import type { RouteRecordRaw } from 'vue-router'
-
-// Mapping of component strings to actual imports
-const modules = import.meta.glob('@/views/**/*.vue')
-if (modules) {
-    // Prevent unused var error
-}
 
 export const usePermissionStore = defineStore('permission', () => {
     const permissions = ref<string[]>([])

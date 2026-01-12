@@ -10,7 +10,8 @@ api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token')
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`
+            // Sa-Token expects token directly without Bearer prefix
+            config.headers.Authorization = token
         }
         return config
     },
@@ -50,7 +51,13 @@ export interface UserInfoVO {
     username: string
     nickname: string
     avatar?: string
-    role?: string
+    email?: string
+    verifyStatus?: number
+    verifyMethod?: string
+    creditScore?: number
+    roles?: string[]
+    permissions?: string[]
+    createdAt?: string
 }
 
 export interface RegisterDTO {
