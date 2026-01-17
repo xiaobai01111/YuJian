@@ -2,19 +2,30 @@
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/campus_wall
-    username: xiaobai
-    password: 20020626Bx/
+    username: ${DB_USERNAME:xiaobai}
+    password: ${DB_PASSWORD:20040226Bx/}
 
   data:
     redis:
       host: localhost
       port: 6379
-      password: 20040226Bx/
+      password: ${REDIS_PASSWORD:20040226Bx/}
+
+# MinIO Configuration (dev default)
+minio:
+  endpoint: http://localhost:9000
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: campus-wall
 
 # Enable SQL logging in development
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  
+  global-config:
+    db-config:
+      id-type: auto
 
 logging:
   level:

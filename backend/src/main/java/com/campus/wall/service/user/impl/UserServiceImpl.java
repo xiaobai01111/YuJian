@@ -48,6 +48,7 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleMapper sysRoleMapper;
+    private final com.campus.wall.service.system.OperLogService operLogService;
 
     @Override
     public PageResult<UserVO> queryUsers(UserQueryDTO query) {
@@ -120,12 +121,36 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void updateUserStatus(Long userId, Integer status) {
-        // 禁止禁用管理员账号
+        updateUserStatusWithReason(userId, status, null, null);
+    }
+
+    @Override
+    @Transactional
+    public void updateUserStatusWithReason(Long userId, Integer status, String reason, Long operatorId) {
         User user = userMapper.selectById(userId);
-        if (user != null && "admin".equals(user.getUsername())) {
-            throw new RuntimeException("管理员账号不允许禁用");
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
         }
+        // 禁止操作管理员账号
+        if ("admin".equals(user.getUsername())) {
+            throw new BusinessException("管理员账号不允许操作");
+        }
+        // 禁止操作自己
+        if (operatorId != null && operatorId.equals(userId)) {
+            throw new BusinessException("不能操作自己的账号");
+        }
+        // 封禁时必须提供理由
+        if (status == 1 && (reason == null || reason.trim().isEmpty())) {
+            throw new BusinessException("封禁用户必须提供理由");
+        }
+
+        Integer oldStatus = user.getStatus();
         userMapper.updateStatus(userId, status);
+
+        // 记录审计日志
+        String action = status == 1 ? "ban" : "unban";
+        operLogService.log(operatorId, null, "user", userId, action, reason, 
+                java.util.Map.of("status", oldStatus), java.util.Map.of("status", status), null);
     }
 
     @Override
@@ -141,6 +166,9 @@ public class UserServiceImpl implements UserService {
             userRole.setRoleId(roleId);
             userRoleMapper.insert(userRole);
         }
+
+        // 记录审计日志
+        operLogService.log("user", userId, "role_assign", null);
     }
 
     @Override
@@ -156,6 +184,8 @@ public class UserServiceImpl implements UserService {
                 userRole.setRoleId(roleId);
                 userRoleMapper.insert(userRole);
             }
+            // 记录审计日志
+            operLogService.log("user", userId, "role_assign", null);
         }
     }
 
@@ -195,6 +225,18 @@ public class UserServiceImpl implements UserService {
         user.setCreditScore(100);
 
         userMapper.insert(user);
+
+        // 创建时分配角色
+        if (dto.getRoleId() != null) {
+            SysUserRole userRole = new SysUserRole();
+            userRole.setUserId(user.getId());
+            userRole.setRoleId(dto.getRoleId());
+            userRoleMapper.insert(userRole);
+        }
+
+        // 记录审计日志
+        operLogService.log("user", user.getId(), "create", null);
+
         return user.getId();
     }
 
@@ -211,23 +253,70 @@ public class UserServiceImpl implements UserService {
         if (dto.getDeptId() != null) user.setDeptId(dto.getDeptId());
         if (dto.getUserType() != null) user.setUserType(dto.getUserType());
         if (dto.getSex() != null) user.setSex(dto.getSex());
-        if (dto.getStatus() != null) user.setStatus(dto.getStatus());
 
         userMapper.updateById(user);
+
+        // 记录审计日志
+        operLogService.log("user", userId, "edit", null);
     }
 
     @Override
     @Transactional
     public void deleteUsers(List<Long> userIds) {
+        deleteUsersWithReason(userIds, null, null);
+    }
+
+    @Override
+    @Transactional
+    public void deleteUsersWithReason(List<Long> userIds, Long operatorId, String reason) {
         if (CollUtil.isEmpty(userIds)) {
             return;
         }
-        // 删除用户角色关联
+
         for (Long userId : userIds) {
-            userRoleMapper.deleteByUserId(userId);
+            User user = userMapper.selectById(userId);
+            if (user == null) continue;
+
+            // 禁止删除 admin
+            if ("admin".equals(user.getUsername())) {
+                throw new BusinessException("不能删除管理员账号");
+            }
+            // 禁止删除自己
+            if (operatorId != null && operatorId.equals(userId)) {
+                throw new BusinessException("不能删除自己的账号");
+            }
+
+            // 软删除：设置删除信息
+            user.setDeletedAt(java.time.LocalDateTime.now());
+            user.setDeletedBy(operatorId);
+            user.setDeletedReason(reason);
+            user.setDeleted(1);
+            userMapper.updateById(user);
+
+            // 记录审计日志
+            operLogService.log(operatorId, null, "user", userId, "delete", reason, 
+                    java.util.Map.of("username", user.getUsername()), null, null);
         }
-        // 删除用户
-        userMapper.deleteBatchIds(userIds);
+    }
+
+    @Override
+    @Transactional
+    public void restoreUser(Long userId, Long operatorId) {
+        // 使用原生SQL查询已删除的用户（绕过@TableLogic）
+        User user = userMapper.selectDeletedById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在或未被删除");
+        }
+
+        // 恢复用户
+        user.setDeleted(0);
+        user.setDeletedAt(null);
+        user.setDeletedBy(null);
+        user.setDeletedReason(null);
+        userMapper.restoreById(userId);
+
+        // 记录审计日志
+        operLogService.log(operatorId, null, "user", userId, "restore", null, null, null, null);
     }
 
     @Override

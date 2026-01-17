@@ -77,12 +77,12 @@ public class MarketOrderServiceImpl implements MarketOrderService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "该商品已有进行中的订单");
         }
 
-        // 创建订单
+        // 创建订单（使用帖子价格，防止买家篡改）
         MarketOrder order = new MarketOrder();
         order.setPostId(dto.getPostId());
         order.setSellerId(post.getUserId());
         order.setBuyerId(buyerId);
-        order.setPrice(dto.getPrice());
+        order.setPrice(post.getPrice());
         order.setStatus(STATUS_PENDING);
         order.setBuyerConfirmed(false);
         order.setSellerConfirmed(false);
@@ -164,7 +164,12 @@ public class MarketOrderServiceImpl implements MarketOrderService {
 
     @Override
     public MarketOrderVO getOrderDetail(Long orderId) {
+        Long userId = StpUtil.getLoginIdAsLong();
         MarketOrder order = getOrderOrThrow(orderId);
+        boolean isAdmin = StpUtil.hasRole("admin");
+        if (!isAdmin && !order.getBuyerId().equals(userId) && !order.getSellerId().equals(userId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权查看此订单");
+        }
         return toOrderVO(order);
     }
 

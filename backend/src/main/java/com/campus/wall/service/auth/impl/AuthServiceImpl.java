@@ -28,6 +28,9 @@ import java.util.List;
 public class AuthServiceImpl implements AuthService {
 
     private final UserMapper userMapper;
+    
+    @org.springframework.beans.factory.annotation.Value("${spring.profiles.active:prod}")
+    private String activeProfile;
     private final SysRoleMapper roleMapper;
     private final SysMenuMapper menuMapper;
     private final IdentityVerificationMapper verificationMapper;
@@ -67,6 +70,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public LoginVO login(LoginDTO dto) {
         // 查询用户
         User user = userMapper.selectOne(
@@ -88,6 +92,10 @@ public class AuthServiceImpl implements AuthService {
 
         // 执行登录
         StpUtil.login(user.getId());
+
+        // 更新登录时间
+        user.setLoginDate(java.time.LocalDateTime.now());
+        userMapper.updateById(user);
 
         // 构建响应
         LoginVO vo = new LoginVO();
@@ -155,8 +163,10 @@ public class AuthServiceImpl implements AuthService {
         // 实际发送邮件
         // emailService.sendVerificationCode(eduEmail, code);
         
-        // 开发环境下打印验证码
-        System.out.println("[DEV] 邮箱验证码: " + code + " -> " + eduEmail);
+        // 仅在开发环境下打印验证码
+        if ("dev".equals(activeProfile)) {
+            System.out.println("[DEV] 邮箱验证码: " + code + " -> " + eduEmail);
+        }
     }
 
     @Override

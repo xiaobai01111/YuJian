@@ -225,6 +225,25 @@
     <RoleAssignModal ref="roleAssignModalRef" :role-list="allRoles" @success="fetchData" />
     <DeleteConfirmModal ref="deleteConfirmModalRef" @confirm="confirmDelete" />
     <ImportModal ref="importModalRef" @success="fetchData" />
+
+    <!-- Ban Reason Modal -->
+    <dialog class="modal" :class="{ 'modal-open': showBanModal }">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg text-error">封禁用户</h3>
+        <p class="py-2 text-base-content/70">确定要封禁用户 <strong>{{ banTargetUser?.username }}</strong> 吗？</p>
+        <div class="form-control">
+          <label class="label"><span class="label-text">封禁理由 <span class="text-error">*</span></span></label>
+          <textarea v-model="banReason" class="textarea textarea-bordered h-24" placeholder="请填写封禁理由（必填）"></textarea>
+        </div>
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="showBanModal = false">取消</button>
+          <button class="btn btn-error" @click="confirmBan">确认封禁</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button @click="showBanModal = false">close</button>
+      </form>
+    </dialog>
   </div>
 </template>
 
@@ -239,8 +258,12 @@ import DeleteConfirmModal from './components/DeleteConfirmModal.vue'
 import ImportModal from './components/ImportModal.vue'
 
 const userStore = useUserStore()
+const currentUserId = computed(() => userStore.userInfo?.id)
 
 const loading = ref(false)
+const showBanModal = ref(false)
+const banTargetUser = ref<UserVO | null>(null)
+const banReason = ref('')
 const showSearch = ref(false)
 const userList = ref<UserVO[]>([])
 const allRoles = ref<RoleVO[]>([])
@@ -343,20 +366,53 @@ const toggleSelectAll = () => {
 }
 
 const handleStatusChange = async (user: UserVO) => {
-  const newStatus = user.status === 0 ? 1 : 0
-  const actionName = newStatus === 1 ? '封禁' : '解封'
-  
-  if (!confirm(`确定要${actionName}用户 ${user.username} 吗？`)) {
-    fetchData()
+  // 禁止操作自己
+  if (user.id === currentUserId.value) {
+    alert('不能操作自己的账号')
+    return
+  }
+  // 禁止操作 admin
+  if (user.username === 'admin') {
+    alert('不能操作管理员账号')
     return
   }
 
+  const newStatus = user.status === 0 ? 1 : 0
+  
+  if (newStatus === 1) {
+    // 封禁需要填写理由
+    banTargetUser.value = user
+    banReason.value = ''
+    showBanModal.value = true
+  } else {
+    // 解封直接确认
+    if (!confirm(`确定要解封用户 ${user.username} 吗？`)) {
+      return
+    }
+    try {
+      await banUser(user.id, 0)
+      user.status = 0
+    } catch (error) {
+      console.error(error)
+      fetchData()
+    }
+  }
+}
+
+const confirmBan = async () => {
+  if (!banReason.value.trim()) {
+    alert('请填写封禁理由')
+    return
+  }
+  if (!banTargetUser.value) return
+  
   try {
-    await banUser(user.id, newStatus)
-    user.status = newStatus
+    await banUser(banTargetUser.value.id, 1, banReason.value)
+    banTargetUser.value.status = 1
+    showBanModal.value = false
+    fetchData()
   } catch (error) {
     console.error(error)
-    fetchData()
   }
 }
 
@@ -382,9 +438,9 @@ const handleDelete = () => {
   deleteConfirmModalRef.value?.open(selectedIds.value, names)
 }
 
-const confirmDelete = async (ids: number[]) => {
+const confirmDelete = async (ids: number[], reason: string) => {
   try {
-    await deleteUsers(ids)
+    await deleteUsers(ids, reason)
     fetchData()
   } catch (error: any) {
     console.error(error)
@@ -424,6 +480,11 @@ const openRoleModal = (user: UserVO) => {
 }
 
 const handleBan = (user: UserVO) => {
+  // 禁止操作自己
+  if (user.id === currentUserId.value) {
+    alert('不能操作自己的账号')
+    return
+  }
   handleStatusChange(user)
 }
 

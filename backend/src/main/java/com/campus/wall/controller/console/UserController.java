@@ -7,6 +7,7 @@ import com.campus.wall.common.R;
 import com.campus.wall.dto.user.BatchUserRoleDTO;
 import com.campus.wall.dto.user.UserBanDTO;
 import com.campus.wall.dto.user.UserCreateDTO;
+import com.campus.wall.dto.user.UserDeleteDTO;
 import com.campus.wall.dto.user.UserEditDTO;
 import com.campus.wall.dto.user.UserQueryDTO;
 import com.campus.wall.dto.user.UserRoleDTO;
@@ -21,7 +22,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 
 /**
  * 用户管理接口（后台）
@@ -63,11 +63,12 @@ public class UserController {
         return R.ok();
     }
 
-    @Operation(summary = "删除用户", description = "批量删除用户")
+    @Operation(summary = "删除用户", description = "批量删除用户（软删除，可恢复）")
     @SaCheckPermission("system:user:delete")
     @DeleteMapping
-    public R<Void> delete(@RequestBody List<Long> ids) {
-        userService.deleteUsers(ids);
+    public R<Void> delete(@RequestBody UserDeleteDTO dto) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        userService.deleteUsersWithReason(dto.getIds(), operatorId, dto.getReason());
         return R.ok();
     }
 
@@ -91,7 +92,8 @@ public class UserController {
     @SaCheckPermission("system:user:ban")
     @PutMapping("/{id}/ban")
     public R<Void> ban(@PathVariable Long id, @RequestBody @Valid UserBanDTO dto) {
-        userService.updateUserStatus(id, dto.getStatus());
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        userService.updateUserStatusWithReason(id, dto.getStatus(), dto.getReason(), operatorId);
         // 封禁时强制下线
         if (dto.getStatus() == 1) {
             StpUtil.kickout(id);
@@ -118,5 +120,14 @@ public class UserController {
     @GetMapping("/template")
     public void downloadTemplate(HttpServletResponse response) {
         userService.downloadTemplate(response);
+    }
+
+    @Operation(summary = "恢复用户", description = "恢复已删除的用户")
+    @SaCheckPermission("system:user:delete")
+    @PutMapping("/{id}/restore")
+    public R<Void> restore(@PathVariable Long id) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        userService.restoreUser(id, operatorId);
+        return R.ok();
     }
 }

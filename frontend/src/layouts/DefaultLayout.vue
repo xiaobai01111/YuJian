@@ -3,9 +3,13 @@
     <!-- Navbar -->
     <Navbar />
 
-    <!-- Hero Section (Only on Home Page) -->
+    <!-- Hero Section -->
     <transition name="fade" mode="out-in">
-      <HeroSection v-if="isHomePage" />
+      <HeroSection 
+        v-if="showHero" 
+        v-bind="heroProps"
+        :key="route.path"
+      />
     </transition>
 
     <!-- Main Content -->
@@ -42,6 +46,25 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const isHomePage = computed(() => route.path === '/')
+
+const showHero = computed(() => {
+  return isHomePage.value || !!route.meta.hero
+})
+
+const heroProps = computed(() => {
+  if (isHomePage.value) {
+    return {
+      theme: 'blue',
+      titleStart: '连接每一份',
+      titleHighlight: '校园心声',
+      description: 'CampusWall 是一个连接校友、分享生活、互助成长的校园社区。在这里，每一个声音都值得被倾听。',
+      badge: 'New v2.0 Released',
+      primaryBtnText: '开始探索 🚀',
+      secondaryBtnText: '热门话题 🔥'
+    }
+  }
+  return route.meta.hero || {}
+})
 </script>
 
 <style scoped>

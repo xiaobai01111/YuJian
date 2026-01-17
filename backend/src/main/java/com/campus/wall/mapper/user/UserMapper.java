@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.campus.wall.entity.user.User;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 /**
@@ -11,6 +12,12 @@ import org.apache.ibatis.annotations.Update;
  */
 @Mapper
 public interface UserMapper extends BaseMapper<User> {
+
+    @Select("SELECT * FROM users WHERE id = #{userId} AND deleted = 1")
+    User selectDeletedById(@Param("userId") Long userId);
+
+    @Update("UPDATE users SET deleted = 0, deleted_at = NULL, deleted_by = NULL, deleted_reason = NULL, updated_at = NOW() WHERE id = #{userId}")
+    int restoreById(@Param("userId") Long userId);
 
     @Update("UPDATE users SET credit_score = #{creditScore}, updated_at = NOW() WHERE id = #{userId}")
     int updateCreditScore(@Param("userId") Long userId, @Param("creditScore") Integer creditScore);

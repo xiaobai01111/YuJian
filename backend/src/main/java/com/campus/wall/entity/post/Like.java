@@ -25,3 +25,4 @@ public class Like implements Serializable {
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }
+

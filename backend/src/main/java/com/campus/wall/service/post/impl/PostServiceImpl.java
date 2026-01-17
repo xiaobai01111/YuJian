@@ -48,6 +48,7 @@ public class PostServiceImpl implements PostService {
     private final UserMapper userMapper;
     private final FileService fileService;
     private final SensitiveWordService sensitiveWordService;
+    private final com.campus.wall.service.user.CreditService creditService;
 
     // 帖子状态：0正常 1已解决 2已删除
     private static final int STATUS_NORMAL = 0;
@@ -56,11 +57,31 @@ public class PostServiceImpl implements PostService {
 
     // 树洞板块强制匿名
     private static final String BOARD_TREE_HOLE = "tree-hole";
+    // 市集板块
+    private static final String BOARD_MARKET = "market";
 
     @Override
     @Transactional
     public Long createPost(PostCreateDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
+
+        // 用户验证状态检查
+        User currentUser = userMapper.selectById(userId);
+        if (currentUser == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在");
+        }
+        
+        // 所有板块都需要验证用户身份才能发帖
+        if (currentUser.getVerifyStatus() == null || currentUser.getVerifyStatus() != 2) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "请先完成身份验证后再发帖");
+        }
+        
+        // 市集板块额外需要信用分达标
+        if (BOARD_MARKET.equals(dto.getBoard())) {
+            if (!creditService.canPostInMarket(userId)) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "信用分不足，无法在市集发帖（需要60分以上）");
+            }
+        }
 
         // 敏感词检测
         if (sensitiveWordService.containsSensitiveWord(dto.getTitle())) {
@@ -193,8 +214,14 @@ public class PostServiceImpl implements PostService {
 
         LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
 
-        // 排除已删除
-        wrapper.ne(Post::getStatus, STATUS_DELETED);
+        // 公开列表只显示正常状态的帖子（排除已删除、待审核、已下架等）
+        // 如果是管理员查询或指定了状态筛选，则允许查看其他状态
+        if (query.getStatus() != null) {
+            wrapper.eq(Post::getStatus, query.getStatus());
+        } else {
+            // 默认只显示正常状态
+            wrapper.eq(Post::getStatus, STATUS_NORMAL);
+        }
 
         // 板块筛选
         if (query.getBoard() != null && !query.getBoard().isEmpty()) {
@@ -204,11 +231,6 @@ public class PostServiceImpl implements PostService {
         // 分类筛选
         if (query.getCategory() != null && !query.getCategory().isEmpty()) {
             wrapper.eq(Post::getCategory, query.getCategory());
-        }
-
-        // 状态筛选
-        if (query.getStatus() != null) {
-            wrapper.eq(Post::getStatus, query.getStatus());
         }
 
         // 用户筛选

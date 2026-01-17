@@ -13,27 +13,92 @@ const router = createRouter({
         {
             path: '/confessions',
             name: 'Confessions',
-            component: () => import('@/views/board/index.vue')
+            component: () => import('@/views/confessions/index.vue'),
+            meta: {
+                hero: {
+                    titleStart: '勇敢表达',
+                    titleHighlight: '爱的声音',
+                    description: '暗恋、表白、祝福。在这里，大声说出你的爱。让心意传递，让缘分开始。',
+                    theme: 'pink',
+                    badge: 'Confessions Wall',
+                    primaryBtnText: '发布表白',
+                    secondaryBtnText: '最新表白',
+                    floatCardLabel: '今日表白',
+                    floatCardValue: '99+ 条'
+                }
+            }
         },
         {
             path: '/treehole',
             name: 'TreeHole',
-            component: () => import('@/views/board/index.vue')
+            component: () => import('@/views/treehole/index.vue'),
+            meta: {
+                hero: {
+                    titleStart: '倾听内心',
+                    titleHighlight: '真实树洞',
+                    description: '匿名倾诉，释放压力。在这里，做最真实的自己。我们是你忠实的倾听者。',
+                    theme: 'emerald',
+                    badge: 'Anonymous Treehole',
+                    primaryBtnText: '发布心声',
+                    secondaryBtnText: '查看树洞',
+                    floatCardLabel: '新收录',
+                    floatCardValue: '58 个秘密'
+                }
+            }
         },
         {
             path: '/help',
             name: 'Help',
-            component: () => import('@/views/board/index.vue')
+            component: () => import('@/views/help/index.vue'),
+            meta: {
+                hero: {
+                    titleStart: '互帮互助',
+                    titleHighlight: '共同成长',
+                    description: '学业困惑、生活难题、求职经验。在这里，寻找答案，分享经验，温暖彼此。',
+                    theme: 'blue',
+                    badge: 'Q&A Help',
+                    primaryBtnText: '发起求助',
+                    secondaryBtnText: '我来解答',
+                    floatCardLabel: '已解决',
+                    floatCardValue: '1,203 个问题'
+                }
+            }
         },
         {
             path: '/market',
             name: 'Market',
-            component: () => import('@/views/board/index.vue')
+            component: () => import('@/views/market/index.vue'),
+            meta: {
+                hero: {
+                    titleStart: '旧物新生',
+                    titleHighlight: '跳蚤市场',
+                    description: '教材书籍、数码电子、生活用品。在这里，让闲置物品流转，发现物美价廉的宝贝。',
+                    theme: 'orange',
+                    badge: 'Flea Market',
+                    primaryBtnText: '发布闲置',
+                    secondaryBtnText: '逛逛市场',
+                    floatCardLabel: '今日上新',
+                    floatCardValue: '45 件好物'
+                }
+            }
         },
         {
             path: '/lost-found',
             name: 'LostFound',
-            component: () => import('@/views/board/index.vue')
+            component: () => import('@/views/lost-found/index.vue'),
+            meta: {
+                hero: {
+                    titleStart: '寻找失物',
+                    titleHighlight: '传递温暖',
+                    description: '丢失物品、捡到失物。在这里，发布信息，让物品回归主人，让善意流转。',
+                    theme: 'purple',
+                    badge: 'Lost & Found',
+                    primaryBtnText: '发布信息',
+                    secondaryBtnText: '最近信息',
+                    floatCardLabel: '寻回率',
+                    floatCardValue: '85%'
+                }
+            }
         },
         {
             path: '/posts/:id',
@@ -82,6 +147,12 @@ const router = createRouter({
                     meta: { title: '角色管理', icon: 'role' }
                 },
                 {
+                    path: 'dept',
+                    name: 'DeptManagement',
+                    component: () => import('@/views/console/dept/index.vue'),
+                    meta: { title: '部门管理', icon: 'tree' }
+                },
+                {
                     path: 'login-log',
                     name: 'LoginLog',
                     component: () => import('@/views/console/login-log/index.vue'),
@@ -113,7 +184,9 @@ router.beforeEach(async (to, _from, next) => {
     const userStore = useUserStore()
     const permissionStore = usePermissionStore()
 
-    const whiteList = ['/', '/confessions', '/treehole', '/help', '/market', '/lost-found']
+    // 未登录仅允许访问首页
+    const whiteList = ['/']
+    const isWhitelisted = whiteList.includes(to.path)
 
     if (userStore.token) {
          // Check if permissions are loaded (simple check for now)
@@ -127,7 +200,7 @@ router.beforeEach(async (to, _from, next) => {
              next()
          }
     } else {
-        if (whiteList.includes(to.path)) {
+        if (isWhitelisted) {
              next()
         } else {
             // If trying to access protected route (like /console), user needs to login. 

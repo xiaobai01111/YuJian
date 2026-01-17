@@ -17,6 +17,7 @@ export interface PostVO {
     isAnonymous: boolean
     category?: string
     price?: number
+    originalPrice?: number
     location?: string
     lostTime?: string
     status: number
@@ -55,41 +56,41 @@ export interface PostCreateDTO {
 }
 
 export function getPostList(params: PostQueryDTO) {
-    return request.get('/posts', { params })
+    return request.get('/api/v1/posts', { params })
 }
 
 export function getPostDetail(id: number) {
-    return request.get(`/posts/${id}`)
+    return request.get(`/api/v1/posts/${id}`)
 }
 
 export function createPost(data: PostCreateDTO) {
-    return request.post('/posts', data)
+    return request.post('/api/v1/posts', data)
 }
 
 export function updatePost(id: number, data: any) {
-    return request.put(`/posts/${id}`, data)
+    return request.put(`/api/v1/posts/${id}`, data)
 }
 
 export function deletePost(id: number) {
-    return request.delete(`/posts/${id}`)
+    return request.delete(`/api/v1/posts/${id}`)
 }
 
 export function likePost(id: number) {
-    return request.post(`/posts/${id}/like`)
+    return request.post(`/api/v1/posts/${id}/like`)
 }
 
 export function unlikePost(id: number) {
-    return request.delete(`/posts/${id}/like`)
+    return request.delete(`/api/v1/posts/${id}/like`)
 }
 
 export function bookmarkPost(id: number) {
-    return request.post(`/posts/${id}/bookmark`)
+    return request.post(`/api/v1/posts/${id}/bookmark`)
 }
 
 export function unbookmarkPost(id: number) {
-    return request.delete(`/posts/${id}/bookmark`)
+    return request.delete(`/api/v1/posts/${id}/bookmark`)
 }
 
 export function resolvePost(id: number) {
-    return request.put(`/posts/${id}/resolve`)
+    return request.put(`/api/v1/posts/${id}/resolve`)
 }

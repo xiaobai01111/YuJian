@@ -4,6 +4,7 @@ import cn.dev33.satoken.context.SaHolder;
 import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.router.SaRouter;
 import cn.dev33.satoken.stp.StpUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -15,6 +16,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @Configuration
 public class SaTokenConfig implements WebMvcConfigurer {
+
+    @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+    private String allowedOrigins;
 
     @Override
     public void addInterceptors(@NonNull InterceptorRegistry registry) {
@@ -40,13 +44,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                             // 认证接口
                             "/api/v1/auth/register",
                             "/api/v1/auth/login",
-                            // 公开查询接口
-                            "/api/health",
-                            "/api/v1/posts",
-                            "/api/v1/posts/{id}",
-                            "/api/v1/comments/post/**",
-                            "/api/v1/search",
-                            "/api/v1/announcements"
+                            // 公开查询接口（仅健康检查，其他需登录）
+                            "/api/health"
                     )
                     .check(r -> StpUtil.checkLogin());
         })).addPathPatterns("/**");
@@ -55,9 +54,10 @@ public class SaTokenConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(@NonNull CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOriginPatterns("*")
+                .allowedOrigins(allowedOrigins.split(","))
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
+                .exposedHeaders("Authorization", "X-Trace-Id")
                 .allowCredentials(true)
                 .maxAge(3600);
     }

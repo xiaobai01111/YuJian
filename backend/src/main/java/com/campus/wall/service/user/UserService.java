@@ -43,6 +43,16 @@ public interface UserService {
     void deleteUsers(List<Long> userIds);
 
     /**
+     * 删除用户（带原因）
+     */
+    void deleteUsersWithReason(List<Long> userIds, Long operatorId, String reason);
+
+    /**
+     * 恢复已删除用户
+     */
+    void restoreUser(Long userId, Long operatorId);
+
+    /**
      * 更新用户信息
      */
     void updateUser(Long userId, UserUpdateDTO dto);
@@ -51,6 +61,11 @@ public interface UserService {
      * 封禁/解封用户
      */
     void updateUserStatus(Long userId, Integer status);
+
+    /**
+     * 封禁/解封用户（带理由和操作者）
+     */
+    void updateUserStatusWithReason(Long userId, Integer status, String reason, Long operatorId);
 
     /**
      * 分配用户角色

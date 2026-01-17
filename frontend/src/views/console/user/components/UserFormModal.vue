@@ -44,8 +44,8 @@
             <input type="email" v-model="form.email" class="input input-bordered input-sm" placeholder="请输入邮箱" />
           </div>
           
-          <!-- 分配角色（单选） -->
-          <div class="form-control">
+          <!-- 分配角色（仅新增时可用，编辑请使用角色分配功能） -->
+          <div class="form-control" v-if="!isEdit">
             <label class="label"><span class="label-text">分配角色</span></label>
             <select v-model="form.roleId" class="select select-bordered select-sm">
               <option :value="undefined">请选择角色</option>
@@ -72,8 +72,8 @@
             </div>
           </div>
           
-          <!-- 用户状态 -->
-          <div class="form-control">
+          <!-- 用户状态（仅新增时可用，编辑状态请使用封禁功能） -->
+          <div class="form-control" v-if="!isEdit">
             <label class="label"><span class="label-text">用户状态</span></label>
             <div class="flex gap-4 h-8 items-center">
               <label class="label cursor-pointer gap-2">
@@ -214,9 +214,7 @@ const handleSubmit = async () => {
         nickname: form.nickname,
         email: form.email || undefined,
         phone: form.phone || undefined,
-        roleId: form.roleId,
         sex: form.sex,
-        status: form.status,
         avatar: form.avatar || undefined,
         remark: form.remark || undefined
       })

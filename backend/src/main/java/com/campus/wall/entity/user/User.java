@@ -57,4 +57,13 @@ public class User implements Serializable {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
+
+    private LocalDateTime deletedAt;
+
+    private Long deletedBy;
+
+    private String deletedReason;
+
+    @TableLogic
+    private Integer deleted = 0;
 }

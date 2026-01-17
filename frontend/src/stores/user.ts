@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { login as loginApi, register as registerApi, type LoginDTO, type RegisterDTO, type UserInfoVO } from '@/api/auth'
+import { login as loginApi, register as registerApi, logout as logoutApi, type LoginDTO, type RegisterDTO, type UserInfoVO } from '@/api/auth'
 export const useUserStore = defineStore('user', () => {
     const token = ref<string | null>(localStorage.getItem('token'))
     const userInfo = ref<UserInfoVO | null>(null)
@@ -52,8 +52,7 @@ export const useUserStore = defineStore('user', () => {
     }
 
     async function logout() {
-        clearToken()
-        try { await logout() } catch {}
+        try { await logoutApi() } catch {}
         clearToken()
     }
 

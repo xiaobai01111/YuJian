@@ -1,6 +1,7 @@
 package com.campus.wall.service.file.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.ResultCode;
 import com.campus.wall.config.MinioConfig;
@@ -41,15 +42,21 @@ public class FileServiceImpl implements FileService {
     private final FileRecordMapper fileRecordMapper;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/webp", "image/gif"
+            "image/jpeg", "image/png", "image/webp"
     );
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    
+    // Magic bytes for file type validation
+    private static final byte[] JPEG_MAGIC = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] PNG_MAGIC = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47};
+    private static final byte[] WEBP_MAGIC = new byte[]{0x52, 0x49, 0x46, 0x46}; // RIFF
 
     @Override
     public FileVO uploadFile(MultipartFile file, String targetType) {
         validateFile(file);
 
         try {
+            Long userId = StpUtil.getLoginIdAsLong();
             // 确保 bucket 存在
             ensureBucketExists();
 
@@ -70,6 +77,7 @@ public class FileServiceImpl implements FileService {
 
             // 保存文件记录
             FileRecord record = new FileRecord();
+            record.setUserId(userId);
             record.setFilename(originalFilename);
             record.setPath(objectName);
             record.setSize(file.getSize());
@@ -94,6 +102,11 @@ public class FileServiceImpl implements FileService {
         if (record == null) {
             return;
         }
+        Long userId = StpUtil.getLoginIdAsLong();
+        boolean isAdmin = StpUtil.hasRole("admin");
+        if (!isAdmin && (record.getUserId() == null || !record.getUserId().equals(userId))) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权删除该文件");
+        }
 
         try {
             minioClient.removeObject(RemoveObjectArgs.builder()
@@ -112,9 +125,16 @@ public class FileServiceImpl implements FileService {
         if (fileIds == null || fileIds.isEmpty()) {
             return;
         }
+        Long userId = StpUtil.getLoginIdAsLong();
         for (Long fileId : fileIds) {
             FileRecord record = fileRecordMapper.selectById(fileId);
             if (record != null) {
+                if (record.getUserId() == null || !record.getUserId().equals(userId)) {
+                    throw new BusinessException(ResultCode.FORBIDDEN, "无权绑定该文件");
+                }
+                if (record.getTargetId() != null && !record.getTargetId().equals(targetId)) {
+                    throw new BusinessException(ResultCode.BAD_REQUEST, "文件已绑定其他资源");
+                }
                 record.setTargetId(targetId);
                 record.setTargetType(targetType);
                 fileRecordMapper.updateById(record);
@@ -162,11 +182,39 @@ public class FileServiceImpl implements FileService {
             throw new BusinessException(ResultCode.FILE_SIZE_EXCEEDED);
         }
 
-        // 文件类型校验
+        // Content-Type 校验
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_IMAGE_TYPES.contains(contentType)) {
             throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED);
         }
+        
+        // Magic bytes 校验（防止伪造 Content-Type）
+        try {
+            byte[] header = new byte[12];
+            file.getInputStream().read(header);
+            if (!isValidImageMagic(header, contentType)) {
+                throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED, "文件内容与类型不匹配");
+            }
+        } catch (java.io.IOException e) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "无法读取文件内容");
+        }
+    }
+    
+    private boolean isValidImageMagic(byte[] header, String contentType) {
+        return switch (contentType) {
+            case "image/jpeg" -> startsWith(header, JPEG_MAGIC);
+            case "image/png" -> startsWith(header, PNG_MAGIC);
+            case "image/webp" -> startsWith(header, WEBP_MAGIC) && header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P';
+            default -> false;
+        };
+    }
+    
+    private boolean startsWith(byte[] data, byte[] prefix) {
+        if (data.length < prefix.length) return false;
+        for (int i = 0; i < prefix.length; i++) {
+            if (data[i] != prefix[i]) return false;
+        }
+        return true;
     }
 
     private void ensureBucketExists() throws Exception {

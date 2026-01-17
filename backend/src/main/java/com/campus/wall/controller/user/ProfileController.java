@@ -35,8 +35,19 @@ public class ProfileController {
 
     @Operation(summary = "获取用户信息")
     @GetMapping("/{id}")
+    @SaCheckLogin
     public R<UserDetailVO> getUserInfo(@PathVariable Long id) {
-        return R.ok(userService.getUserDetail(id));
+        UserDetailVO vo = userService.getUserDetail(id);
+        Long currentUserId = StpUtil.getLoginIdAsLong();
+        boolean isAdmin = StpUtil.hasRole("admin");
+        if (!isAdmin && !currentUserId.equals(id)) {
+            vo.setEmail(null);
+            vo.setEduEmail(null);
+            vo.setCreditScore(null);
+            vo.setRoleIds(null);
+            vo.setStatus(null);
+        }
+        return R.ok(vo);
     }
 
     @Operation(summary = "获取用户发布的帖子")

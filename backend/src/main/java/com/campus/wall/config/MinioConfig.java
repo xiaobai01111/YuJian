@@ -15,8 +15,8 @@ import org.springframework.context.annotation.Configuration;
 public class MinioConfig {
 
     private String endpoint = "http://localhost:9000";
-    private String accessKey = "minioadmin";
-    private String secretKey = "minioadmin";
+    private String accessKey;
+    private String secretKey;
     private String bucketName = "campus-wall";
 
     @Bean

@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL,
+    baseURL: import.meta.env.VITE_API_BASE_URL || '',
     timeout: 5000
 })
 
@@ -69,17 +69,17 @@ export interface RegisterDTO {
 }
 
 export const register = (data: RegisterDTO) => {
-    return api.post<any, number>('/v1/auth/register', data)
+    return api.post<any, number>('/api/v1/auth/register', data)
 }
 
 export const login = (data: LoginDTO) => {
-    return api.post<any, LoginVO>('/v1/auth/login', data)
+    return api.post<any, LoginVO>('/api/v1/auth/login', data)
 }
 
 export const logout = () => {
-    return api.post('/v1/auth/logout')
+    return api.post('/api/v1/auth/logout')
 }
 
 export const getUserInfo = () => {
-    return api.get<any, UserInfoVO>('/v1/auth/info')
+    return api.get<any, UserInfoVO>('/api/v1/auth/info')
 }

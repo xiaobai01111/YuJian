@@ -18,7 +18,7 @@ import java.util.List;
  */
 @Tag(name = "角色管理", description = "系统角色 CRUD 接口")
 @RestController
-@RequestMapping("/api/v1/system/role")
+@RequestMapping("/api/v1/system/roles")
 @RequiredArgsConstructor
 public class RoleController {
 

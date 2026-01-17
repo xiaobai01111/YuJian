@@ -8,10 +8,15 @@
         确认删除
       </h3>
       <p class="py-4">
-        确定要删除以下 <span class="font-bold text-error">{{ userIds.length }}</span> 个用户吗？此操作不可恢复。
+        确定要删除以下 <span class="font-bold text-error">{{ userIds.length }}</span> 个用户吗？
+        <span class="text-success text-sm">（软删除，可在回收站恢复）</span>
       </p>
-      <div class="bg-base-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+      <div class="bg-base-200 rounded-lg p-3 max-h-32 overflow-y-auto mb-4">
         <div v-for="name in userNames" :key="name" class="text-sm py-1">• {{ name }}</div>
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">删除理由</span></label>
+        <textarea v-model="reason" class="textarea textarea-bordered h-20" placeholder="请填写删除理由（可选）"></textarea>
       </div>
       <div class="modal-action">
         <button class="btn btn-ghost" @click="close">取消</button>
@@ -31,13 +36,14 @@
 import { ref } from 'vue'
 
 const emit = defineEmits<{
-  (e: 'confirm', ids: number[]): void
+  (e: 'confirm', ids: number[], reason: string): void
 }>()
 
 const modalRef = ref<HTMLDialogElement>()
 const loading = ref(false)
 const userIds = ref<number[]>([])
 const userNames = ref<string[]>([])
+const reason = ref('')
 
 const open = (ids: number[], names: string[]) => {
   userIds.value = ids
@@ -52,8 +58,9 @@ const close = () => {
 const handleConfirm = async () => {
   loading.value = true
   try {
-    emit('confirm', userIds.value)
+    emit('confirm', userIds.value, reason.value)
     close()
+    reason.value = ''
   } finally {
     loading.value = false
   }

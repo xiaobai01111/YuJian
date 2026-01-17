@@ -88,11 +88,11 @@ export interface RoleDTO {
 
 // --- Menu & Router ---
 export function getRoutes() {
-    return request.get('/v1/system/menu/routes')
+    return request.get('/api/v1/system/menu/routes')
 }
 
 export function getMenuTree() {
-    return request.get('/v1/system/menu/list')
+    return request.get('/api/v1/system/menu/list')
 }
 
 // --- Dept ---
@@ -120,23 +120,23 @@ export interface DeptDTO {
 }
 
 export function getDeptList() {
-    return request.get('/v1/system/dept/list')
+    return request.get('/api/v1/system/dept/list')
 }
 
 export function getDeptTree() {
-    return request.get('/v1/system/dept/tree')
+    return request.get('/api/v1/system/dept/tree')
 }
 
 export function createDept(data: DeptDTO) {
-    return request.post('/v1/system/dept', data)
+    return request.post('/api/v1/system/dept', data)
 }
 
 export function updateDept(id: number, data: DeptDTO) {
-    return request.put(`/v1/system/dept/${id}`, data)
+    return request.put(`/api/v1/system/dept/${id}`, data)
 }
 
 export function deleteDept(id: number) {
-    return request.delete(`/v1/system/dept/${id}`)
+    return request.delete(`/api/v1/system/dept/${id}`)
 }
 
 // --- User ---
@@ -167,75 +167,75 @@ export interface UserEditDTO {
 }
 
 export function getUserList(params?: any) {
-    return request.get('/v1/console/users', { params })
+    return request.get('/api/v1/console/users', { params })
 }
 
 export function createUser(data: UserCreateDTO) {
-    return request.post('/v1/console/users', data)
+    return request.post('/api/v1/console/users', data)
 }
 
 export function editUser(userId: number, data: UserEditDTO) {
-    return request.put(`/v1/console/users/${userId}`, data)
+    return request.put(`/api/v1/console/users/${userId}`, data)
 }
 
-export function deleteUsers(ids: number[]) {
-    return request.delete('/v1/console/users', { data: ids })
+export function deleteUsers(ids: number[], reason?: string) {
+    return request.delete('/api/v1/console/users', { data: { ids, reason } })
 }
 
 export function updateUserRole(userId: number, roleIds: number[]) {
-    return request.put(`/v1/console/users/${userId}/role`, { roleIds })
+    return request.put(`/api/v1/console/users/${userId}/role`, { roleIds })
 }
 
 export function batchUpdateUserRole(userIds: number[], roleIds: number[]) {
-    return request.put('/v1/console/users/batch-role', { userIds, roleIds })
+    return request.put('/api/v1/console/users/batch-role', { userIds, roleIds })
 }
 
-export function banUser(userId: number, status: number) {
-    return request.put(`/v1/console/users/${userId}/ban`, { status })
+export function banUser(userId: number, status: number, reason?: string) {
+    return request.put(`/api/v1/console/users/${userId}/ban`, { status, reason })
 }
 
 export function exportUsers(params?: any) {
-    return request.get('/v1/console/users/export', { params, responseType: 'blob' })
+    return request.get('/api/v1/console/users/export', { params, responseType: 'blob' })
 }
 
 export function importUsers(file: File, updateExisting: boolean = false) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('updateExisting', String(updateExisting))
-    return request.post('/v1/console/users/import', formData, {
+    return request.post('/api/v1/console/users/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     })
 }
 
 export function downloadUserTemplate() {
-    return request.get('/v1/console/users/template', { responseType: 'blob' })
+    return request.get('/api/v1/console/users/template', { responseType: 'blob' })
 }
 
 // --- Role ---
 export function getRoleList(params?: any) {
-    return request.get('/v1/system/role/list', { params })
+    return request.get('/api/v1/system/roles/list', { params })
 }
 
 export function createRole(data: RoleDTO) {
-    return request.post('/v1/system/role', data)
+    return request.post('/api/v1/system/roles', data)
 }
 
 export function updateRole(id: number, data: RoleDTO) {
-    return request.put(`/v1/system/role/${id}`, data)
+    return request.put(`/api/v1/system/roles/${id}`, data)
 }
 
 export function deleteRole(roleId: number) {
-    return request.delete(`/v1/system/role/${roleId}`)
+    return request.delete(`/api/v1/system/roles/${roleId}`)
 }
 
 export function deleteRoles(roleIds: number[]) {
-    return request.delete('/v1/system/role', { data: roleIds })
+    return request.delete('/api/v1/system/roles', { data: roleIds })
 }
 
 export function assignRoleMenus(roleId: number, menuIds: number[]) {
-    return request.put(`/v1/system/role/${roleId}/menus`, menuIds)
+    return request.put(`/api/v1/system/roles/${roleId}/menus`, menuIds)
 }
 
 export function assignRoleDepts(roleId: number, deptIds: number[], dataScope: number) {
-    return request.put(`/v1/system/role/${roleId}/depts`, { deptIds, dataScope })
+    return request.put(`/api/v1/system/roles/${roleId}/depts`, { deptIds, dataScope })
 }

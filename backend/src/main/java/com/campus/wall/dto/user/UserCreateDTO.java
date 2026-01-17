@@ -44,4 +44,10 @@ public class UserCreateDTO {
 
     @Schema(description = "状态：0=正常, 1=停用")
     private Integer status;
+
+    @Schema(description = "角色ID（创建时分配）")
+    private Long roleId;
+
+    @Schema(description = "备注")
+    private String remark;
 }
