@@ -5,7 +5,6 @@ import com.campus.wall.entity.system.SysOperLog;
 import com.campus.wall.mapper.system.SysOperLogMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.OperLogService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,7 +16,6 @@ public class OperLogServiceImpl implements OperLogService {
 
     private final SysOperLogMapper operLogMapper;
     private final UserMapper userMapper;
-    private final ObjectMapper objectMapper;
 
     @Override
     public void log(Long operatorId, String operatorName, String targetType, Long targetId,
@@ -31,13 +29,8 @@ public class OperLogServiceImpl implements OperLogService {
             operLog.setAction(action);
             operLog.setReason(reason);
             operLog.setIpAddress(ipAddress);
-
-            if (beforeValue != null) {
-                operLog.setBeforeValue(objectMapper.writeValueAsString(beforeValue));
-            }
-            if (afterValue != null) {
-                operLog.setAfterValue(objectMapper.writeValueAsString(afterValue));
-            }
+            operLog.setBeforeValue(beforeValue);
+            operLog.setAfterValue(afterValue);
 
             operLogMapper.insert(operLog);
         } catch (Exception e) {

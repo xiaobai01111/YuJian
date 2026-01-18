@@ -88,17 +88,18 @@ public class UserController {
         return R.ok();
     }
 
-    @Operation(summary = "封禁/解封用户", description = "封禁或解封用户，封禁时强制下线")
+    @Operation(summary = "封禁/解封用户", description = "封禁或解封用户，封禁时强制下线，返回最新用户状态")
     @SaCheckPermission("system:user:ban")
     @PutMapping("/{id}/ban")
-    public R<Void> ban(@PathVariable Long id, @RequestBody @Valid UserBanDTO dto) {
+    public R<UserVO> ban(@PathVariable Long id, @RequestBody @Valid UserBanDTO dto) {
         Long operatorId = StpUtil.getLoginIdAsLong();
         userService.updateUserStatusWithReason(id, dto.getStatus(), dto.getReason(), operatorId);
         // 封禁时强制下线
         if (dto.getStatus() == 1) {
             StpUtil.kickout(id);
         }
-        return R.ok();
+        // 返回最新用户状态
+        return R.ok(userService.getUserById(id));
     }
 
     @Operation(summary = "导出用户", description = "导出用户列表到Excel")

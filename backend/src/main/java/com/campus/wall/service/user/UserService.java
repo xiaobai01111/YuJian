@@ -28,6 +28,11 @@ public interface UserService {
     UserDetailVO getUserDetail(Long userId);
 
     /**
+     * 根据ID获取用户VO
+     */
+    UserVO getUserById(Long userId);
+
+    /**
      * 创建用户
      */
     Long createUser(UserCreateDTO dto);

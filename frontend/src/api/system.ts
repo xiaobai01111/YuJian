@@ -139,6 +139,29 @@ export function deleteDept(id: number) {
     return request.delete(`/api/v1/system/dept/${id}`)
 }
 
+export type DeptUserStrategy = 'TRANSFER_PARENT' | 'UNASSIGN' | 'DELETE'
+
+export interface DeptDeleteDTO {
+    userStrategy?: DeptUserStrategy
+    reason?: string
+}
+
+export function deleteDeptWithStrategy(id: number, data: DeptDeleteDTO) {
+    return request.post(`/api/v1/system/dept/${id}/delete`, data)
+}
+
+export function updateDeptStatus(id: number, status: number) {
+    return request.put(`/api/v1/system/dept/${id}/status`, { status })
+}
+
+export function getDeptUsers(deptId: number) {
+    return request.get(`/api/v1/system/dept/${deptId}/users`)
+}
+
+export function getDeptUserCount(deptId: number) {
+    return request.get(`/api/v1/system/dept/${deptId}/user-count`)
+}
+
 // --- User ---
 export interface UserCreateDTO {
     username: string
@@ -224,8 +247,17 @@ export function updateRole(id: number, data: RoleDTO) {
     return request.put(`/api/v1/system/roles/${id}`, data)
 }
 
-export function deleteRole(roleId: number) {
-    return request.delete(`/api/v1/system/roles/${roleId}`)
+export function getRoleMenuIds(roleId: number) {
+    return request.get(`/api/v1/system/roles/${roleId}/menus`)
+}
+
+export function getRoleUsers(roleId: number) {
+    return request.get(`/api/v1/system/roles/${roleId}/users`)
+}
+
+export function deleteRole(roleId: number, data?: { deleteUsers?: boolean; reason?: string }) {
+    const payload = data ?? { deleteUsers: false }
+    return request.post(`/api/v1/system/roles/${roleId}/delete`, payload)
 }
 
 export function deleteRoles(roleIds: number[]) {

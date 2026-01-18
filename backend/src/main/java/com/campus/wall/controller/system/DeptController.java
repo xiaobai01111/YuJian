@@ -2,9 +2,11 @@ package com.campus.wall.controller.system;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.R;
+import com.campus.wall.dto.system.DeptDeleteDTO;
 import com.campus.wall.entity.system.SysDept;
 import com.campus.wall.service.system.DeptService;
 import com.campus.wall.vo.system.DeptTreeVO;
+import com.campus.wall.vo.user.UserVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -84,7 +86,37 @@ public class DeptController {
     @SaCheckPermission("system:dept:delete")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
-        deptService.delete(id);
+        deptService.delete(id, null);
         return R.ok();
+    }
+
+    @Operation(summary = "删除部门（带用户处理策略）")
+    @SaCheckPermission("system:dept:delete")
+    @PostMapping("/{id}/delete")
+    public R<Void> deleteWithStrategy(@PathVariable Long id, @RequestBody DeptDeleteDTO dto) {
+        deptService.delete(id, dto);
+        return R.ok();
+    }
+
+    @Operation(summary = "更新部门状态")
+    @SaCheckPermission("system:dept:edit")
+    @PutMapping("/{id}/status")
+    public R<Void> updateStatus(@PathVariable Long id, @RequestBody SysDept dept) {
+        deptService.updateStatus(id, dept.getStatus());
+        return R.ok();
+    }
+
+    @Operation(summary = "获取部门用户列表")
+    @SaCheckPermission("system:dept:list")
+    @GetMapping("/{id}/users")
+    public R<List<UserVO>> getDeptUsers(@PathVariable Long id) {
+        return R.ok(deptService.getDeptUsers(id));
+    }
+
+    @Operation(summary = "获取部门用户数量")
+    @SaCheckPermission("system:dept:list")
+    @GetMapping("/{id}/user-count")
+    public R<Long> getDeptUserCount(@PathVariable Long id) {
+        return R.ok(deptService.getDeptUserCount(id));
     }
 }

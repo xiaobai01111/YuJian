@@ -23,4 +23,10 @@ public interface SysUserRoleMapper extends BaseMapper<SysUserRole> {
 
     @Select("SELECT user_id FROM sys_user_roles WHERE role_id = #{roleId}")
     List<Long> selectUserIdsByRoleId(@Param("roleId") Long roleId);
+
+    @Select("SELECT COUNT(1) FROM sys_user_roles WHERE role_id = #{roleId}")
+    Long countByRoleId(@Param("roleId") Long roleId);
+
+    @Select("SELECT COUNT(1) FROM sys_user_roles WHERE user_id = #{userId}")
+    Long countByUserId(@Param("userId") Long userId);
 }

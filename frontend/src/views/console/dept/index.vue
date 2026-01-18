@@ -69,6 +69,78 @@
       </div>
     </div>
 
+    <!-- Delete Dept Modal -->
+    <dialog :class="['modal', showDeleteModal && 'modal-open']">
+      <div class="modal-box max-w-lg">
+        <h3 class="font-bold text-lg mb-4">删除部门</h3>
+        <p class="text-base-content/70 mb-4">
+          确定要删除部门 <span class="font-semibold text-error">{{ deleteTarget?.deptName }}</span> 吗？
+        </p>
+        
+        <!-- 用户列表 -->
+        <div v-if="deleteLoading" class="flex justify-center py-4">
+          <span class="loading loading-spinner loading-md"></span>
+        </div>
+        <div v-else-if="deleteUsers.length > 0" class="mb-4">
+          <div class="alert alert-warning mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>该部门下有 <strong>{{ deleteUsers.length }}</strong> 个用户</span>
+          </div>
+          <div class="max-h-32 overflow-y-auto bg-base-200 rounded-lg p-2">
+            <div v-for="user in deleteUsers" :key="user.id" class="text-sm py-1 px-2">
+              {{ user.username }} <span class="text-base-content/50">({{ user.nickname }})</span>
+            </div>
+          </div>
+          
+          <!-- 用户处理策略 -->
+          <div class="form-control mt-4">
+            <label class="label"><span class="label-text font-medium">用户处理方式</span></label>
+            <select v-model="deleteStrategy" class="select select-bordered w-full">
+              <option value="TRANSFER_PARENT">转移到上级部门</option>
+              <option value="UNASSIGN">转移到未分配</option>
+              <option value="DELETE">删除用户</option>
+            </select>
+          </div>
+          
+          <!-- 策略后果提示 -->
+          <div class="mt-3 text-sm">
+            <div v-if="deleteStrategy === 'TRANSFER_PARENT'" class="alert alert-info py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>用户将被转移到上级部门，并强制重新登录</span>
+            </div>
+            <div v-else-if="deleteStrategy === 'UNASSIGN'" class="alert alert-info py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>用户将变为未分配部门状态，并强制重新登录</span>
+            </div>
+            <div v-else-if="deleteStrategy === 'DELETE'" class="alert alert-error py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              <span><strong>危险操作！</strong>用户将被软删除并强制下线，无法恢复登录</span>
+            </div>
+          </div>
+          
+          <!-- 删除原因（删除用户时显示） -->
+          <div v-if="deleteStrategy === 'DELETE'" class="form-control mt-3">
+            <label class="label"><span class="label-text font-medium">删除原因</span></label>
+            <textarea v-model="deleteReason" class="textarea textarea-bordered" placeholder="请输入删除原因"></textarea>
+          </div>
+        </div>
+        <div v-else class="text-base-content/60 mb-4">该部门下没有用户</div>
+        
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="closeDeleteModal" :disabled="deleteLoading">取消</button>
+          <button class="btn btn-error" @click="confirmDelete" :disabled="deleteLoading">
+            <span v-if="deleteLoading" class="loading loading-spinner loading-sm"></span>
+            确认删除
+          </button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button @click="closeDeleteModal">close</button>
+      </form>
+    </dialog>
+
     <!-- Dept Form Modal -->
     <dialog id="dept_form_modal" class="modal">
       <div class="modal-box">
@@ -128,7 +200,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, defineComponent, h, type PropType } from 'vue'
-import { getDeptTree, createDept, updateDept, deleteDept, type DeptVO, type DeptDTO } from '@/api/system'
+import { getDeptTree, createDept, updateDept, deleteDeptWithStrategy, updateDeptStatus, getDeptUsers, type DeptVO, type DeptDTO, type DeptUserStrategy } from '@/api/system'
+import type { UserVO } from '@/api/system'
 
 interface DeptNode extends DeptVO {
   level?: number
@@ -380,17 +453,56 @@ const submitForm = async () => {
   }
 }
 
+// --- Delete Modal State ---
+const showDeleteModal = ref(false)
+const deleteTarget = ref<DeptVO | null>(null)
+const deleteUsers = ref<UserVO[]>([])
+const deleteLoading = ref(false)
+const deleteStrategy = ref<DeptUserStrategy>('UNASSIGN')
+const deleteReason = ref('')
+
 const handleDelete = async (dept: DeptVO) => {
   if (dept.children && dept.children.length > 0) {
-    alert('存在子部门，无法删除')
+    alert('存在子部门，无法删除，请先删除或转移子部门')
     return
   }
-  if (!confirm(`确定要删除部门 ${dept.deptName} 吗？`)) return
+  deleteTarget.value = dept
+  deleteStrategy.value = 'UNASSIGN'
+  deleteReason.value = ''
+  deleteLoading.value = true
+  showDeleteModal.value = true
+  
   try {
-    await deleteDept(dept.id)
-    fetchDeptTree()
+    const res: any = await getDeptUsers(dept.id)
+    deleteUsers.value = res || []
   } catch (error) {
     console.error(error)
+    deleteUsers.value = []
+  } finally {
+    deleteLoading.value = false
+  }
+}
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false
+  deleteTarget.value = null
+  deleteUsers.value = []
+}
+
+const confirmDelete = async () => {
+  if (!deleteTarget.value) return
+  deleteLoading.value = true
+  try {
+    await deleteDeptWithStrategy(deleteTarget.value.id, {
+      userStrategy: deleteStrategy.value,
+      reason: deleteReason.value || undefined
+    })
+    closeDeleteModal()
+    fetchDeptTree()
+  } catch (error: any) {
+    alert(error?.response?.data?.message || '删除失败')
+  } finally {
+    deleteLoading.value = false
   }
 }
 
@@ -398,19 +510,16 @@ const handleStatusChange = async (dept: DeptVO) => {
   const newStatus = dept.status === 0 ? 1 : 0
   const actionName = newStatus === 1 ? '停用' : '启用'
   
-  if (!confirm(`确定要${actionName}部门 ${dept.deptName} 吗？`)) {
+  if (!confirm(`确定要${actionName}部门 ${dept.deptName} 吗？${newStatus === 1 ? '\n停用后该部门下的用户将被踢出登录。' : ''}`)) {
     fetchDeptTree()
     return
   }
   
   try {
-    await updateDept(dept.id, {
-      ...dept,
-      status: newStatus
-    })
+    await updateDeptStatus(dept.id, newStatus)
     fetchDeptTree()
-  } catch (error) {
-    console.error(error)
+  } catch (error: any) {
+    alert(error?.response?.data?.message || '操作失败')
     fetchDeptTree()
   }
 }

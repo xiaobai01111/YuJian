@@ -16,6 +16,11 @@ public interface RoleService {
     List<RoleVO> getAllRoles();
 
     /**
+     * 获取角色菜单ID列表
+     */
+    List<Long> getRoleMenuIds(Long roleId);
+
+    /**
      * 分页查询角色
      */
     PageResult<RoleVO> queryRoles(int page, int size);
@@ -23,20 +28,25 @@ public interface RoleService {
     /**
      * 创建角色
      */
-    Long createRole(String roleName, String roleKey, List<Long> menuIds);
+    RoleVO createRole(String roleName, String roleKey, Integer status, Integer sortOrder, String remark, List<Long> menuIds);
 
     /**
      * 更新角色
      */
-    void updateRole(Long roleId, String roleName, Integer status, Integer sortOrder, String remark, List<Long> menuIds);
+    RoleVO updateRole(Long roleId, String roleName, String roleKey, Integer status, Integer sortOrder, String remark, List<Long> menuIds);
 
     /**
      * 删除角色
      */
-    void deleteRole(Long roleId);
+    void deleteRole(Long roleId, boolean deleteUsers, String reason);
 
     /**
      * 分配角色菜单
      */
-    void assignMenus(Long roleId, List<Long> menuIds);
+    RoleVO assignMenus(Long roleId, List<Long> menuIds);
+
+    /**
+     * 获取角色下的用户列表
+     */
+    List<com.campus.wall.vo.user.UserVO> getRoleUsers(Long roleId);
 }

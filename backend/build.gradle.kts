@@ -48,7 +48,7 @@ dependencies {
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
     // Database
-    runtimeOnly("org.postgresql:postgresql")
+    implementation("org.postgresql:postgresql")
     implementation("com.baomidou:mybatis-plus-spring-boot3-starter:$mybatisPlusVersion")
 
     // Flyway

@@ -76,10 +76,14 @@
                 <td class="font-medium">{{ role.roleName }}</td>
                 <td>{{ role.roleKey }}</td>
                 <td>
-                  <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="role.status === 0" :disabled="isAdminRole(role)" @change="handleStatusChange(role)" />
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="role.status === 0" :disabled="isAdminRole(role)" @change="handleStatusChange(role)" />
+                    <span v-if="role.status === 1" class="badge badge-error badge-sm">停用</span>
+                    <span v-else class="badge badge-success badge-sm">正常</span>
+                  </div>
                 </td>
                 <td>{{ role.sortOrder }}</td>
-                <td class="text-base-content/60 max-w-xs truncate" :title="role.remark">{{ role.remark || '-' }}</td>
+                <td class="text-base-content/60 max-w-xs truncate" :title="role.remark || ''">{{ role.remark || '-' }}</td>
                 <td class="text-base-content/60 text-sm">{{ formatDate(role.createdAt) }}</td>
                 <td>
                    <div class="flex justify-center gap-2">
@@ -186,13 +190,67 @@
       </div>
     </dialog>
 
+    <!-- Role Delete Modal -->
+    <dialog id="role_delete_modal" class="modal">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg text-error">删除角色</h3>
+        <p class="py-2 text-base-content/70">
+          确定要删除角色
+          <strong v-if="deleteRoleTargets.length === 1">{{ deleteRoleTargets[0].roleName }}</strong>
+          <strong v-else>{{ deleteRoleTargets.length }} 个角色</strong>
+          吗？
+        </p>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-medium">该角色下用户</span>
+            <span class="label-text-alt">{{ deleteRoleUserCount }} 人</span>
+          </label>
+          <div class="border border-base-200 rounded-lg p-3 max-h-40 overflow-auto bg-base-50">
+            <div v-if="deleteRoleLoading" class="flex items-center justify-center py-4">
+              <span class="loading loading-spinner text-primary"></span>
+            </div>
+            <div v-else-if="deleteRoleUserCount === 0" class="text-sm text-base-content/60">
+              无用户
+            </div>
+            <div v-else class="text-sm space-y-3">
+              <div v-for="role in deleteRoleTargets" :key="role.id">
+                <div class="font-medium text-base-content/70 mb-1">{{ role.roleName }}</div>
+                <ul class="space-y-1">
+                  <li v-for="user in deleteRoleUsersMap[role.id] || []" :key="user.id">
+                    {{ user.nickname || user.username }}
+                    <span class="text-base-content/50">({{ user.username }})</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-control mt-3">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" class="checkbox checkbox-sm" v-model="deleteWithUsers" />
+            <span class="label-text">同时删除该角色下的用户</span>
+          </label>
+        </div>
+        <div class="form-control mt-2">
+          <label class="label"><span class="label-text">删除原因（可选）</span></label>
+          <textarea v-model="deleteReason" class="textarea textarea-bordered h-20" placeholder="可填写防误删原因"></textarea>
+        </div>
+        <div class="modal-action">
+          <form method="dialog">
+            <button class="btn btn-ghost">取消</button>
+            <button class="btn btn-error ml-2" @click.prevent="confirmDeleteRole" :disabled="submitting">确认删除</button>
+          </form>
+        </div>
+      </div>
+    </dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus } from '@/api/system'
-import type { RoleVO, RoleDTO, MenuVO } from '@/api/system'
+import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers } from '@/api/system'
+import type { RoleVO, RoleDTO, MenuVO, UserVO } from '@/api/system'
 import { defineComponent, h, type PropType } from 'vue'
 
 // --- Components ---
@@ -299,6 +357,11 @@ const currentId = ref<number>(0)
 const currentRole = ref<RoleVO | null>(null)
 const selectedMenuIds = ref<number[]>([])
 const selectedIds = ref<number[]>([])
+const deleteRoleTargets = ref<RoleVO[]>([])
+const deleteRoleUsersMap = ref<Record<number, UserVO[]>>({})
+const deleteRoleLoading = ref(false)
+const deleteWithUsers = ref(false)
+const deleteReason = ref('')
 
 const isAllSelected = computed(() => {
   return roleList.value.length > 0 && selectedIds.value.length === roleList.value.length
@@ -313,12 +376,10 @@ const fetchRoles = async () => {
   selectedIds.value = []
   try {
     const res: any = await getRoleList()
-    roleList.value = (res || []).map((role: RoleVO) => ({
-        ...role,
-        remark: role.remark || '暂无备注'
-    }))
-  } catch (error) {
+    roleList.value = res || []
+  } catch (error: any) {
     console.error(error)
+    alert(error?.response?.data?.message || '获取角色列表失败')
   } finally {
     loading.value = false
   }
@@ -348,46 +409,117 @@ const openFormModal = (role?: RoleVO) => {
 const submitForm = async () => {
   submitting.value = true
   try {
+    const payload: RoleDTO = {
+      roleName: form.roleName.trim(),
+      roleKey: form.roleKey.trim(),
+      sortOrder: form.sortOrder,
+      status: form.status,
+      remark: form.remark?.trim() || undefined
+    }
     if (isEdit.value) {
-      await updateRole(currentId.value, form)
+      const updated = await updateRole(currentId.value, payload)
+      const idx = roleList.value.findIndex(r => r.id === currentId.value)
+      if (idx !== -1) {
+        roleList.value[idx] = updated
+      }
     } else {
-      await createRole(form)
+      const created = await createRole(payload)
+      roleList.value = [created, ...roleList.value]
     }
     const modal = document.getElementById('role_form_modal') as HTMLDialogElement
     modal.close()
-    fetchRoles()
-  } catch (error) {
+  } catch (error: any) {
     console.error(error)
+    alert(error?.response?.data?.message || '保存失败')
   } finally {
     submitting.value = false
   }
 }
 
 const handleDelete = async (role: RoleVO) => {
-  if (!confirm(`确定要删除角色 ${role.roleName} 吗？`)) return
+  deleteRoleTargets.value = [role]
+  deleteWithUsers.value = false
+  deleteReason.value = ''
+  deleteRoleUsersMap.value = {}
+  deleteRoleLoading.value = true
+  const modal = document.getElementById('role_delete_modal') as HTMLDialogElement
+  modal.showModal()
   try {
-    await deleteRole(role.id)
-    fetchRoles()
-  } catch (error) {
+    const res: any = await getRoleUsers(role.id)
+    deleteRoleUsersMap.value = { [role.id]: res || [] }
+  } catch (error: any) {
     console.error(error)
+    alert(error?.response?.data?.message || '获取角色用户失败')
+  } finally {
+    deleteRoleLoading.value = false
   }
 }
 
 const handleBatchDelete = async () => {
-  if (!confirm(`确定要删除选中的 ${selectedIds.value.length} 个角色吗？`)) return
+  const targets = roleList.value.filter(r => selectedIds.value.includes(r.id))
+  if (targets.length === 0) return
+  deleteRoleTargets.value = targets
+  deleteWithUsers.value = false
+  deleteReason.value = ''
+  deleteRoleUsersMap.value = {}
+  deleteRoleLoading.value = true
+  const modal = document.getElementById('role_delete_modal') as HTMLDialogElement
+  modal.showModal()
   try {
-    for (const id of selectedIds.value) {
-      await deleteRole(id)
-    }
-    fetchRoles()
-  } catch (error) {
+    const results = await Promise.all(
+      targets.map(async role => {
+        const users = await getRoleUsers(role.id)
+        return { roleId: role.id, users: users || [] }
+      })
+    )
+    const map: Record<number, UserVO[]> = {}
+    results.forEach(r => { map[r.roleId] = r.users })
+    deleteRoleUsersMap.value = map
+  } catch (error: any) {
     console.error(error)
+    alert(error?.response?.data?.message || '获取角色用户失败')
+  } finally {
+    deleteRoleLoading.value = false
   }
 }
 
+const confirmDeleteRole = async () => {
+  if (deleteRoleTargets.value.length === 0) return
+  submitting.value = true
+  try {
+    const failed: number[] = []
+    for (const role of deleteRoleTargets.value) {
+      try {
+        await deleteRole(role.id, {
+          deleteUsers: deleteWithUsers.value,
+          reason: deleteReason.value?.trim() || undefined
+        })
+      } catch {
+        failed.push(role.id)
+      }
+    }
+    roleList.value = roleList.value.filter(r => !deleteRoleTargets.value.some(t => t.id === r.id))
+    selectedIds.value = []
+    const modal = document.getElementById('role_delete_modal') as HTMLDialogElement
+    modal.close()
+    if (failed.length > 0) {
+      alert(`部分角色删除失败：${failed.join(', ')}`)
+    }
+  } catch (error: any) {
+    console.error(error)
+    alert(error?.response?.data?.message || '删除失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const deleteRoleUserCount = computed(() => {
+  return Object.values(deleteRoleUsersMap.value).reduce((sum, list) => sum + list.length, 0)
+})
+
 const openMenuModal = async (role: RoleVO) => {
   currentRole.value = role
-  selectedMenuIds.value = role.menuIds || []
+  selectedMenuIds.value = []
   const modal = document.getElementById('menu_perm_modal') as HTMLDialogElement
   modal.showModal()
   
@@ -401,6 +533,13 @@ const openMenuModal = async (role: RoleVO) => {
     } finally {
       loadingMenus.value = false
     }
+  }
+  try {
+    const res: any = await getRoleMenuIds(role.id)
+    selectedMenuIds.value = res || []
+  } catch (error: any) {
+    console.error(error)
+    alert(error?.response?.data?.message || '获取角色菜单失败')
   }
 }
 
@@ -417,13 +556,18 @@ const submitMenuPerms = async () => {
   if (!currentRole.value) return
   submitting.value = true
   try {
-    await assignRoleMenus(currentRole.value.id, selectedMenuIds.value)
+    const updated = await assignRoleMenus(currentRole.value.id, selectedMenuIds.value)
     currentRole.value.menuIds = [...selectedMenuIds.value]
+    const idx = roleList.value.findIndex(r => r.id === currentRole.value?.id)
+    if (idx !== -1) {
+      roleList.value[idx] = updated
+    }
     
     const modal = document.getElementById('menu_perm_modal') as HTMLDialogElement
     modal.close()
-  } catch (error) {
+  } catch (error: any) {
     console.error(error)
+    alert(error?.response?.data?.message || '分配菜单失败')
   } finally {
     submitting.value = false
   }
@@ -465,16 +609,20 @@ const handleStatusChange = async (role: RoleVO) => {
   }
   
   try {
-    await updateRole(role.id, {
+    const updated = await updateRole(role.id, {
       roleName: role.roleName,
       roleKey: role.roleKey,
       sortOrder: role.sortOrder,
       status: newStatus,
       remark: role.remark
     })
-    role.status = newStatus
-  } catch (error) {
+    const idx = roleList.value.findIndex(r => r.id === role.id)
+    if (idx !== -1) {
+      roleList.value[idx] = updated
+    }
+  } catch (error: any) {
     console.error(error)
+    alert(error?.response?.data?.message || '更新角色状态失败')
     fetchRoles()
   }
 }

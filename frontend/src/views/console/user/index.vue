@@ -165,7 +165,11 @@
                   <span class="badge badge-sm badge-ghost">{{ getSexLabel(user.sex) }}</span>
                 </td>
                 <td>
-                  <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="user.status === 0" :disabled="user.username === 'admin'" @change="handleStatusChange(user)" />
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="user.status === 0" :disabled="user.username === 'admin'" @change="handleStatusChange(user)" />
+                    <span v-if="user.status === 1" class="badge badge-error badge-sm">已封禁</span>
+                    <span v-else class="badge badge-success badge-sm">正常</span>
+                  </div>
                 </td>
                 <td class="text-sm text-base-content/60">{{ user.loginDate ? formatDate(user.loginDate) : '-' }}</td>
                 <td>
@@ -232,16 +236,22 @@
         <h3 class="font-bold text-lg text-error">封禁用户</h3>
         <p class="py-2 text-base-content/70">确定要封禁用户 <strong>{{ banTargetUser?.username }}</strong> 吗？</p>
         <div class="form-control">
-          <label class="label"><span class="label-text">封禁理由 <span class="text-error">*</span></span></label>
-          <textarea v-model="banReason" class="textarea textarea-bordered h-24" placeholder="请填写封禁理由（必填）"></textarea>
+          <label class="label">
+            <span class="label-text">封禁理由 <span class="text-error">*</span></span>
+            <span class="label-text-alt">{{ banReason.length }}/200</span>
+          </label>
+          <textarea v-model="banReason" class="textarea textarea-bordered h-24" :class="{ 'textarea-error': banReason.length > 200 || (banReasonTouched && banReason.trim().length < 2) }" maxlength="200" placeholder="请填写封禁理由（2-200字）" @blur="banReasonTouched = true"></textarea>
+          <label class="label" v-if="banReasonTouched && banReason.trim().length < 2">
+            <span class="label-text-alt text-error">封禁理由至少2个字符</span>
+          </label>
         </div>
         <div class="modal-action">
-          <button class="btn btn-ghost" @click="showBanModal = false">取消</button>
-          <button class="btn btn-error" @click="confirmBan">确认封禁</button>
+          <button class="btn btn-ghost" @click="closeBanModal">取消</button>
+          <button class="btn btn-error" :disabled="banReason.trim().length < 2 || banReason.length > 200" @click="confirmBan">确认封禁</button>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop">
-        <button @click="showBanModal = false">close</button>
+        <button @click="closeBanModal">close</button>
       </form>
     </dialog>
   </div>
@@ -264,6 +274,7 @@ const loading = ref(false)
 const showBanModal = ref(false)
 const banTargetUser = ref<UserVO | null>(null)
 const banReason = ref('')
+const banReasonTouched = ref(false)
 const showSearch = ref(false)
 const userList = ref<UserVO[]>([])
 const allRoles = ref<RoleVO[]>([])
@@ -399,18 +410,30 @@ const handleStatusChange = async (user: UserVO) => {
   }
 }
 
+const closeBanModal = () => {
+  showBanModal.value = false
+  banReason.value = ''
+  banReasonTouched.value = false
+  banTargetUser.value = null
+}
+
 const confirmBan = async () => {
-  if (!banReason.value.trim()) {
-    alert('请填写封禁理由')
+  if (banReason.value.trim().length < 2) {
+    banReasonTouched.value = true
     return
   }
   if (!banTargetUser.value) return
   
   try {
-    await banUser(banTargetUser.value.id, 1, banReason.value)
-    banTargetUser.value.status = 1
-    showBanModal.value = false
-    fetchData()
+    const res = await banUser(banTargetUser.value.id, 1, banReason.value)
+    // 使用返回的最新用户状态更新列表
+    if (res) {
+      const idx = userList.value.findIndex(u => u.id === banTargetUser.value?.id)
+      if (idx !== -1) {
+        userList.value[idx] = res
+      }
+    }
+    closeBanModal()
   } catch (error) {
     console.error(error)
   }

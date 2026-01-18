@@ -31,4 +31,7 @@ public class UserEditDTO {
 
     @Schema(description = "性别：0=未知, 1=男, 2=女")
     private Integer sex;
+
+    @Schema(description = "备注")
+    private String remark;
 }

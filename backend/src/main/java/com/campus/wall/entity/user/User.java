@@ -44,6 +44,8 @@ public class User implements Serializable {
 
     private String phone;
 
+    private String remark;
+
     private Long deptId;
 
     private Integer userType;

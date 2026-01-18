@@ -21,6 +21,7 @@ public class UserDetailVO {
     private Integer status;
     private Integer creditScore;
     private List<Long> roleIds;
+    private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

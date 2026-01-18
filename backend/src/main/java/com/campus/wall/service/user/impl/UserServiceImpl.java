@@ -24,6 +24,7 @@ import cn.hutool.poi.excel.ExcelUtil;
 import cn.hutool.poi.excel.ExcelWriter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import cn.hutool.crypto.digest.BCrypt;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
@@ -100,6 +102,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserVO getUserById(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return null;
+        }
+        return toUserVO(user);
+    }
+
+    @Override
     public void updateUser(Long userId, UserUpdateDTO dto) {
         User user = userMapper.selectById(userId);
         if (user == null) {
@@ -145,7 +156,16 @@ public class UserServiceImpl implements UserService {
         }
 
         Integer oldStatus = user.getStatus();
-        userMapper.updateStatus(userId, status);
+        int updated = userMapper.updateStatus(userId, status);
+        if (updated == 0) {
+            throw new BusinessException("更新用户状态失败，请重试");
+        }
+        User updatedUser = userMapper.selectById(userId);
+        if (updatedUser == null || !Objects.equals(updatedUser.getStatus(), status)) {
+            log.warn("用户状态更新后读取不一致 userId={} expect={} actual={}", userId, status,
+                updatedUser != null ? updatedUser.getStatus() : null);
+            throw new BusinessException("用户状态更新失败，请稍后重试");
+        }
 
         // 记录审计日志
         String action = status == 1 ? "ban" : "unban";
@@ -221,6 +241,7 @@ public class UserServiceImpl implements UserService {
         user.setUserType(dto.getUserType() != null ? dto.getUserType() : 0);
         user.setSex(dto.getSex() != null ? dto.getSex() : 0);
         user.setStatus(dto.getStatus() != null ? dto.getStatus() : 0);
+        user.setRemark(dto.getRemark());
         user.setVerifyStatus(0);
         user.setCreditScore(100);
 
@@ -253,6 +274,7 @@ public class UserServiceImpl implements UserService {
         if (dto.getDeptId() != null) user.setDeptId(dto.getDeptId());
         if (dto.getUserType() != null) user.setUserType(dto.getUserType());
         if (dto.getSex() != null) user.setSex(dto.getSex());
+        if (dto.getRemark() != null) user.setRemark(dto.getRemark());
 
         userMapper.updateById(user);
 
@@ -286,12 +308,8 @@ public class UserServiceImpl implements UserService {
                 throw new BusinessException("不能删除自己的账号");
             }
 
-            // 软删除：设置删除信息
-            user.setDeletedAt(java.time.LocalDateTime.now());
-            user.setDeletedBy(operatorId);
-            user.setDeletedReason(reason);
-            user.setDeleted(1);
-            userMapper.updateById(user);
+            // 软删除：使用原生SQL绕过@TableLogic
+            userMapper.softDeleteById(userId, java.time.LocalDateTime.now(), operatorId, reason);
 
             // 记录审计日志
             operLogService.log(operatorId, null, "user", userId, "delete", reason, 

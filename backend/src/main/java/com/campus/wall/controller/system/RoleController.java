@@ -3,7 +3,9 @@ package com.campus.wall.controller.system;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.system.RoleDTO;
+import com.campus.wall.dto.system.RoleDeleteDTO;
 import com.campus.wall.service.system.RoleService;
+import com.campus.wall.vo.user.UserVO;
 import com.campus.wall.vo.system.RoleVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,36 +33,63 @@ public class RoleController {
         return R.ok(roleService.getAllRoles());
     }
 
+    @Operation(summary = "角色菜单ID列表", description = "获取角色关联的菜单ID列表")
+    @SaCheckPermission("system:role:list")
+    @GetMapping("/{id}/menus")
+    public R<List<Long>> getRoleMenus(@PathVariable Long id) {
+        return R.ok(roleService.getRoleMenuIds(id));
+    }
+
     @Operation(summary = "创建角色")
     @SaCheckPermission("system:role:add")
     @PostMapping
-    public R<Long> create(@RequestBody @Valid RoleDTO dto) {
-        Long roleId = roleService.createRole(dto.getRoleName(), dto.getRoleKey(), dto.getMenuIds());
-        return R.ok(roleId);
+    public R<RoleVO> create(@RequestBody @Valid RoleDTO dto) {
+        RoleVO role = roleService.createRole(dto.getRoleName(), dto.getRoleKey(), dto.getStatus(),
+            dto.getSortOrder(), dto.getRemark(), dto.getMenuIds());
+        return R.ok(role);
     }
 
     @Operation(summary = "更新角色")
     @SaCheckPermission("system:role:edit")
     @PutMapping("/{id}")
-    public R<Void> update(@PathVariable Long id, @RequestBody @Valid RoleDTO dto) {
-        roleService.updateRole(id, dto.getRoleName(), dto.getStatus(), dto.getSortOrder(), 
-                dto.getRemark(), dto.getMenuIds());
-        return R.ok();
+    public R<RoleVO> update(@PathVariable Long id, @RequestBody @Valid RoleDTO dto) {
+        RoleVO role = roleService.updateRole(id, dto.getRoleName(), dto.getRoleKey(), dto.getStatus(),
+            dto.getSortOrder(), dto.getRemark(), dto.getMenuIds());
+        return R.ok(role);
     }
 
     @Operation(summary = "删除角色")
     @SaCheckPermission("system:role:delete")
     @DeleteMapping("/{id}")
-    public R<Void> delete(@PathVariable Long id) {
-        roleService.deleteRole(id);
+    public R<Void> delete(@PathVariable Long id,
+                          @RequestParam(value = "deleteUsers", required = false) Boolean deleteUsers,
+                          @RequestParam(value = "reason", required = false) String reason) {
+        roleService.deleteRole(id, Boolean.TRUE.equals(deleteUsers), reason);
+        return R.ok();
+    }
+
+    @Operation(summary = "删除角色（携带参数）")
+    @SaCheckPermission("system:role:delete")
+    @PostMapping("/{id}/delete")
+    public R<Void> deleteWithBody(@PathVariable Long id, @RequestBody RoleDeleteDTO dto) {
+        boolean deleteUsers = dto != null && Boolean.TRUE.equals(dto.getDeleteUsers());
+        String reason = dto != null ? dto.getReason() : null;
+        roleService.deleteRole(id, deleteUsers, reason);
         return R.ok();
     }
 
     @Operation(summary = "分配菜单权限")
     @SaCheckPermission("system:role:edit")
     @PutMapping("/{id}/menus")
-    public R<Void> assignMenus(@PathVariable Long id, @RequestBody List<Long> menuIds) {
-        roleService.assignMenus(id, menuIds);
-        return R.ok();
+    public R<RoleVO> assignMenus(@PathVariable Long id, @RequestBody List<Long> menuIds) {
+        RoleVO role = roleService.assignMenus(id, menuIds);
+        return R.ok(role);
+    }
+
+    @Operation(summary = "角色用户列表", description = "获取角色下的用户列表")
+    @SaCheckPermission("system:role:list")
+    @GetMapping("/{id}/users")
+    public R<List<UserVO>> users(@PathVariable Long id) {
+        return R.ok(roleService.getRoleUsers(id));
     }
 }
