@@ -163,6 +163,18 @@ const router = createRouter({
                     meta: { title: '部门管理', icon: 'tree' }
                 },
                 {
+                    path: 'auth-rule',
+                    name: 'AuthRuleManagement',
+                    component: () => import('@/views/console/auth-rule/index.vue'),
+                    meta: { title: '认证规则', icon: 'id-card' }
+                },
+                {
+                    path: 'sensitive-word',
+                    name: 'SensitiveWordManagement',
+                    component: () => import('@/views/console/sensitive-word/index.vue'),
+                    meta: { title: '敏感词管理', icon: 'warning' }
+                },
+                {
                     path: 'login-log',
                     name: 'LoginLog',
                     component: () => import('@/views/console/login-log/index.vue'),

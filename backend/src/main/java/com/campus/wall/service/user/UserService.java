@@ -3,8 +3,10 @@ package com.campus.wall.service.user;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.dto.user.UserCreateDTO;
 import com.campus.wall.dto.user.UserEditDTO;
+import com.campus.wall.dto.user.UserBatchAssignDTO;
 import com.campus.wall.dto.user.UserQueryDTO;
 import com.campus.wall.dto.user.UserUpdateDTO;
+import com.campus.wall.dto.user.UserProfileUpdateDTO;
 import com.campus.wall.vo.user.UserDetailVO;
 import com.campus.wall.vo.user.UserVO;
 import jakarta.servlet.http.HttpServletResponse;
@@ -63,6 +65,11 @@ public interface UserService {
     void updateUser(Long userId, UserUpdateDTO dto);
 
     /**
+     * 更新个人中心资料
+     */
+    void updateProfile(Long userId, UserProfileUpdateDTO dto);
+
+    /**
      * 封禁/解封用户
      */
     void updateUserStatus(Long userId, Integer status);
@@ -81,6 +88,11 @@ public interface UserService {
      * 批量分配用户角色
      */
     void batchAssignRoles(List<Long> userIds, List<Long> roleIds);
+
+    /**
+     * 按条件批量分配角色/部门
+     */
+    int batchAssignByQuery(UserBatchAssignDTO dto, Long operatorId);
 
     /**
      * 更新用户信用分

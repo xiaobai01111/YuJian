@@ -1,5 +1,6 @@
 <template>
-  <div class="p-6">
+  <div class="h-full flex flex-col overflow-hidden">
+    <div class="flex-1 overflow-auto min-h-0 p-6 space-y-6">
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
       <div>
@@ -124,6 +125,8 @@
           </div>
         </div>
       </div>
+    </div>
+
     </div>
 
     <!-- Create/Edit Modal -->

@@ -12,6 +12,7 @@ import com.campus.wall.entity.user.IdentityVerification;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.service.system.AuthRuleService;
 import com.campus.wall.service.user.VerificationService;
 import com.campus.wall.vo.user.VerificationVO;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class VerificationServiceImpl implements VerificationService {
 
     private final IdentityVerificationMapper verificationMapper;
     private final UserMapper userMapper;
+    private final AuthRuleService authRuleService;
 
     @Override
     public PageResult<VerificationVO> queryVerifications(Integer status, int page, int size) {
@@ -106,6 +108,9 @@ public class VerificationServiceImpl implements VerificationService {
             }
 
             userMapper.updateById(user);
+
+            // 认证通过后应用规则
+            authRuleService.applyRules(user, "VERIFY", "MANUAL");
         }
 
         verificationMapper.updateById(verification);

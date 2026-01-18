@@ -87,10 +87,10 @@ public class SensitiveWordServiceImpl implements SensitiveWordService {
         if (word == null || word.trim().isEmpty()) {
             return;
         }
-        // 保存到数据库
+        // 保存到数据库（默认拦截级别）
         SensitiveWord entity = new SensitiveWord();
         entity.setWord(word.trim());
-        entity.setLevel(0);
+        entity.setLevel(2);
         sensitiveWordMapper.insert(entity);
         
         // 更新内存

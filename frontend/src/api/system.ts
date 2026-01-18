@@ -213,6 +213,10 @@ export function batchUpdateUserRole(userIds: number[], roleIds: number[]) {
     return request.put('/api/v1/console/users/batch-role', { userIds, roleIds })
 }
 
+export function batchAssignUsersByQuery(data: any) {
+    return request.post('/api/v1/console/users/batch-assign', data)
+}
+
 export function banUser(userId: number, status: number, reason?: string) {
     return request.put(`/api/v1/console/users/${userId}/ban`, { status, reason })
 }
@@ -347,4 +351,85 @@ export function offlineNotice(id: number) {
 
 export function deleteNotice(id: number) {
     return request.delete(`/api/v1/console/notices/${id}`)
+}
+
+// --- Sensitive Words (敏感词) ---
+export interface SensitiveWordVO {
+    id: number
+    word: string
+    level: number
+    createdAt?: string
+}
+
+export interface SensitiveWordDTO {
+    word: string
+    level?: number
+}
+
+export function querySensitiveWords(params: { page?: number; size?: number; level?: number; keyword?: string }) {
+    return request.get('/api/v1/system/sensitive-words', { params })
+}
+
+export function createSensitiveWord(data: SensitiveWordDTO) {
+    return request.post('/api/v1/system/sensitive-words', data)
+}
+
+export function createSensitiveWordsBatch(data: { words: string[]; level?: number }) {
+    return request.post('/api/v1/system/sensitive-words/batch', data)
+}
+
+export function deleteSensitiveWord(id: number) {
+    return request.delete(`/api/v1/system/sensitive-words/${id}`)
+}
+
+export function deleteSensitiveWords(ids: number[]) {
+    return request.delete('/api/v1/system/sensitive-words', { data: ids })
+}
+
+// --- Auth Rules (认证规则) ---
+export interface AuthRuleVO {
+    id: number
+    name: string
+    enabled: boolean
+    triggerType: string
+    verifyMethod?: string
+    matchType?: string
+    matchValue?: string
+    roleIds?: number[]
+    roleNames?: string[]
+    deptId?: number
+    deptName?: string
+    priority?: number
+    remark?: string
+    createdAt?: string
+    updatedAt?: string
+}
+
+export interface AuthRuleDTO {
+    name: string
+    enabled?: boolean
+    triggerType: string
+    verifyMethod?: string
+    matchType?: string
+    matchValue?: string
+    roleIds?: number[]
+    deptId?: number
+    priority?: number
+    remark?: string
+}
+
+export function queryAuthRules(params: { page?: number; size?: number; triggerType?: string; verifyMethod?: string; enabled?: boolean }) {
+    return request.get('/api/v1/system/auth-rules', { params })
+}
+
+export function createAuthRule(data: AuthRuleDTO) {
+    return request.post('/api/v1/system/auth-rules', data)
+}
+
+export function updateAuthRule(id: number, data: AuthRuleDTO) {
+    return request.put(`/api/v1/system/auth-rules/${id}`, data)
+}
+
+export function deleteAuthRule(id: number) {
+    return request.delete(`/api/v1/system/auth-rules/${id}`)
 }

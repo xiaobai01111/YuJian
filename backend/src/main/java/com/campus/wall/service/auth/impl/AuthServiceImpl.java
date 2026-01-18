@@ -18,6 +18,7 @@ import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.auth.AuthService;
+import com.campus.wall.service.system.AuthRuleService;
 import com.campus.wall.vo.auth.LoginVO;
 import com.campus.wall.vo.auth.UserInfoVO;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class AuthServiceImpl implements AuthService {
     private final SysDeptMapper deptMapper;
     private final IdentityVerificationMapper verificationMapper;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+    private final AuthRuleService authRuleService;
 
     private static final String EMAIL_CODE_PREFIX = "campus:verify:email:";
     private static final long EMAIL_CODE_TTL = 5 * 60; // 5分钟
@@ -70,6 +72,9 @@ public class AuthServiceImpl implements AuthService {
         user.setCreditScore(100);
 
         userMapper.insert(user);
+
+        // 注册后应用规则（默认分配普通用户角色等）
+        authRuleService.applyRules(user, "REGISTER", null);
         return user.getId();
     }
 
@@ -210,6 +215,9 @@ public class AuthServiceImpl implements AuthService {
         user.setVerifyStatus(2); // 已验证
         user.setVerifyMethod("EDU_EMAIL");
         userMapper.updateById(user);
+
+        // 认证通过后应用规则
+        authRuleService.applyRules(user, "VERIFY", "EDU_EMAIL");
 
         // 删除验证码
         redisTemplate.delete(key);

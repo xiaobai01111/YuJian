@@ -15,11 +15,13 @@ public class UserDetailVO {
     private String nickname;
     private String avatar;
     private String email;
+    private String phone;
     private String eduEmail;
     private Integer verifyStatus;
     private String verifyMethod;
     private Integer status;
     private Integer creditScore;
+    private Integer sex;
     private List<Long> roleIds;
     private String remark;
     private LocalDateTime createdAt;

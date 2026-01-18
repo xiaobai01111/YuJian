@@ -12,6 +12,13 @@ public class UserQueryDTO extends PageQueryDTO {
 
     private String username;
     private String nickname;
+    private String phone;
     private Integer status;
     private Integer verifyStatus;
+    private Integer userType;
+    private Long deptId;
+    private Long roleId;
+    private String loginDateStart;
+    private String loginDateEnd;
+    private Long lastId;
 }

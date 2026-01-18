@@ -7,6 +7,7 @@ import com.campus.wall.common.R;
 import com.campus.wall.dto.user.BatchUserRoleDTO;
 import com.campus.wall.dto.user.UserBanDTO;
 import com.campus.wall.dto.user.UserCreateDTO;
+import com.campus.wall.dto.user.UserBatchAssignDTO;
 import com.campus.wall.dto.user.UserDeleteDTO;
 import com.campus.wall.dto.user.UserEditDTO;
 import com.campus.wall.dto.user.UserQueryDTO;
@@ -86,6 +87,15 @@ public class UserController {
     public R<Void> batchAssignRole(@RequestBody @Valid BatchUserRoleDTO dto) {
         userService.batchAssignRoles(dto.getUserIds(), dto.getRoleIds());
         return R.ok();
+    }
+
+    @Operation(summary = "按条件批量分配", description = "按筛选条件批量分配角色/部门")
+    @SaCheckPermission("system:user:role")
+    @PostMapping("/batch-assign")
+    public R<Integer> batchAssignByQuery(@RequestBody @Valid UserBatchAssignDTO dto) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        int affected = userService.batchAssignByQuery(dto, operatorId);
+        return R.ok(affected);
     }
 
     @Operation(summary = "封禁/解封用户", description = "封禁或解封用户，封禁时强制下线，返回最新用户状态")

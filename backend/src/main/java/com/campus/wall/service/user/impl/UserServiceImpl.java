@@ -9,6 +9,8 @@ import com.campus.wall.dto.user.UserCreateDTO;
 import com.campus.wall.dto.user.UserEditDTO;
 import com.campus.wall.dto.user.UserQueryDTO;
 import com.campus.wall.dto.user.UserUpdateDTO;
+import com.campus.wall.dto.user.UserBatchAssignDTO;
+import com.campus.wall.dto.user.UserProfileUpdateDTO;
 import com.campus.wall.entity.system.SysUserRole;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.system.SysRoleMapper;
@@ -40,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,22 +57,14 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResult<UserVO> queryUsers(UserQueryDTO query) {
-        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        
-        if (StringUtils.hasText(query.getUsername())) {
-            wrapper.like(User::getUsername, query.getUsername());
+        LambdaQueryWrapper<User> wrapper = buildUserQuery(query);
+
+        if (query.getLastId() != null) {
+            wrapper.lt(User::getId, query.getLastId());
+            wrapper.orderByDesc(User::getId);
+        } else {
+            wrapper.orderByDesc(User::getCreatedAt);
         }
-        if (StringUtils.hasText(query.getNickname())) {
-            wrapper.like(User::getNickname, query.getNickname());
-        }
-        if (query.getStatus() != null) {
-            wrapper.eq(User::getStatus, query.getStatus());
-        }
-        if (query.getVerifyStatus() != null) {
-            wrapper.eq(User::getVerifyStatus, query.getVerifyStatus());
-        }
-        
-        wrapper.orderByDesc(User::getCreatedAt);
 
         Page<User> page = userMapper.selectPage(
             new Page<>(query.getPage(), query.getSize()), wrapper
@@ -125,6 +120,27 @@ public class UserServiceImpl implements UserService {
         }
         if (dto.getEmail() != null) {
             user.setEmail(dto.getEmail());
+        }
+
+        userMapper.updateById(user);
+    }
+
+    @Override
+    public void updateProfile(Long userId, UserProfileUpdateDTO dto) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+
+        user.setNickname(dto.getNickname());
+        if (dto.getEmail() != null) {
+            user.setEmail(dto.getEmail());
+        }
+        if (dto.getPhone() != null) {
+            user.setPhone(dto.getPhone());
+        }
+        if (dto.getSex() != null) {
+            user.setSex(dto.getSex());
         }
 
         userMapper.updateById(user);
@@ -206,6 +222,124 @@ public class UserServiceImpl implements UserService {
             }
             // 记录审计日志
             operLogService.log("user", userId, "role_assign", null);
+        }
+    }
+
+    @Override
+    public int batchAssignByQuery(UserBatchAssignDTO dto, Long operatorId) {
+        if ((dto.getRoleIds() == null || dto.getRoleIds().isEmpty()) && dto.getDeptId() == null) {
+            throw new BusinessException("请选择要分配的角色或部门");
+        }
+
+        String roleMode = dto.getRoleMode() == null ? "REPLACE" : dto.getRoleMode().toUpperCase();
+        int affected = 0;
+        int batchSize = 200;
+        Long lastId = null;
+
+        while (true) {
+            LambdaQueryWrapper<User> wrapper = buildUserQuery(dto);
+            if (lastId != null) {
+                wrapper.lt(User::getId, lastId);
+            }
+            wrapper.orderByDesc(User::getId);
+            wrapper.select(User::getId, User::getDeptId);
+
+            Page<User> page = userMapper.selectPage(new Page<>(1, batchSize), wrapper);
+            List<User> users = page.getRecords();
+            if (users == null || users.isEmpty()) {
+                break;
+            }
+
+            for (User user : users) {
+                Long userId = user.getId();
+                if (isSystemAdminUserId(userId)) {
+                    continue;
+                }
+
+                if (dto.getDeptId() != null && !Objects.equals(user.getDeptId(), dto.getDeptId())) {
+                    userMapper.updateDept(userId, dto.getDeptId());
+                }
+
+                if (dto.getRoleIds() != null && !dto.getRoleIds().isEmpty()) {
+                    if ("ADD".equals(roleMode)) {
+                        List<Long> existing = userRoleMapper.selectRoleIdsByUserId(userId);
+                        Set<Long> existingSet = existing == null ? new java.util.HashSet<>() : new java.util.HashSet<>(existing);
+                        for (Long roleId : dto.getRoleIds()) {
+                            if (roleId == null || existingSet.contains(roleId)) continue;
+                            SysUserRole userRole = new SysUserRole();
+                            userRole.setUserId(userId);
+                            userRole.setRoleId(roleId);
+                            userRoleMapper.insert(userRole);
+                        }
+                    } else {
+                        userRoleMapper.deleteByUserId(userId);
+                        for (Long roleId : dto.getRoleIds()) {
+                            if (roleId == null) continue;
+                            SysUserRole userRole = new SysUserRole();
+                            userRole.setUserId(userId);
+                            userRole.setRoleId(roleId);
+                            userRoleMapper.insert(userRole);
+                        }
+                    }
+                }
+
+                affected++;
+            }
+
+            lastId = users.get(users.size() - 1).getId();
+        }
+
+        operLogService.log(operatorId, null, "user", null, "batch_assign", 
+                "批量分配用户，影响 " + affected + " 人", null, null, null);
+        return affected;
+    }
+
+    private LambdaQueryWrapper<User> buildUserQuery(UserQueryDTO query) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+
+        if (StringUtils.hasText(query.getUsername())) {
+            wrapper.like(User::getUsername, query.getUsername());
+        }
+        if (StringUtils.hasText(query.getNickname())) {
+            wrapper.like(User::getNickname, query.getNickname());
+        }
+        if (StringUtils.hasText(query.getPhone())) {
+            wrapper.like(User::getPhone, query.getPhone());
+        }
+        if (query.getStatus() != null) {
+            wrapper.eq(User::getStatus, query.getStatus());
+        }
+        if (query.getVerifyStatus() != null) {
+            wrapper.eq(User::getVerifyStatus, query.getVerifyStatus());
+        }
+        if (query.getUserType() != null) {
+            wrapper.eq(User::getUserType, query.getUserType());
+        }
+        if (query.getDeptId() != null) {
+            wrapper.eq(User::getDeptId, query.getDeptId());
+        }
+        if (query.getRoleId() != null) {
+            wrapper.inSql(User::getId, "SELECT user_id FROM sys_user_roles WHERE role_id = " + query.getRoleId());
+        }
+
+        applyLoginDateRange(wrapper, query.getLoginDateStart(), query.getLoginDateEnd());
+        return wrapper;
+    }
+
+    private void applyLoginDateRange(LambdaQueryWrapper<User> wrapper, String start, String end) {
+        if (!StringUtils.hasText(start) && !StringUtils.hasText(end)) {
+            return;
+        }
+        try {
+            java.time.LocalDate startDate = StringUtils.hasText(start) ? java.time.LocalDate.parse(start) : null;
+            java.time.LocalDate endDate = StringUtils.hasText(end) ? java.time.LocalDate.parse(end) : null;
+            if (startDate != null) {
+                wrapper.ge(User::getLoginDate, startDate.atStartOfDay());
+            }
+            if (endDate != null) {
+                wrapper.le(User::getLoginDate, endDate.plusDays(1).atStartOfDay().minusNanos(1));
+            }
+        } catch (Exception ignored) {
         }
     }
 

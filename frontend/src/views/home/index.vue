@@ -52,14 +52,14 @@
                </svg>
                <h3 class="font-bold text-slate-800">公告栏</h3>
              </div>
-             <router-link to="/notices" class="text-xs text-blue-500 hover:underline">更多</router-link>
+             <button @click="showNoticeModal = true" class="text-xs text-blue-500 hover:underline">更多</button>
            </div>
            <div v-if="notices.length > 0" class="space-y-3">
-             <router-link
+             <div
                v-for="notice in notices.slice(0, 3)" 
                :key="notice.id" 
-               :to="`/notices/${notice.id}`"
-               class="block group"
+               class="block group cursor-pointer"
+               @click="openNoticeDetail(notice)"
              >
                <div class="flex items-start gap-2">
                  <span v-if="notice.isPinned" class="badge badge-error badge-xs mt-1">置顶</span>
@@ -68,7 +68,7 @@
                  </span>
                  <span class="text-xs text-slate-400 shrink-0">{{ formatDate(notice.publishedAt) }}</span>
                </div>
-             </router-link>
+             </div>
            </div>
            <div v-else class="text-sm text-slate-500 text-center py-2">暂无公告</div>
         </div>
@@ -92,6 +92,57 @@
       </div>
   </teleport>
 
+  <!-- Notice List Modal -->
+  <dialog class="modal" :class="{ 'modal-open': showNoticeModal }">
+    <div class="modal-box max-w-2xl max-h-[80vh]">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg">全部公告</h3>
+        <button class="btn btn-sm btn-circle btn-ghost" @click="showNoticeModal = false">✕</button>
+      </div>
+      <div v-if="allNotices.length > 0" class="space-y-3 overflow-y-auto max-h-[60vh]">
+        <div 
+          v-for="notice in allNotices" 
+          :key="notice.id" 
+          class="block p-4 rounded-lg border border-base-200 hover:bg-base-50 transition-colors cursor-pointer"
+          @click="openNoticeDetail(notice)"
+        >
+          <div class="flex items-start gap-2">
+            <span v-if="notice.isPinned" class="badge badge-error badge-sm">置顶</span>
+            <div class="flex-1">
+              <div class="font-medium text-slate-800 line-clamp-1">{{ notice.title }}</div>
+              <div class="text-xs text-slate-400 mt-1">{{ formatDateTime(notice.publishedAt) }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-center py-8 text-slate-500">暂无公告</div>
+    </div>
+    <form method="dialog" class="modal-backdrop" @click="showNoticeModal = false"><button>close</button></form>
+  </dialog>
+
+  <!-- Notice Detail Modal -->
+  <dialog class="modal" :class="{ 'modal-open': showDetailModal }">
+    <div class="modal-box max-w-2xl border-0 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span v-if="selectedNotice?.isPinned" class="badge badge-error">置顶</span>
+          <h3 class="font-bold text-lg">{{ selectedNotice?.title }}</h3>
+        </div>
+        <button class="btn btn-sm btn-circle btn-ghost" @click="showDetailModal = false">✕</button>
+      </div>
+      <div class="text-xs text-slate-400 mb-4">
+        发布时间：{{ formatDateTime(selectedNotice?.publishedAt) }}
+        <span v-if="selectedNotice?.createdByName" class="ml-4">发布者：{{ selectedNotice?.createdByName }}</span>
+      </div>
+      <div class="prose prose-sm max-w-none whitespace-pre-wrap text-slate-700">
+        {{ selectedNotice?.content }}
+      </div>
+      <div class="modal-action">
+        <button class="btn btn-sm" @click="showDetailModal = false">关闭</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop" @click="showDetailModal = false"><button>close</button></form>
+  </dialog>
 </template>
 
 <script setup lang="ts">
@@ -100,6 +151,10 @@ import { getPublicNotices, type NoticeVO } from '@/api/system'
 
 const mounted = ref(false)
 const notices = ref<NoticeVO[]>([])
+const allNotices = ref<NoticeVO[]>([])
+const showNoticeModal = ref(false)
+const showDetailModal = ref(false)
+const selectedNotice = ref<NoticeVO | null>(null)
 
 onMounted(async () => {
   mounted.value = true
@@ -110,6 +165,7 @@ const loadNotices = async () => {
   try {
     const res = await getPublicNotices(50)
     const list = normalizeNoticeList(res)
+    allNotices.value = list
     notices.value = list.slice(0, 3)
   } catch (e) {
     console.error('Failed to load notices', e)
@@ -120,6 +176,18 @@ const formatDate = (dateStr?: string) => {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
+const formatDateTime = (dateStr?: string) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+const openNoticeDetail = (notice: NoticeVO) => {
+  selectedNotice.value = notice
+  showNoticeModal.value = false
+  showDetailModal.value = true
 }
 
 const normalizeNoticeList = (res: any): NoticeVO[] => {

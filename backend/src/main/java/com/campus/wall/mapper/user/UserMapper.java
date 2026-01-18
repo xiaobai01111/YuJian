@@ -28,6 +28,9 @@ public interface UserMapper extends BaseMapper<User> {
     @Update("UPDATE users SET status = #{status}, updated_at = NOW() WHERE id = #{userId}")
     int updateStatus(@Param("userId") Long userId, @Param("status") Integer status);
 
+    @Update("UPDATE users SET dept_id = #{deptId}, updated_at = NOW() WHERE id = #{userId}")
+    int updateDept(@Param("userId") Long userId, @Param("deptId") Long deptId);
+
     @Update("UPDATE users SET deleted = 1, deleted_at = #{deletedAt}, deleted_by = #{deletedBy}, deleted_reason = #{reason}, updated_at = NOW() WHERE id = #{userId}")
     int softDeleteById(@Param("userId") Long userId, @Param("deletedAt") java.time.LocalDateTime deletedAt, @Param("deletedBy") Long deletedBy, @Param("reason") String reason);
 }

@@ -52,6 +52,8 @@ export interface UserInfoVO {
     nickname: string
     avatar?: string
     email?: string
+    phone?: string
+    sex?: number
     verifyStatus?: number
     verifyMethod?: string
     creditScore?: number
@@ -82,4 +84,42 @@ export const logout = () => {
 
 export const getUserInfo = () => {
     return api.get<any, UserInfoVO>('/api/v1/auth/info')
+}
+
+export interface UpdatePasswordDTO {
+    oldPassword: string
+    newPassword: string
+    confirmPassword: string
+}
+
+export const updatePassword = (data: UpdatePasswordDTO) => {
+    return api.put('/api/v1/auth/password', data)
+}
+
+export interface UserProfileUpdateDTO {
+    nickname: string
+    email?: string
+    phone?: string
+    sex?: number
+}
+
+export interface UserProfileVO {
+    id: number
+    username: string
+    nickname: string
+    avatar?: string
+    email?: string
+    phone?: string
+    sex?: number
+    verifyStatus?: number
+    creditScore?: number
+    createdAt?: string
+}
+
+export const getMyProfile = () => {
+    return api.get<any, UserProfileVO>('/api/v1/users/me')
+}
+
+export const updateProfile = (data: UserProfileUpdateDTO) => {
+    return api.post('/api/v1/users/me', data)
 }
