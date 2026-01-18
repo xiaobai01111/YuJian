@@ -86,3 +86,7 @@ logging:
     org.springframework.web: info
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
+
+app:
+  security:
+    super-admin-role-key: ${SUPER_ADMIN_ROLE_KEY:admin}

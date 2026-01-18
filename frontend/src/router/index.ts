@@ -101,6 +101,16 @@ const router = createRouter({
             }
         },
         {
+            path: '/notices',
+            name: 'NoticeList',
+            component: () => import('@/views/notice/index.vue')
+        },
+        {
+            path: '/notices/:id',
+            name: 'NoticeDetail',
+            component: () => import('@/views/notice/detail.vue')
+        },
+        {
             path: '/posts/:id',
             name: 'PostDetail',
             component: () => import('@/views/post/detail.vue')
@@ -165,6 +175,24 @@ const router = createRouter({
                     meta: { title: '操作日志', icon: 'form' }
                 },
                 {
+                    path: 'notice',
+                    name: 'NoticeManagement',
+                    component: () => import('@/views/console/notice/index.vue'),
+                    meta: { title: '公告管理', icon: 'bell' }
+                },
+                {
+                    path: 'announcement',
+                    name: 'AnnouncementManagement',
+                    component: () => import('@/views/console/notice/index.vue'),
+                    meta: { title: '公告管理', icon: 'bell' }
+                },
+                {
+                    path: 'dashboard/notice',
+                    name: 'DashboardNoticeManagement',
+                    component: () => import('@/views/console/notice/index.vue'),
+                    meta: { title: '公告管理', icon: 'bell' }
+                },
+                {
                     path: 'profile',
                     name: 'ConsoleProfile',
                     component: () => import('@/views/console/profile/index.vue'),
@@ -184,9 +212,9 @@ router.beforeEach(async (to, _from, next) => {
     const userStore = useUserStore()
     const permissionStore = usePermissionStore()
 
-    // 未登录仅允许访问首页
-    const whiteList = ['/']
-    const isWhitelisted = whiteList.includes(to.path)
+    // 未登录允许访问的路径
+    const whiteList = ['/', '/notices']
+    const isWhitelisted = whiteList.includes(to.path) || to.path.startsWith('/notices/')
 
     if (userStore.token) {
          // Check if permissions are loaded (simple check for now)

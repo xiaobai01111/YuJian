@@ -72,6 +72,7 @@ dependencies {
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
     implementation("cn.hutool:hutool-all:$hutoolVersion")
+    implementation("org.jsoup:jsoup:1.18.1")
     
     // POI for Excel import/export
     implementation("org.apache.poi:poi-ooxml:5.2.5")

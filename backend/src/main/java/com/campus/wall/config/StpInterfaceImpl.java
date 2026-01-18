@@ -1,8 +1,13 @@
 package com.campus.wall.config;
 
 import cn.dev33.satoken.stp.StpInterface;
+import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
+import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.entity.user.User;
+import com.campus.wall.constant.SecurityConstants;
+import com.campus.wall.util.SecurityUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +27,12 @@ public class StpInterfaceImpl implements StpInterface {
     @Autowired
     private SysRoleMapper roleMapper;
 
+    @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
+    private SysDeptMapper deptMapper;
+
     /**
      * 返回一个账号所拥有的权限码集合
      * (对应 sys_menus 表的 perms 字段，如 "post:delete")
@@ -30,12 +41,22 @@ public class StpInterfaceImpl implements StpInterface {
     public List<String> getPermissionList(Object loginId, String loginType) {
         Long userId = Long.valueOf(loginId.toString());
 
-        // 超级管理员 (userId == 1) 拥有所有权限
-        // 返回所有权限标识，确保能匹配任何权限检查
-        if (userId == 1L) {
+        // 超级管理员拥有所有权限
+        String adminRoleKey = SecurityUtil.getSuperAdminRoleKey();
+        List<String> roleKeys = roleMapper.selectRoleKeysByUserId(userId);
+        if (roleKeys.contains(adminRoleKey)) {
             List<String> allPerms = new ArrayList<>(menuMapper.selectAllPerms());
-            allPerms.add("*"); // 同时保留通配符
+            allPerms.add(SecurityConstants.ALL_PERMISSION);
             return allPerms;
+        }
+
+        // 部门停用的用户无权限
+        User user = userMapper.selectById(userId);
+        if (user != null && user.getDeptId() != null) {
+            var dept = deptMapper.selectById(user.getDeptId());
+            if (dept != null && dept.getStatus() != null && dept.getStatus() == 1) {
+                return new ArrayList<>();
+            }
         }
 
         // 从数据库查询该用户的权限列表
@@ -49,6 +70,13 @@ public class StpInterfaceImpl implements StpInterface {
     @Override
     public List<String> getRoleList(Object loginId, String loginType) {
         Long userId = Long.valueOf(loginId.toString());
+        User user = userMapper.selectById(userId);
+        if (user != null && user.getDeptId() != null) {
+            var dept = deptMapper.selectById(user.getDeptId());
+            if (dept != null && dept.getStatus() != null && dept.getStatus() == 1) {
+                return new ArrayList<>();
+            }
+        }
         return roleMapper.selectRoleKeysByUserId(userId);
     }
 }

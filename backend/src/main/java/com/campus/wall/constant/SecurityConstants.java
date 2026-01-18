@@ -8,16 +8,6 @@ public final class SecurityConstants {
     private SecurityConstants() {}
 
     /**
-     * 超级管理员用户ID
-     */
-    public static final Long SUPER_ADMIN_ID = 1L;
-
-    /**
-     * 超级管理员角色标识
-     */
-    public static final String ROLE_ADMIN = "admin";
-
-    /**
      * 版主角色标识
      */
     public static final String ROLE_MODERATOR = "moderator";

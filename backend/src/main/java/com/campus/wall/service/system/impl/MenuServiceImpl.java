@@ -1,6 +1,7 @@
 package com.campus.wall.service.system.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.wall.entity.system.SysMenu;
 import com.campus.wall.mapper.system.SysMenuMapper;
@@ -36,7 +37,7 @@ public class MenuServiceImpl implements MenuService {
     @Override
     public List<MenuVO> getUserMenus(Long userId) {
         // 超级管理员返回所有菜单
-        if (userId == 1L) {
+        if (StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())) {
             List<SysMenu> allMenus = sysMenuMapper.selectList(
                     new LambdaQueryWrapper<SysMenu>()
                             .in(SysMenu::getType, 0, 1)
@@ -57,7 +58,7 @@ public class MenuServiceImpl implements MenuService {
         
         List<SysMenu> menus;
         // 超级管理员返回所有启用的菜单
-        if (userId == 1L) {
+        if (StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())) {
             menus = sysMenuMapper.selectList(
                     new LambdaQueryWrapper<SysMenu>()
                             .in(SysMenu::getType, 0, 1)

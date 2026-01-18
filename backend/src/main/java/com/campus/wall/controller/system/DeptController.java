@@ -102,6 +102,12 @@ public class DeptController {
     @SaCheckPermission("system:dept:edit")
     @PutMapping("/{id}/status")
     public R<Void> updateStatus(@PathVariable Long id, @RequestBody SysDept dept) {
+        if (dept.getStatus() == null) {
+            throw new com.campus.wall.common.BusinessException("状态不能为空");
+        }
+        if (dept.getStatus() != 0 && dept.getStatus() != 1) {
+            throw new com.campus.wall.common.BusinessException("状态只能为0或1");
+        }
         deptService.updateStatus(id, dept.getStatus());
         return R.ok();
     }

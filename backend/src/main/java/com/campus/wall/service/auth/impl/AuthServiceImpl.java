@@ -10,7 +10,10 @@ import cn.hutool.crypto.SecureUtil;
 import com.campus.wall.dto.auth.*;
 import com.campus.wall.entity.user.IdentityVerification;
 import com.campus.wall.entity.user.User;
+import com.campus.wall.constant.SecurityConstants;
+import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
+import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
@@ -33,6 +36,7 @@ public class AuthServiceImpl implements AuthService {
     private String activeProfile;
     private final SysRoleMapper roleMapper;
     private final SysMenuMapper menuMapper;
+    private final SysDeptMapper deptMapper;
     private final IdentityVerificationMapper verificationMapper;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
@@ -88,6 +92,14 @@ public class AuthServiceImpl implements AuthService {
         // 检查封禁状态
         if (user.getStatus() == 1) {
             throw new BusinessException(ResultCode.USER_BANNED);
+        }
+
+        // 部门停用禁止登录
+        if (user.getDeptId() != null) {
+            var dept = deptMapper.selectById(user.getDeptId());
+            if (dept != null && dept.getStatus() != null && dept.getStatus() == 1) {
+                throw new BusinessException(ResultCode.DEPT_DISABLED);
+            }
         }
 
         // 执行登录
@@ -258,9 +270,9 @@ public class AuthServiceImpl implements AuthService {
         List<String> permissions;
         
         // 超级管理员拥有所有权限
-        if (roles.contains("admin")) {
+        if (roles.contains(SecurityUtil.getSuperAdminRoleKey())) {
             permissions = new java.util.ArrayList<>();
-            permissions.add("*");
+            permissions.add(SecurityConstants.ALL_PERMISSION);
         } else {
             permissions = menuMapper.selectPermsByUserId(user.getId());
         }

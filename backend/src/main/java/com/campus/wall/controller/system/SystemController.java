@@ -1,6 +1,8 @@
 package com.campus.wall.controller.system;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.constant.SecurityConstants;
+import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.common.R;
 import com.campus.wall.mapper.system.SysMenuMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,8 +34,8 @@ public class SystemController {
         Long userId = StpUtil.getLoginIdAsLong();
         
         // 超级管理员返回通配符权限
-        if (userId == 1L) {
-            return R.ok(List.of("*"));
+        if (StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())) {
+            return R.ok(List.of(SecurityConstants.ALL_PERMISSION));
         }
         
         List<String> permissions = sysMenuMapper.selectPermsByUserId(userId);

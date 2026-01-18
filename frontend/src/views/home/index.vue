@@ -42,38 +42,35 @@
 
   <!-- Sidebar Content (Injected into Layout) -->
   <teleport to="#sidebar-slot-target" v-if="mounted">
-      <!-- Hot Topics -->
+      <!-- Bulletin -->
       <div class="card bg-base-100 shadow-sm border border-base-200">
         <div class="card-body p-5">
-           <div class="flex items-center gap-2 mb-4">
-             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
-             </svg>
-             <h3 class="font-bold text-slate-800">热门话题</h3>
+           <div class="flex items-center justify-between mb-4">
+             <div class="flex items-center gap-2">
+               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+               </svg>
+               <h3 class="font-bold text-slate-800">公告栏</h3>
+             </div>
+             <router-link to="/notices" class="text-xs text-blue-500 hover:underline">更多</router-link>
            </div>
-           <ul class="space-y-4">
-             <li v-for="(topic, index) in hotTopics" :key="index" class="flex gap-3 items-start group cursor-pointer">
-               <span :class="`text-xs font-bold mt-0.5 w-4 ${index < 3 ? 'text-red-500' : 'text-slate-400'}`">{{ String(index + 1).padStart(2, '0') }}</span>
-               <span class="text-sm text-slate-600 group-hover:text-primary transition-colors line-clamp-2">{{ topic }}</span>
-             </li>
-           </ul>
-        </div>
-      </div>
-
-      <!-- Bulletin -->
-      <div class="card bg-base-100 shadow-sm border border-base-200 mt-6">
-        <div class="card-body p-5">
-           <div class="flex items-center gap-2 mb-4">
-             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-             </svg>
-             <h3 class="font-bold text-slate-800">公告栏</h3>
+           <div v-if="notices.length > 0" class="space-y-3">
+             <router-link
+               v-for="notice in notices.slice(0, 3)" 
+               :key="notice.id" 
+               :to="`/notices/${notice.id}`"
+               class="block group"
+             >
+               <div class="flex items-start gap-2">
+                 <span v-if="notice.isPinned" class="badge badge-error badge-xs mt-1">置顶</span>
+                 <span class="text-sm text-slate-600 group-hover:text-primary transition-colors line-clamp-1 flex-1">
+                   {{ notice.title }}
+                 </span>
+                 <span class="text-xs text-slate-400 shrink-0">{{ formatDate(notice.publishedAt) }}</span>
+               </div>
+             </router-link>
            </div>
-           <div class="text-sm text-slate-600 space-y-2">
-             <p>欢迎来到 CampusWall！请文明发言，共同维护良好的社区环境。</p>
-             <p class="text-xs text-slate-400 mt-2 pt-2 border-t border-base-200">如遇问题请联系管理员</p>
-           </div>
+           <div v-else class="text-sm text-slate-500 text-center py-2">暂无公告</div>
         </div>
       </div>
 
@@ -94,16 +91,43 @@
         </div>
       </div>
   </teleport>
+
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
+import { getPublicNotices, type NoticeVO } from '@/api/system'
 
 const mounted = ref(false)
+const notices = ref<NoticeVO[]>([])
 
-onMounted(() => {
+onMounted(async () => {
   mounted.value = true
+  await loadNotices()
 })
+
+const loadNotices = async () => {
+  try {
+    const res = await getPublicNotices(50)
+    const list = normalizeNoticeList(res)
+    notices.value = list.slice(0, 3)
+  } catch (e) {
+    console.error('Failed to load notices', e)
+  }
+}
+
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
+const normalizeNoticeList = (res: any): NoticeVO[] => {
+  if (Array.isArray(res)) return res
+  if (res?.records && Array.isArray(res.records)) return res.records
+  if (res?.data && Array.isArray(res.data)) return res.data
+  return []
+}
 
 // Icons as components
 const HeartIcon = {
@@ -144,11 +168,4 @@ const categories = [
   { id: 5, name: '失物招领', desc: '传递温暖', icon: SearchIcon, bgClass: 'bg-purple-50', textClass: 'text-purple-500', path: '/lost-found' },
 ]
 
-const hotTopics = [
-  '图书馆闭馆时间调整通知',
-  '寻找周五下午在篮球场丢耳机的小伙伴',
-  '食堂二楼新开的麻辣烫怎么样？',
-  '求推荐大一高数辅导资料',
-  '有没有一起晨跑的搭子？'
-]
 </script>

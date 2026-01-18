@@ -1,6 +1,7 @@
 package com.campus.wall.service.post.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -181,7 +182,7 @@ public class PostServiceImpl implements PostService {
         Post post = getPostOrThrow(postId);
 
         // 权限校验：作者或管理员可删除
-        boolean isAdmin = StpUtil.hasRole("admin");
+        boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
         if (!post.getUserId().equals(userId) && !isAdmin) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权删除此帖子");
         }

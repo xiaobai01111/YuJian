@@ -44,6 +44,10 @@ public class SaTokenConfig implements WebMvcConfigurer {
                             // 认证接口
                             "/api/v1/auth/register",
                             "/api/v1/auth/login",
+                            "/api/v1/auth/logout",
+                            // 公告公开接口
+                            "/api/v1/notices/public",
+                            "/api/v1/notices/public/**",
                             // 公开查询接口（仅健康检查，其他需登录）
                             "/api/health"
                     )

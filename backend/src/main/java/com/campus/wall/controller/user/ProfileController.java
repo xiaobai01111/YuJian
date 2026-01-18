@@ -2,6 +2,7 @@ package com.campus.wall.controller.user;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.post.PostQueryDTO;
@@ -39,7 +40,7 @@ public class ProfileController {
     public R<UserDetailVO> getUserInfo(@PathVariable Long id) {
         UserDetailVO vo = userService.getUserDetail(id);
         Long currentUserId = StpUtil.getLoginIdAsLong();
-        boolean isAdmin = StpUtil.hasRole("admin");
+        boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
         if (!isAdmin && !currentUserId.equals(id)) {
             vo.setEmail(null);
             vo.setEduEmail(null);

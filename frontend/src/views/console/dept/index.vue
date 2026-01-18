@@ -179,7 +179,7 @@
               <input type="number" v-model="form.sortOrder" class="input input-bordered w-full" />
             </div>
           </div>
-          <div class="form-control">
+          <div v-if="!isEdit" class="form-control">
             <label class="label cursor-pointer justify-start gap-4">
               <span class="label-text font-medium">状态</span>
               <input type="checkbox" class="toggle toggle-primary" :checked="form.status === 0" @change="form.status = ($event.target as HTMLInputElement).checked ? 0 : 1" />
@@ -491,6 +491,10 @@ const closeDeleteModal = () => {
 
 const confirmDelete = async () => {
   if (!deleteTarget.value) return
+  if (deleteStrategy.value === 'DELETE' && !deleteReason.value.trim()) {
+    alert('删除用户必须提供原因')
+    return
+  }
   deleteLoading.value = true
   try {
     await deleteDeptWithStrategy(deleteTarget.value.id, {

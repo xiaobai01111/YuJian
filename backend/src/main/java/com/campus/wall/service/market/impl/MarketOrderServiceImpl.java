@@ -1,6 +1,7 @@
 package com.campus.wall.service.market.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
@@ -166,7 +167,7 @@ public class MarketOrderServiceImpl implements MarketOrderService {
     public MarketOrderVO getOrderDetail(Long orderId) {
         Long userId = StpUtil.getLoginIdAsLong();
         MarketOrder order = getOrderOrThrow(orderId);
-        boolean isAdmin = StpUtil.hasRole("admin");
+        boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
         if (!isAdmin && !order.getBuyerId().equals(userId) && !order.getSellerId().equals(userId)) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权查看此订单");
         }

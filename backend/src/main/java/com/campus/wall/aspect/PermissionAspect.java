@@ -1,6 +1,7 @@
 package com.campus.wall.aspect;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.annotation.RequiresPermission;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.ResultCode;
@@ -51,7 +52,7 @@ public class PermissionAspect {
         Long userId = StpUtil.getLoginIdAsLong();
 
         // 超级管理员跳过权限检查
-        if (userId == 1L) {
+        if (StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())) {
             return joinPoint.proceed();
         }
 

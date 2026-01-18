@@ -33,3 +33,7 @@ logging:
 
 sa-token:
   token-style: random-128
+
+app:
+  security:
+    super-admin-role-key: admin

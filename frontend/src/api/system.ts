@@ -271,3 +271,80 @@ export function assignRoleMenus(roleId: number, menuIds: number[]) {
 export function assignRoleDepts(roleId: number, deptIds: number[], dataScope: number) {
     return request.put(`/api/v1/system/roles/${roleId}/depts`, { deptIds, dataScope })
 }
+
+// --- Notice (公告) ---
+export interface NoticeVO {
+    id: number
+    title: string
+    content: string
+    status: number  // 0草稿 1已发布 2已下线
+    statusText: string
+    scopeType: 'ALL' | 'DEPT' | 'USERS'
+    scopeTypeText: string
+    scopeIds?: number[]
+    isPinned: boolean
+    startAt?: string
+    endAt?: string
+    publishedAt?: string
+    createdBy: number
+    createdByName?: string
+    createdAt: string
+    updatedAt?: string
+}
+
+export interface NoticeDTO {
+    title: string
+    content: string
+    scopeType?: 'ALL' | 'DEPT' | 'USERS'
+    scopeIds?: number[]
+    isPinned?: boolean
+    startAt?: string
+    endAt?: string
+}
+
+// 公开接口（未登录可访问）
+export function getPublicNotices(limit: number = 10) {
+    return request.get('/api/v1/notices/public', { params: { limit } })
+}
+
+export function getPublicNoticeDetail(id: number) {
+    return request.get(`/api/v1/notices/public/${id}`)
+}
+
+// 登录用户接口
+export function getVisibleNotices(page: number = 1, size: number = 10) {
+    return request.get('/api/v1/notices', { params: { page, size } })
+}
+
+export function getVisibleNoticeDetail(id: number) {
+    return request.get(`/api/v1/notices/${id}`)
+}
+
+// 后台管理接口
+export function queryNotices(params: { page?: number; size?: number; status?: number; keyword?: string }) {
+    return request.get('/api/v1/console/notices', { params })
+}
+
+export function getNoticeDetail(id: number) {
+    return request.get(`/api/v1/console/notices/${id}`)
+}
+
+export function createNotice(data: NoticeDTO) {
+    return request.post('/api/v1/console/notices', data)
+}
+
+export function updateNotice(id: number, data: NoticeDTO) {
+    return request.put(`/api/v1/console/notices/${id}`, data)
+}
+
+export function publishNotice(id: number) {
+    return request.put(`/api/v1/console/notices/${id}/publish`)
+}
+
+export function offlineNotice(id: number) {
+    return request.put(`/api/v1/console/notices/${id}/offline`)
+}
+
+export function deleteNotice(id: number) {
+    return request.delete(`/api/v1/console/notices/${id}`)
+}

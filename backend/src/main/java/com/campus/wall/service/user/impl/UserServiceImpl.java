@@ -143,7 +143,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
         // 禁止操作管理员账号
-        if ("admin".equals(user.getUsername())) {
+        if (isSystemAdminUserId(user.getId())) {
             throw new BusinessException("管理员账号不允许操作");
         }
         // 禁止操作自己
@@ -299,8 +299,8 @@ public class UserServiceImpl implements UserService {
             User user = userMapper.selectById(userId);
             if (user == null) continue;
 
-            // 禁止删除 admin
-            if ("admin".equals(user.getUsername())) {
+            // 禁止删除系统管理员
+            if (isSystemAdminUserId(user.getId())) {
                 throw new BusinessException("不能删除管理员账号");
             }
             // 禁止删除自己
@@ -489,5 +489,13 @@ public class UserServiceImpl implements UserService {
         }
         
         return vo;
+    }
+
+    private boolean isSystemAdminUserId(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        List<String> roleKeys = sysRoleMapper.selectRoleKeysByUserId(userId);
+        return roleKeys != null && roleKeys.contains(com.campus.wall.util.SecurityUtil.getSuperAdminRoleKey());
     }
 }

@@ -13,6 +13,7 @@ import com.campus.wall.mapper.system.SysRoleMenuMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.OperLogService;
+import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.service.system.RoleService;
 import com.campus.wall.service.user.UserService;
 import com.campus.wall.vo.user.UserVO;
@@ -182,10 +183,7 @@ public class RoleServiceImpl implements RoleService {
         if (deleteUsers && userIds != null && !userIds.isEmpty()) {
             // 过滤掉 admin 用户，admin 不能删除
             List<Long> deletableUserIds = userIds.stream()
-                .filter(userId -> {
-                    var user = userMapper.selectById(userId);
-                    return user != null && !"admin".equals(user.getUsername()) && !userId.equals(operatorId);
-                })
+                .filter(userId -> !isSystemAdminUserId(userId) && !userId.equals(operatorId))
                 .collect(Collectors.toList());
             
             if (!deletableUserIds.isEmpty()) {
@@ -287,7 +285,15 @@ public class RoleServiceImpl implements RoleService {
      * 判断是否为管理员角色
      */
     private boolean isAdminRole(SysRole role) {
-        return role.getId() == 1L || "admin".equals(role.getRoleKey());
+        return role != null && SecurityUtil.getSuperAdminRoleKey().equals(role.getRoleKey());
+    }
+
+    private boolean isSystemAdminUserId(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        List<String> roleKeys = sysRoleMapper.selectRoleKeysByUserId(userId);
+        return roleKeys != null && roleKeys.contains(SecurityUtil.getSuperAdminRoleKey());
     }
 
     private RoleVO toRoleVO(SysRole role, boolean withMenuIds) {

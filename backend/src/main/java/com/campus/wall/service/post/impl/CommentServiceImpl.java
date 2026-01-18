@@ -1,6 +1,7 @@
 package com.campus.wall.service.post.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
@@ -117,7 +118,7 @@ public class CommentServiceImpl implements CommentService {
         }
 
         // 权限校验：作者或管理员可删除
-        boolean isAdmin = StpUtil.hasRole("admin");
+        boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
         if (!comment.getUserId().equals(userId) && !isAdmin) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权删除此评论");
         }

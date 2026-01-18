@@ -26,6 +26,7 @@ public enum ResultCode {
     USER_NOT_VERIFIED(1003, "请先完成校园身份验证"),
     STUDENT_ID_EXISTS(1004, "该学号已被使用"),
     TOKEN_EXPIRED(1005, "登录已过期，请重新登录"),
+    DEPT_DISABLED(1006, "所在部门已停用，无法登录"),
 
     // 业务相关
     POST_NOT_FOUND(2001, "帖子不存在"),

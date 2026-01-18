@@ -1,7 +1,6 @@
 package com.campus.wall.util;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.campus.wall.constant.SecurityConstants;
 
 /**
  * 安全工具类
@@ -9,6 +8,18 @@ import com.campus.wall.constant.SecurityConstants;
 public final class SecurityUtil {
 
     private SecurityUtil() {}
+
+    private static volatile String superAdminRoleKey = "admin";
+
+    public static void setSuperAdminRoleKey(String roleKey) {
+        if (roleKey != null && !roleKey.trim().isEmpty()) {
+            superAdminRoleKey = roleKey.trim();
+        }
+    }
+
+    public static String getSuperAdminRoleKey() {
+        return superAdminRoleKey;
+    }
 
     /**
      * 获取当前登录用户ID
@@ -33,7 +44,7 @@ public final class SecurityUtil {
      */
     public static boolean isSuperAdmin() {
         try {
-            return SecurityConstants.SUPER_ADMIN_ID.equals(getCurrentUserId());
+            return StpUtil.hasRole(superAdminRoleKey);
         } catch (Exception e) {
             return false;
         }

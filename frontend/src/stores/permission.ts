@@ -33,9 +33,9 @@ export const usePermissionStore = defineStore('permission', () => {
 
     function hasPermission(value: string | string[]): boolean {
         if (!value) return true
-        // 超级管理员拥有所有权限
+        // 超级管理员拥有所有权限（由后端下发 * 权限）
         const userStore = useUserStore()
-        if (userStore.userInfo?.roles?.includes('admin')) {
+        if (userStore.userInfo?.permissions?.includes('*')) {
             return true
         }
         const required = Array.isArray(value) ? value : [value]

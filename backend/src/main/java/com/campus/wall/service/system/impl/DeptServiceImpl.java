@@ -7,11 +7,13 @@ import com.campus.wall.dto.system.DeptDeleteDTO;
 import com.campus.wall.entity.system.SysDept;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.system.SysDeptMapper;
+import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.DeptService;
 import com.campus.wall.service.system.OperLogService;
 import com.campus.wall.service.user.UserService;
 import com.campus.wall.vo.user.UserVO;
+import com.campus.wall.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 public class DeptServiceImpl implements DeptService {
 
     private final SysDeptMapper deptMapper;
+    private final SysRoleMapper roleMapper;
     private final UserMapper userMapper;
     private final UserService userService;
     private final OperLogService operLogService;
@@ -159,7 +162,8 @@ public class DeptServiceImpl implements DeptService {
         
         // 停用部门时踢出该部门下所有用户
         if (status == 1) {
-            kickoutDeptUsers(id);
+            List<Long> deptIds = collectDeptIdsForKickout(id);
+            kickoutDeptUsers(deptIds);
         }
         
         // 审计日志
@@ -193,11 +197,15 @@ public class DeptServiceImpl implements DeptService {
         
         // 处理部门下的用户
         if (!deptUsers.isEmpty()) {
-            DeptDeleteDTO.UserHandleStrategy strategy = dto != null && dto.getUserStrategy() != null 
-                ? dto.getUserStrategy() 
+            DeptDeleteDTO.UserHandleStrategy strategy = dto != null && dto.getUserStrategy() != null
+                ? dto.getUserStrategy()
                 : DeptDeleteDTO.UserHandleStrategy.UNASSIGN;
             String reason = dto != null ? dto.getReason() : null;
-            
+
+            if (strategy == DeptDeleteDTO.UserHandleStrategy.DELETE && (reason == null || reason.trim().isEmpty())) {
+                throw new BusinessException("删除用户必须提供原因");
+            }
+
             switch (strategy) {
                 case TRANSFER_PARENT:
                     // 转移到上级部门，校验上级部门存在且启用
@@ -211,12 +219,16 @@ public class DeptServiceImpl implements DeptService {
                             throw new BusinessException("上级部门已停用，无法转移用户，请选择其他处理方式");
                         }
                     }
+                    // 先踢出当前部门下用户，保证权限立即失效
+                    kickoutUsers(deptUsers);
                     for (User user : deptUsers) {
                         user.setDeptId((parentId == null || parentId == 0L) ? null : parentId);
                         userMapper.updateById(user);
                     }
                     break;
                 case UNASSIGN:
+                    // 先踢出当前部门下用户，保证权限立即失效
+                    kickoutUsers(deptUsers);
                     // 转移到未分配
                     for (User user : deptUsers) {
                         user.setDeptId(null);
@@ -224,13 +236,12 @@ public class DeptServiceImpl implements DeptService {
                     }
                     break;
                 case DELETE:
-                    // 先踢出所有要删除的用户，避免删除后无法踢出
+                    // 删除用户
                     List<User> deletableUsers = deptUsers.stream()
-                        .filter(u -> !"admin".equals(u.getUsername()) && !u.getId().equals(operatorId))
+                        .filter(u -> !isSystemAdmin(u) && !u.getId().equals(operatorId))
                         .collect(Collectors.toList());
-                    for (User user : deletableUsers) {
-                        StpUtil.kickout(user.getId());
-                    }
+                    // 先踢出当前部门下用户（除系统管理员）
+                    kickoutUsers(deptUsers);
                     // 删除用户
                     List<Long> userIds = deletableUsers.stream()
                         .map(User::getId)
@@ -240,7 +251,7 @@ public class DeptServiceImpl implements DeptService {
                     }
                     // 处理未删除的用户（管理员/操作者），清除其dept_id避免悬挂引用
                     List<User> excludedUsers = deptUsers.stream()
-                        .filter(u -> "admin".equals(u.getUsername()) || u.getId().equals(operatorId))
+                        .filter(u -> isSystemAdmin(u) || u.getId().equals(operatorId))
                         .collect(Collectors.toList());
                     for (User user : excludedUsers) {
                         user.setDeptId(null);
@@ -249,8 +260,6 @@ public class DeptServiceImpl implements DeptService {
                     break;
             }
             
-            // 踢出所有相关用户（未被删除的）
-            kickoutDeptUsers(id);
         }
         
         // 删除部门
@@ -283,12 +292,54 @@ public class DeptServiceImpl implements DeptService {
     }
 
     private void kickoutDeptUsers(Long deptId) {
+        kickoutDeptUsers(List.of(deptId));
+    }
+
+    private void kickoutDeptUsers(List<Long> deptIds) {
+        if (deptIds == null || deptIds.isEmpty()) {
+            return;
+        }
         List<User> users = userMapper.selectList(
-            new LambdaQueryWrapper<User>().eq(User::getDeptId, deptId).eq(User::getDeleted, 0)
+            new LambdaQueryWrapper<User>().in(User::getDeptId, deptIds).eq(User::getDeleted, 0)
         );
+        kickoutUsers(users);
+    }
+
+    private void kickoutUsers(List<User> users) {
+        if (users == null) {
+            return;
+        }
         for (User user : users) {
-            if (!"admin".equals(user.getUsername())) {
+            if (!isSystemAdmin(user)) {
                 StpUtil.kickout(user.getId());
+            }
+        }
+    }
+
+    private boolean isSystemAdmin(User user) {
+        if (user == null || user.getId() == null) {
+            return false;
+        }
+        List<String> roleKeys = roleMapper.selectRoleKeysByUserId(user.getId());
+        return roleKeys != null && roleKeys.contains(SecurityUtil.getSuperAdminRoleKey());
+    }
+
+    private List<Long> collectDeptIdsForKickout(Long rootDeptId) {
+        if (rootDeptId == null) {
+            return List.of();
+        }
+        List<SysDept> allDepts = listAll();
+        List<Long> result = new java.util.ArrayList<>();
+        result.add(rootDeptId);
+        collectChildren(allDepts, rootDeptId, result);
+        return result;
+    }
+
+    private void collectChildren(List<SysDept> allDepts, Long parentId, List<Long> result) {
+        for (SysDept dept : allDepts) {
+            if (dept.getParentId().equals(parentId)) {
+                result.add(dept.getId());
+                collectChildren(allDepts, dept.getId(), result);
             }
         }
     }

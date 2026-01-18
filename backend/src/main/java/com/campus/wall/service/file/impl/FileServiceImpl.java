@@ -2,6 +2,7 @@ package com.campus.wall.service.file.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.ResultCode;
 import com.campus.wall.config.MinioConfig;
@@ -103,7 +104,7 @@ public class FileServiceImpl implements FileService {
             return;
         }
         Long userId = StpUtil.getLoginIdAsLong();
-        boolean isAdmin = StpUtil.hasRole("admin");
+        boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
         if (!isAdmin && (record.getUserId() == null || !record.getUserId().equals(userId))) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权删除该文件");
         }
