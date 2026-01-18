@@ -42,7 +42,8 @@
 
         <!-- Table -->
         <div class="overflow-auto flex-1 min-h-0">
-          <table class="table table-md table-pin-rows">
+          <div class="rounded-xl border border-base-200 overflow-hidden">
+            <table class="table table-md table-pin-rows role-table">
             <thead class="bg-base-200/30 text-base-content/70">
               <tr>
                 <th class="w-10">
@@ -66,7 +67,7 @@
                    <span class="loading loading-spinner loading-lg text-primary"></span>
                 </td>
               </tr>
-              <tr v-else v-for="(role, index) in roleList" :key="role.id" class="hover border-b border-base-100 last:border-0">
+              <tr v-else v-for="(role, index) in roleList" :key="role.id" class="hover">
                 <th>
                   <label>
                     <input type="checkbox" class="checkbox checkbox-sm rounded-sm" :checked="selectedIds.includes(role.id)" @change="toggleSelection(role.id)" />
@@ -102,11 +103,17 @@
                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </button>
+                      <button v-if="!isAdminRole(role)" class="btn btn-square btn-xs bg-purple-50 text-purple-600 border-none hover:bg-purple-100" title="授权部门" @click="openRoleDeptModal(role)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                        </svg>
+                      </button>
                   </div>
                 </td>
               </tr>
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
         
         <!-- Pagination -->
@@ -142,7 +149,7 @@
             <label class="label"><span class="label-text font-medium">排序</span></label>
             <input type="number" v-model="form.sortOrder" class="input input-bordered w-full" />
           </div>
-           <div class="form-control w-full">
+          <div class="form-control w-full">
             <label class="label"><span class="label-text font-medium">备注</span></label>
             <textarea v-model="form.remark" class="textarea textarea-bordered h-24" placeholder="请输入备注信息"></textarea>
           </div>
@@ -185,6 +192,40 @@
           <form method="dialog">
             <button class="btn btn-ghost">取消</button>
             <button class="btn btn-primary ml-2" @click.prevent="submitMenuPerms" :disabled="submitting">保存</button>
+          </form>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Data Scope Modal -->
+    <dialog id="role_dept_modal" class="modal">
+      <div class="modal-box max-w-2xl">
+        <h3 class="font-bold text-lg">授权部门 - <span class="text-primary">{{ roleDeptRole?.roleName }}</span></h3>
+        <div class="space-y-4 mt-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">授权部门</span></label>
+            <div class="border border-base-200 rounded-lg p-3 max-h-60 overflow-auto bg-base-50">
+              <div v-if="loadingDepts" class="flex items-center justify-center py-6">
+                <span class="loading loading-spinner text-primary"></span>
+              </div>
+              <div v-else class="space-y-1">
+                <DeptTreeItem
+                  v-for="dept in deptTree"
+                  :key="dept.id"
+                  :dept="dept"
+                  :level="0"
+                  :selected-ids="roleDeptForm.deptIds"
+                  @toggle="(id:number, checked:boolean) => toggleDeptSelection(roleDeptForm.deptIds, id, checked)"
+                />
+              </div>
+            </div>
+            <label class="label"><span class="label-text-alt text-base-content/60">选择多个部门时，权限范围取并集</span></label>
+          </div>
+        </div>
+        <div class="modal-action">
+          <form method="dialog">
+            <button class="btn btn-ghost">取消</button>
+            <button class="btn btn-primary ml-2" @click.prevent="submitRoleDept" :disabled="submitting">保存</button>
           </form>
         </div>
       </div>
@@ -249,8 +290,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers } from '@/api/system'
-import type { RoleVO, RoleDTO, MenuVO, UserVO } from '@/api/system'
+import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers, getDeptTree, assignRoleDepts, getRoleDeptIds } from '@/api/system'
+import type { RoleVO, RoleDTO, MenuVO, UserVO, DeptVO } from '@/api/system'
 import { defineComponent, h, type PropType } from 'vue'
 
 // --- Components ---
@@ -271,6 +312,7 @@ const MenuTreeItem: ReturnType<typeof defineComponent> = defineComponent({
       const hasChildren = props.menu.children && props.menu.children.length > 0
       const isButton = props.menu.menuType === 'F' || (props.menu as any).type === 2
       const paddingLeft = `${props.level * 20 + 8}px`
+      const prefix = props.level > 0 ? `${'|  '.repeat(Math.max(props.level - 1, 0))}|- ` : ''
       
       // 按钮权限（叶子节点，无展开）
       if (isButton || !hasChildren) {
@@ -337,12 +379,61 @@ const MenuTreeItem: ReturnType<typeof defineComponent> = defineComponent({
   }
 })
 
+const DeptTreeItem: ReturnType<typeof defineComponent> = defineComponent({
+  name: 'DeptTreeItem',
+  props: {
+    dept: { type: Object as PropType<DeptVO>, required: true },
+    level: { type: Number, default: 0 },
+    selectedIds: { type: Array as PropType<number[]>, required: true }
+  },
+  emits: ['toggle'],
+  setup(props, { emit }) {
+    return () => {
+      const isChecked = props.selectedIds.includes(props.dept.id)
+      const hasChildren = props.dept.children && props.dept.children.length > 0
+      const paddingLeft = `${props.level * 20 + 8}px`
+      return h('div', {}, [
+        h('div', {
+          class: 'flex items-center gap-2 py-1 cursor-pointer rounded-md hover:bg-base-200/60',
+          style: { paddingLeft }
+        }, [
+          h('input', {
+            type: 'checkbox',
+            class: 'checkbox checkbox-sm',
+            checked: isChecked,
+            onChange: () => emit('toggle', props.dept.id, !isChecked)
+          }),
+          h('span', { class: props.level === 0 ? 'text-sm font-medium' : 'text-sm text-base-content/70' }, [
+            prefix ? h('span', { class: 'font-mono text-xs text-base-content/40' }, prefix) : null,
+            props.dept.deptName
+          ])
+        ]),
+        hasChildren ? h('div', { class: 'border-l border-base-200 ml-3 pl-2' },
+          props.dept.children!.map(child => h(DeptTreeItem, {
+            dept: child,
+            level: props.level + 1,
+            selectedIds: props.selectedIds,
+            onToggle: (id: number, checked: boolean) => emit('toggle', id, checked)
+          }))
+        ) : null
+      ])
+    }
+  }
+})
+
 // --- State ---
 const loading = ref(false)
 const submitting = ref(false)
 const roleList = ref<RoleVO[]>([])
 const menuTree = ref<MenuVO[]>([])
 const loadingMenus = ref(false)
+const loadingDepts = ref(false)
+const deptTree = ref<DeptVO[]>([])
+
+const roleDeptRole = ref<RoleVO | null>(null)
+const roleDeptForm = reactive({
+  deptIds: [] as number[]
+})
 
 const form = reactive<RoleDTO>({
   roleName: '',
@@ -366,6 +457,7 @@ const deleteReason = ref('')
 const isAllSelected = computed(() => {
   return roleList.value.length > 0 && selectedIds.value.length === roleList.value.length
 })
+
 
 onMounted(() => {
   fetchRoles()
@@ -543,6 +635,106 @@ const openMenuModal = async (role: RoleVO) => {
   }
 }
 
+const openRoleDeptModal = async (role: RoleVO) => {
+  roleDeptRole.value = role
+  roleDeptForm.deptIds = []
+  const modal = document.getElementById('role_dept_modal') as HTMLDialogElement
+  modal.showModal()
+  
+  await ensureDeptTree()
+  await fetchRoleDeptIds(role.id, roleDeptForm)
+}
+
+const submitRoleDept = async () => {
+  if (!roleDeptRole.value) return
+  submitting.value = true
+  try {
+    const updated = await assignRoleDepts(
+      roleDeptRole.value.id,
+      roleDeptForm.deptIds
+    )
+    const idx = roleList.value.findIndex(r => r.id === roleDeptRole.value?.id)
+    if (idx !== -1) {
+      roleList.value[idx] = updated
+    }
+    const modal = document.getElementById('role_dept_modal') as HTMLDialogElement
+    modal.close()
+  } catch (error: any) {
+    console.error(error)
+    alert(error?.response?.data?.message || '保存授权部门失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const ensureDeptTree = async () => {
+  if (deptTree.value.length > 0) return
+  loadingDepts.value = true
+  try {
+    const res: any = await getDeptTree()
+    deptTree.value = res || []
+  } catch (error) {
+    console.error(error)
+  } finally {
+    loadingDepts.value = false
+  }
+}
+
+const fetchRoleDeptIds = async (roleId: number, target?: { deptIds: number[] }) => {
+  if (!roleId) return
+  try {
+    const res: any = await getRoleDeptIds(roleId)
+    if (target) {
+      target.deptIds = res || []
+    } else {
+      form.deptIds = res || []
+    }
+  } catch (error: any) {
+    console.error(error)
+  }
+}
+
+const findDeptById = (nodes: DeptVO[], id: number): DeptVO | null => {
+  for (const node of nodes) {
+    if (node.id === id) return node
+    if (node.children && node.children.length > 0) {
+      const found = findDeptById(node.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+const collectDeptIds = (dept: DeptVO, target: number[] = []) => {
+  target.push(dept.id)
+  if (dept.children && dept.children.length > 0) {
+    for (const child of dept.children) {
+      collectDeptIds(child, target)
+    }
+  }
+  return target
+}
+
+const toggleDeptSelection = (target: number[] | undefined, id: number, checked: boolean) => {
+  if (!target) return
+  const dept = findDeptById(deptTree.value, id)
+  const ids = dept ? collectDeptIds(dept) : [id]
+  if (checked) {
+    for (const deptId of ids) {
+      if (!target.includes(deptId)) {
+        target.push(deptId)
+      }
+    }
+  } else {
+    for (const deptId of ids) {
+      const index = target.indexOf(deptId)
+      if (index !== -1) {
+        target.splice(index, 1)
+      }
+    }
+  }
+}
+
 const toggleMenuSelection = (id: number) => {
   const index = selectedMenuIds.value.indexOf(id)
   if (index === -1) {
@@ -635,4 +827,25 @@ const formatDate = (dateStr: string) => {
 const isAdminRole = (role: RoleVO) => {
   return role.id === 1 || role.roleKey === 'admin'
 }
+
 </script>
+
+<style scoped>
+.role-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.role-table th,
+.role-table td {
+  border-bottom: 1px solid hsl(var(--b2) / 0.8);
+  border-right: 1px solid hsl(var(--b2) / 0.8);
+}
+.role-table th:last-child,
+.role-table td:last-child {
+  border-right: 0;
+}
+.role-table tbody tr:last-child th,
+.role-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+</style>

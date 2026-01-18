@@ -53,7 +53,11 @@
         <div class="card-body p-6">
           <div class="flex justify-between items-start">
             <h3 class="card-title text-lg font-bold text-base-content mb-2">{{ post.title }}</h3>
-            <div class="badge badge-ghost badge-sm">{{ getBoardName(post.board) }}</div>
+            <div class="flex flex-wrap gap-2">
+              <div v-for="board in getPostBoards(post)" :key="board" class="badge badge-ghost badge-sm">
+                {{ getBoardLabel(board) }}
+              </div>
+            </div>
           </div>
           <p class="text-base-content/70 text-sm line-clamp-2 mb-2">{{ post.content }}</p>
           
@@ -76,6 +80,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getPostList, type PostVO } from '@/api/post'
+import { getBoardLabel, getPostBoards } from '@/utils/boards'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -87,16 +92,6 @@ const myPosts = ref<PostVO[]>([])
 const myBookmarks = ref<PostVO[]>([])
 
 const currentList = computed(() => activeTab.value === 'posts' ? myPosts.value : myBookmarks.value)
-
-const boardNameMap: Record<string, string> = {
-  'Confessions': '表白墙',
-  'TreeHole': '树洞',
-  'Help': '求助问答',
-  'Market': '跳蚤市场',
-  'LostFound': '失物招领'
-}
-
-const getBoardName = (board: string) => boardNameMap[board] || board
 
 onMounted(() => {
   if (!userStore.token) {
@@ -113,7 +108,7 @@ const fetchMyPosts = async () => {
     // API needs to support query by userId. Current implementation might need adjustment or new endpoint.
     // For now assuming getPostList supports filtering by current user (maybe implicit or explicit param)
     const res: any = await getPostList({ page: 1, size: 20, userId: userInfo.value?.id })
-    myPosts.value = res.rows || []
+    myPosts.value = res.records || []
   } catch (error) {
     console.error(error)
   } finally {

@@ -39,6 +39,9 @@ public class Post implements Serializable {
 
     private Integer status;
 
+    @TableField("show_on_home")
+    private Boolean showOnHome;
+
     private Integer likeCount;
 
     private Integer commentCount;

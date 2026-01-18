@@ -1,6 +1,7 @@
 package com.campus.wall.service.market.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.BoardUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -10,8 +11,10 @@ import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.market.MarketOrderCreateDTO;
 import com.campus.wall.entity.market.MarketOrder;
 import com.campus.wall.entity.post.Post;
+import com.campus.wall.entity.post.PostBoard;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.market.MarketOrderMapper;
+import com.campus.wall.mapper.post.PostBoardMapper;
 import com.campus.wall.mapper.post.PostMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.market.MarketOrderService;
@@ -38,6 +41,7 @@ public class MarketOrderServiceImpl implements MarketOrderService {
 
     private final MarketOrderMapper marketOrderMapper;
     private final PostMapper postMapper;
+    private final PostBoardMapper postBoardMapper;
     private final UserMapper userMapper;
     private final CreditService creditService;
 
@@ -47,7 +51,7 @@ public class MarketOrderServiceImpl implements MarketOrderService {
     private static final int STATUS_CANCELLED = 2;
 
     // 市集板块
-    private static final String BOARD_MARKET = "market";
+    private static final String BOARD_MARKET = BoardUtil.BOARD_MARKET;
 
     @Override
     @Transactional
@@ -59,7 +63,7 @@ public class MarketOrderServiceImpl implements MarketOrderService {
         if (post == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "商品不存在");
         }
-        if (!BOARD_MARKET.equals(post.getBoard())) {
+        if (!isMarketPost(post)) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "该帖子不是市集商品");
         }
 
@@ -281,5 +285,20 @@ public class MarketOrderServiceImpl implements MarketOrderService {
         }
 
         return vo;
+    }
+
+    private boolean isMarketPost(Post post) {
+        if (post == null) {
+            return false;
+        }
+        String normalizedBoard = BoardUtil.normalizeBoardKey(post.getBoard());
+        if (BOARD_MARKET.equals(normalizedBoard)) {
+            return true;
+        }
+        return postBoardMapper.selectCount(
+                new LambdaQueryWrapper<PostBoard>()
+                        .eq(PostBoard::getPostId, post.getId())
+                        .eq(PostBoard::getBoard, BOARD_MARKET)
+        ) > 0;
     }
 }

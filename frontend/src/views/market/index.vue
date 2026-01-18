@@ -25,11 +25,11 @@
           </button>
         </div>
 
-        <router-link to="/publish" class="btn btn-primary btn-sm btn-circle h-8 w-8 min-h-0 bg-orange-500 hover:bg-orange-600 border-none text-white shadow-sm shadow-orange-200 tooltip tooltip-bottom" data-tip="发布闲置">
+        <button class="btn btn-primary btn-sm btn-circle h-8 w-8 min-h-0 bg-orange-500 hover:bg-orange-600 border-none text-white shadow-sm shadow-orange-200 tooltip tooltip-bottom" data-tip="发布闲置" @click="openPublish">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-        </router-link>
+        </button>
       </div>
     </div>
 
@@ -47,13 +47,13 @@
         </div>
         <h3 class="text-slate-900 font-medium mb-1">暂无闲置</h3>
         <p class="text-slate-500 text-sm mb-4">有闲置物品？发布出来让它找到新主人</p>
-        <router-link to="/publish" class="btn btn-primary btn-sm">发布闲置</router-link>
+        <button class="btn btn-primary btn-sm" @click="openPublish">发布闲置</button>
       </div>
 
       <!-- Item Cards -->
       <div v-else v-for="post in postList" :key="post.id" 
         class="card bg-base-100 shadow-sm hover:shadow-md transition-all border border-base-200 cursor-pointer group"
-        @click="goToDetail(post.id)">
+        @click="openPostDetail(post.id)">
         <!-- Image -->
         <figure class="relative aspect-square bg-base-200">
           <img v-if="post.files && post.files.length > 0" :src="post.files[0]?.url" 
@@ -154,15 +154,21 @@
       </div>
     </div>
   </teleport>
+
+  <PostPublishModal v-model="showPublish" :default-boards="['market']" @success="fetchData" />
+  <PostDetailModal v-model="showPostDetail" :postId="selectedPostId" @updated="fetchData" />
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import PostPublishModal from '@/components/post/PostPublishModal.vue'
+import PostDetailModal from '@/components/post/PostDetailModal.vue'
 
-const router = useRouter()
 const mounted = ref(false)
+const showPublish = ref(false)
+const showPostDetail = ref(false)
+const selectedPostId = ref<number | null>(null)
 
 const tabs = [
   { label: '全部', value: 'all' },
@@ -186,7 +192,7 @@ const fetchData = async () => {
   loading.value = true
   try {
     const res: any = await getPostList(queryParams)
-    postList.value = res.rows || []
+    postList.value = res.records || []
   } catch (error) {
     console.error('Failed to fetch posts', error)
   } finally {
@@ -199,8 +205,13 @@ const changePage = (page: number) => {
   fetchData()
 }
 
-const goToDetail = (id: number) => {
-  router.push(`/posts/${id}`)
+const openPublish = () => {
+  showPublish.value = true
+}
+
+const openPostDetail = (id: number) => {
+  selectedPostId.value = id
+  showPostDetail.value = true
 }
 
 onMounted(() => {

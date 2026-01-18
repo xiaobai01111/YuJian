@@ -22,20 +22,93 @@
           <div class="w-1.5 h-6 bg-blue-600 rounded-full"></div>
           <h2 class="text-xl font-bold text-slate-800">最新动态</h2>
         </div>
-        <div class="flex gap-4 text-sm font-medium text-slate-500">
+        <div class="flex items-center gap-3 text-sm font-medium text-slate-500">
           <button class="hover:text-slate-900 transition-colors">全部精华</button>
+          <button class="btn btn-primary btn-sm" @click="openPublish">发布</button>
         </div>
       </div>
 
       <!-- Content Area -->
-      <div class="bg-base-100 border border-dashed border-base-300 rounded-2xl min-h-[400px] flex flex-col items-center justify-center text-center p-8">
+      <div v-if="loadingPosts && latestPosts.length === 0" class="text-center py-10">
+        <span class="loading loading-spinner loading-lg text-blue-500"></span>
+      </div>
+      <div v-else-if="latestPosts.length === 0" class="bg-base-100 border border-dashed border-base-300 rounded-2xl min-h-[360px] flex flex-col items-center justify-center text-center p-8">
         <div class="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-           <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>
         </div>
         <h3 class="text-slate-900 font-medium mb-1">暂无内容</h3>
-        <p class="text-slate-500 text-sm">换个筛选条件试试？</p>
+        <p class="text-slate-500 text-sm mb-4">快来发布第一条帖子吧</p>
+        <button class="btn btn-primary btn-sm" @click="openPublish">发布帖子</button>
+      </div>
+      <div v-else class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div
+          v-for="post in latestPosts"
+          :key="post.id"
+          class="card bg-base-100 shadow-sm hover:shadow-md transition-all border border-base-200 cursor-pointer"
+          @click="openPostDetail(post.id)"
+        >
+          <div class="card-body p-5">
+            <div class="flex items-start justify-between gap-3 mb-2">
+              <h3 class="font-bold text-slate-800 text-base line-clamp-1">{{ post.title || '校园动态' }}</h3>
+              <div class="flex flex-wrap gap-1">
+                <span
+                  v-for="board in getPostBoards(post)"
+                  :key="board"
+                  class="badge badge-ghost badge-xs"
+                >
+                  {{ getBoardLabel(board) }}
+                </span>
+              </div>
+            </div>
+            <p class="text-slate-600 text-sm line-clamp-2 mb-3">{{ post.content }}</p>
+            <div v-if="post.files && post.files.length > 0" class="flex gap-2 mb-3 overflow-x-auto pb-1">
+              <img
+                v-for="file in post.files.slice(0, 3)"
+                :key="file.id"
+                :src="file.url"
+                class="w-20 h-20 object-cover rounded-lg border border-base-200"
+                alt=""
+              />
+              <div v-if="post.files.length > 3" class="w-20 h-20 bg-base-200 rounded-lg flex items-center justify-center text-slate-400 text-xs">
+                +{{ post.files.length - 3 }}
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-base-200">
+              <div class="flex items-center gap-2">
+                <div class="avatar placeholder">
+                  <div class="bg-slate-200 text-slate-600 rounded-full w-6 h-6">
+                    <span class="text-xs">{{ post.isAnonymous ? '?' : (post.author?.nickname?.[0] || 'U') }}</span>
+                  </div>
+                </div>
+                <span>{{ post.isAnonymous ? '匿名用户' : (post.author?.nickname || post.author?.username || '用户') }}</span>
+                <span>{{ formatDateTime(post.createdAt) }}</span>
+              </div>
+              <div class="flex items-center gap-4">
+                <span class="flex items-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  {{ post.viewCount || 0 }}
+                </span>
+                <span class="flex items-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  {{ post.likeCount || 0 }}
+                </span>
+                <span class="flex items-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  {{ post.commentCount || 0 }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -143,11 +216,18 @@
     </div>
     <form method="dialog" class="modal-backdrop" @click="showDetailModal = false"><button>close</button></form>
   </dialog>
+
+  <PostPublishModal v-model="showPublish" @success="loadLatestPosts" />
+  <PostDetailModal v-model="showPostDetail" :postId="selectedPostId" @updated="loadLatestPosts" />
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, reactive, onMounted, h } from 'vue'
 import { getPublicNotices, type NoticeVO } from '@/api/system'
+import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getBoardLabel, normalizeBoardKeys } from '@/utils/boards'
+import PostPublishModal from '@/components/post/PostPublishModal.vue'
+import PostDetailModal from '@/components/post/PostDetailModal.vue'
 
 const mounted = ref(false)
 const notices = ref<NoticeVO[]>([])
@@ -155,10 +235,22 @@ const allNotices = ref<NoticeVO[]>([])
 const showNoticeModal = ref(false)
 const showDetailModal = ref(false)
 const selectedNotice = ref<NoticeVO | null>(null)
+const latestPosts = ref<PostVO[]>([])
+const loadingPosts = ref(false)
+const showPublish = ref(false)
+const showPostDetail = ref(false)
+const selectedPostId = ref<number | null>(null)
+
+const postQuery = reactive<PostQueryDTO>({
+  page: 1,
+  size: 6,
+  showOnHome: true
+})
 
 onMounted(async () => {
   mounted.value = true
   await loadNotices()
+  await loadLatestPosts()
 })
 
 const loadNotices = async () => {
@@ -170,6 +262,32 @@ const loadNotices = async () => {
   } catch (e) {
     console.error('Failed to load notices', e)
   }
+}
+
+const loadLatestPosts = async () => {
+  loadingPosts.value = true
+  try {
+    const res: any = await getPostList(postQuery)
+    latestPosts.value = res.records || []
+  } catch (e) {
+    console.error('Failed to load posts', e)
+  } finally {
+    loadingPosts.value = false
+  }
+}
+
+const openPublish = () => {
+  showPublish.value = true
+}
+
+const openPostDetail = (id: number) => {
+  selectedPostId.value = id
+  showPostDetail.value = true
+}
+
+const getPostBoards = (post: PostVO) => {
+  const raw = post.boards && post.boards.length > 0 ? post.boards : post.board ? [post.board] : []
+  return normalizeBoardKeys(raw)
 }
 
 const formatDate = (dateStr?: string) => {

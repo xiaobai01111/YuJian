@@ -29,4 +29,10 @@ public class PostUpdateDTO {
     private List<Long> addFileIds;
 
     private List<Long> removeFileIds;
+
+    @Schema(description = "更新板块标识列表（可选）")
+    private List<String> boards;
+
+    @Schema(description = "是否同步到首页展示")
+    private Boolean showOnHome;
 }

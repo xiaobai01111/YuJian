@@ -26,8 +26,6 @@ public class SysRole implements Serializable {
 
     private Integer sortOrder;
 
-    private Integer dataScope;
-
     private String remark;
 
     @TableField(fill = FieldFill.INSERT)

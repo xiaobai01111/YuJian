@@ -2,6 +2,7 @@ package com.campus.wall.controller.system;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.R;
+import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.dto.system.DeptDeleteDTO;
 import com.campus.wall.entity.system.SysDept;
 import com.campus.wall.service.system.DeptService;
@@ -52,6 +53,13 @@ public class DeptController {
                 vo.setPhone(dept.getPhone());
                 vo.setEmail(dept.getEmail());
                 vo.setStatus(dept.getStatus());
+                Integer dataScope = dept.getDataScope();
+                if (dataScope == null) {
+                    dataScope = dept.getId() != null && dept.getId().equals(SecurityConstants.SYSTEM_DEPT_ID)
+                        ? SecurityConstants.DATA_SCOPE_ALL
+                        : SecurityConstants.DATA_SCOPE_DEPT;
+                }
+                vo.setDataScope(dataScope);
                 vo.setCreatedAt(dept.getCreatedAt());
                 vo.setChildren(buildTree(depts, dept.getId()));
                 result.add(vo);

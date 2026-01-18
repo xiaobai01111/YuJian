@@ -37,6 +37,11 @@ public interface PostService {
     PageResult<PostVO> queryPosts(PostQueryDTO query);
 
     /**
+     * 控制台分页查询帖子（应用数据权限）
+     */
+    PageResult<PostVO> queryPostsForConsole(PostQueryDTO query);
+
+    /**
      * 点赞帖子
      */
     void likePost(Long postId);

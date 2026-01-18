@@ -54,7 +54,11 @@
           <div class="card-body p-6">
             <div class="flex justify-between items-start">
               <h3 class="card-title text-lg font-bold text-base-content mb-2" v-html="highlight(post.title)"></h3>
-              <div class="badge badge-ghost badge-sm">{{ getBoardName(post.board) }}</div>
+              <div class="flex flex-wrap gap-2">
+                <div v-for="board in getPostBoards(post)" :key="board" class="badge badge-ghost badge-sm">
+                  {{ getBoardLabel(board) }}
+                </div>
+              </div>
             </div>
             <p class="text-base-content/70 text-sm line-clamp-2 mb-2" v-html="highlight(post.content)"></p>
             
@@ -86,6 +90,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getBoardLabel, getPostBoards } from '@/utils/boards'
 
 const router = useRouter()
 const route = useRoute()
@@ -101,16 +106,6 @@ const queryParams = reactive<PostQueryDTO>({
   size: 10,
   keyword: ''
 })
-
-const boardNameMap: Record<string, string> = {
-  'Confessions': '表白墙',
-  'TreeHole': '树洞',
-  'Help': '求助问答',
-  'Market': '跳蚤市场',
-  'LostFound': '失物招领'
-}
-
-const getBoardName = (board: string) => boardNameMap[board] || board
 
 onMounted(() => {
   if (route.query.q) {
@@ -132,7 +127,7 @@ const handleSearch = async () => {
   
   try {
     const res: any = await getPostList(queryParams)
-    postList.value = res.rows || []
+    postList.value = res.records || []
     total.value = res.total || 0
   } catch (error) {
     console.error(error)
@@ -151,7 +146,7 @@ const changePage = (page: number) => {
   // Call API again directly instead of handleSearch to keep existing keyword state consistent
   loading.value = true
   getPostList(queryParams).then((res: any) => {
-      postList.value = res.rows || []
+      postList.value = res.records || []
       total.value = res.total || 0
   }).finally(() => {
       loading.value = false

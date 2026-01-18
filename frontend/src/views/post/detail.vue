@@ -4,7 +4,9 @@
     <div class="text-sm breadcrumbs mb-6 text-base-content/60">
       <ul>
         <li><router-link to="/">首页</router-link></li>
-        <li><router-link :to="getBoardPath(post.board)">{{ getBoardName(post.board) }}</router-link></li>
+        <li v-if="displayBoards.length > 0">
+          <router-link :to="getBoardPath(displayBoards[0])">{{ getBoardLabel(displayBoards[0]) }}</router-link>
+        </li>
         <li>帖子详情</li>
       </ul>
     </div>
@@ -30,8 +32,10 @@
                   {{ formatDate(post.createdAt) }} · {{ post.viewCount || 0 }} 阅读
                 </div>
               </div>
-              <div class="ml-auto">
-                <div class="badge badge-ghost">{{ getBoardName(post.board) }}</div>
+              <div class="ml-auto flex flex-wrap gap-2">
+                <div v-for="board in displayBoards" :key="board" class="badge badge-ghost">
+                  {{ getBoardLabel(board) }}
+                </div>
               </div>
             </div>
 
@@ -141,23 +145,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPostDetail, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
 import { useUserStore } from '@/stores/user'
+import { getBoardLabel, getBoardPath, getPostBoards } from '@/utils/boards'
 
 const route = useRoute()
 const userStore = useUserStore()
 const post = ref<PostVO | null>(null)
 const loading = ref(false)
 
-const boardNameMap: Record<string, string> = {
-  'Confessions': '表白墙',
-  'TreeHole': '树洞',
-  'Help': '求助问答',
-  'Market': '跳蚤市场',
-  'LostFound': '失物招领'
-}
+const displayBoards = computed(() => (post.value ? getPostBoards(post.value) : []))
 
 onMounted(() => {
   fetchDetail()
@@ -219,26 +218,6 @@ const handleBookmark = async () => {
   } catch (error) {
     console.error(error)
   }
-}
-
-const getBoardName = (board: string) => {
-  return boardNameMap[board] || board
-}
-
-const getBoardPath = (board: string) => {
-  // Simple mapping, assumes route name matches board key but lowercase or dashed
-  // Our routes are like /confessions, /treehole (camelCase or just lowercase?)
-  // Route definitions: /confessions, /treehole, /lost-found
-  // Board keys: 'Confessions', 'TreeHole', 'LostFound'
-  // Need to map correctly
-  const map: Record<string, string> = {
-    'Confessions': '/confessions',
-    'TreeHole': '/treehole',
-    'Help': '/help',
-    'Market': '/market',
-    'LostFound': '/lost-found'
-  }
-  return map[board] || '/'
 }
 
 const formatDate = (dateStr: string | undefined) => {

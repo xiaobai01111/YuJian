@@ -46,6 +46,16 @@ public interface RoleService {
     RoleVO assignMenus(Long roleId, List<Long> menuIds);
 
     /**
+     * 获取角色数据权限部门
+     */
+    List<Long> getRoleDeptIds(Long roleId);
+
+    /**
+     * 分配角色数据权限
+     */
+    RoleVO assignDepts(Long roleId, List<Long> deptIds);
+
+    /**
      * 获取角色下的用户列表
      */
     List<com.campus.wall.vo.user.UserVO> getRoleUsers(Long roleId);

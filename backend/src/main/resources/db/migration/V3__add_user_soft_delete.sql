@@ -1,8 +1,0 @@
--- 用户软删除支持
-ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by BIGINT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_reason VARCHAR(500);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted INTEGER DEFAULT 0;
-
--- 索引优化
-CREATE INDEX IF NOT EXISTS idx_users_deleted ON users(deleted);

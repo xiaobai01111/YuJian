@@ -1,6 +1,7 @@
 package com.campus.wall.service.post.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.BoardUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -14,10 +15,14 @@ import com.campus.wall.dto.post.PostUpdateDTO;
 import com.campus.wall.entity.post.Bookmark;
 import com.campus.wall.entity.post.Like;
 import com.campus.wall.entity.post.Post;
+import com.campus.wall.entity.post.PostBoard;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.post.BookmarkMapper;
 import com.campus.wall.mapper.post.LikeMapper;
+import com.campus.wall.mapper.post.PostBoardMapper;
 import com.campus.wall.mapper.post.PostMapper;
+import com.campus.wall.mapper.system.SysDeptMapper;
+import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.content.SensitiveWordService;
 import com.campus.wall.service.file.FileService;
@@ -25,6 +30,7 @@ import com.campus.wall.service.post.PostService;
 import com.campus.wall.vo.file.FileVO;
 import com.campus.wall.vo.post.PostVO;
 import com.campus.wall.vo.user.UserVO;
+import com.campus.wall.constant.SecurityConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -32,7 +38,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -46,7 +55,10 @@ public class PostServiceImpl implements PostService {
     private final PostMapper postMapper;
     private final LikeMapper likeMapper;
     private final BookmarkMapper bookmarkMapper;
+    private final PostBoardMapper postBoardMapper;
     private final UserMapper userMapper;
+    private final SysRoleDeptMapper sysRoleDeptMapper;
+    private final SysDeptMapper deptMapper;
     private final FileService fileService;
     private final SensitiveWordService sensitiveWordService;
     private final com.campus.wall.service.user.CreditService creditService;
@@ -56,10 +68,9 @@ public class PostServiceImpl implements PostService {
     private static final int STATUS_RESOLVED = 1;
     private static final int STATUS_DELETED = 2;
 
-    // 树洞板块强制匿名
-    private static final String BOARD_TREE_HOLE = "tree-hole";
-    // 市集板块
-    private static final String BOARD_MARKET = "market";
+    // 板块常量
+    private static final String BOARD_TREE_HOLE = BoardUtil.BOARD_TREE_HOLE;
+    private static final String BOARD_MARKET = BoardUtil.BOARD_MARKET;
 
     @Override
     @Transactional
@@ -77,8 +88,20 @@ public class PostServiceImpl implements PostService {
             throw new BusinessException(ResultCode.FORBIDDEN, "请先完成身份验证后再发帖");
         }
         
+        // 规范化板块列表（兼容旧字段 board）
+        List<String> boards = BoardUtil.normalizeBoardKeys(dto.getBoards());
+        if (boards.isEmpty()) {
+            String singleBoard = BoardUtil.normalizeBoardKey(dto.getBoard());
+            if (singleBoard != null) {
+                boards = List.of(singleBoard);
+            }
+        }
+        if (boards.isEmpty()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "板块不能为空或无效");
+        }
+
         // 市集板块额外需要信用分达标
-        if (BOARD_MARKET.equals(dto.getBoard())) {
+        if (boards.contains(BOARD_MARKET)) {
             if (!creditService.canPostInMarket(userId)) {
                 throw new BusinessException(ResultCode.FORBIDDEN, "信用分不足，无法在市集发帖（需要60分以上）");
             }
@@ -94,14 +117,14 @@ public class PostServiceImpl implements PostService {
 
         // 树洞板块强制匿名
         Boolean isAnonymous = dto.getIsAnonymous();
-        if (BOARD_TREE_HOLE.equals(dto.getBoard())) {
+        if (boards.contains(BOARD_TREE_HOLE)) {
             isAnonymous = true;
         }
 
         // 创建帖子
         Post post = new Post();
         post.setUserId(userId);
-        post.setBoard(dto.getBoard());
+        post.setBoard(boards.get(0));
         post.setTitle(dto.getTitle());
         post.setContent(dto.getContent());
         post.setIsAnonymous(isAnonymous);
@@ -109,6 +132,8 @@ public class PostServiceImpl implements PostService {
         post.setPrice(dto.getPrice());
         post.setLocation(dto.getLocation());
         post.setLostTime(dto.getLostTime());
+        Boolean showOnHome = dto.getShowOnHome();
+        post.setShowOnHome(showOnHome == null ? Boolean.TRUE : showOnHome);
         post.setStatus(STATUS_NORMAL);
         post.setLikeCount(0);
         post.setCommentCount(0);
@@ -116,6 +141,9 @@ public class PostServiceImpl implements PostService {
         post.setLastInteractionAt(LocalDateTime.now());
 
         postMapper.insert(post);
+
+        // 绑定板块
+        savePostBoards(post.getId(), boards);
 
         // 绑定文件
         if (dto.getFileIds() != null && !dto.getFileIds().isEmpty()) {
@@ -164,6 +192,25 @@ public class PostServiceImpl implements PostService {
         if (dto.getLostTime() != null) {
             post.setLostTime(dto.getLostTime());
         }
+        if (dto.getShowOnHome() != null) {
+            post.setShowOnHome(dto.getShowOnHome());
+        }
+
+        // 更新板块（可选）
+        if (dto.getBoards() != null) {
+            List<String> boards = BoardUtil.normalizeBoardKeys(dto.getBoards());
+            if (boards.isEmpty()) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "板块不能为空或无效");
+            }
+            if (boards.contains(BOARD_MARKET) && !creditService.canPostInMarket(userId)) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "信用分不足，无法在市集发帖（需要60分以上）");
+            }
+            if (boards.contains(BOARD_TREE_HOLE)) {
+                post.setIsAnonymous(true);
+            }
+            post.setBoard(boards.get(0));
+            replacePostBoards(postId, boards);
+        }
 
         postMapper.updateById(post);
 
@@ -206,40 +253,76 @@ public class PostServiceImpl implements PostService {
         // 增加浏览数
         postMapper.incrementViewCount(postId);
 
-        return toPostVO(post, true);
+        List<String> boards = loadBoards(postId);
+        return toPostVO(post, true, boards);
     }
 
     @Override
     public PageResult<PostVO> queryPosts(PostQueryDTO query) {
-        Page<Post> page = new Page<>(query.getPage(), query.getSize());
+        return queryPostsInternal(query, true, false);
+    }
 
+    @Override
+    public PageResult<PostVO> queryPostsForConsole(PostQueryDTO query) {
+        return queryPostsInternal(query, false, true);
+    }
+
+    private PageResult<PostVO> queryPostsInternal(PostQueryDTO query, boolean defaultNormalStatus, boolean applyDataScope) {
+        Page<Post> page = new Page<>(query.getPage(), query.getSize());
+        LambdaQueryWrapper<Post> wrapper = buildWrapper(query, defaultNormalStatus);
+        if (applyDataScope) {
+            applyPostDataScope(wrapper);
+        }
+
+        Page<Post> result = postMapper.selectPage(page, wrapper);
+
+        List<Long> postIds = result.getRecords().stream()
+                .map(Post::getId)
+                .collect(Collectors.toList());
+        Map<Long, List<String>> boardsMap = loadBoardsMap(postIds);
+
+        List<PostVO> records = result.getRecords().stream()
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId())))
+                .collect(Collectors.toList());
+
+        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    private LambdaQueryWrapper<Post> buildWrapper(PostQueryDTO query, boolean defaultNormalStatus) {
         LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
 
-        // 公开列表只显示正常状态的帖子（排除已删除、待审核、已下架等）
-        // 如果是管理员查询或指定了状态筛选，则允许查看其他状态
         if (query.getStatus() != null) {
             wrapper.eq(Post::getStatus, query.getStatus());
-        } else {
-            // 默认只显示正常状态
+        } else if (defaultNormalStatus) {
             wrapper.eq(Post::getStatus, STATUS_NORMAL);
         }
 
-        // 板块筛选
-        if (query.getBoard() != null && !query.getBoard().isEmpty()) {
-            wrapper.eq(Post::getBoard, query.getBoard());
+        String normalizedBoard = BoardUtil.normalizeBoardKey(query.getBoard());
+        if (query.getBoard() != null && !query.getBoard().isEmpty() && normalizedBoard == null) {
+            wrapper.eq(Post::getId, -1L);
+            return wrapper;
+        }
+        if (normalizedBoard != null) {
+            wrapper.inSql(Post::getId, "SELECT post_id FROM post_boards WHERE board = '" + normalizedBoard + "'");
         }
 
-        // 分类筛选
         if (query.getCategory() != null && !query.getCategory().isEmpty()) {
             wrapper.eq(Post::getCategory, query.getCategory());
         }
 
-        // 用户筛选
         if (query.getUserId() != null) {
             wrapper.eq(Post::getUserId, query.getUserId());
         }
 
-        // 排序
+        if (query.getShowOnHome() != null) {
+            wrapper.eq(Post::getShowOnHome, query.getShowOnHome());
+        }
+
+        if (query.getKeyword() != null && !query.getKeyword().trim().isEmpty()) {
+            String keyword = query.getKeyword().trim();
+            wrapper.and(w -> w.like(Post::getTitle, keyword).or().like(Post::getContent, keyword));
+        }
+
         String orderBy = query.getOrderBy();
         if ("hot".equals(orderBy)) {
             wrapper.orderByDesc(Post::getLastInteractionAt);
@@ -247,13 +330,107 @@ public class PostServiceImpl implements PostService {
             wrapper.orderByDesc(Post::getCreatedAt);
         }
 
-        Page<Post> result = postMapper.selectPage(page, wrapper);
+        return wrapper;
+    }
 
-        List<PostVO> records = result.getRecords().stream()
-                .map(post -> toPostVO(post, false))
-                .collect(Collectors.toList());
+    private void applyPostDataScope(LambdaQueryWrapper<Post> wrapper) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        if (SecurityUtil.isSuperAdmin()) {
+            return;
+        }
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        List<Long> deptIds = sysRoleDeptMapper.selectDeptIdsByUserId(userId);
+        if (deptIds == null) {
+            deptIds = new ArrayList<>();
+        }
+        User user = userMapper.selectById(userId);
+        if (user != null && user.getDeptId() != null) {
+            if (!deptIds.contains(user.getDeptId())) {
+                deptIds.add(user.getDeptId());
+            }
+        }
+
+        if (deptIds.isEmpty()) {
+            wrapper.eq(Post::getUserId, userId);
+            return;
+        }
+
+        List<com.campus.wall.entity.system.SysDept> depts = deptMapper.selectBatchIds(deptIds);
+        boolean allowAll = false;
+        boolean allowSelf = false;
+        List<Long> allowDeptIds = new ArrayList<>();
+        boolean includeChildren = false;
+
+        for (com.campus.wall.entity.system.SysDept dept : depts) {
+            if (dept == null) continue;
+            Integer scope = dept.getDataScope() != null ? dept.getDataScope() : SecurityConstants.DATA_SCOPE_DEPT;
+            if (scope == SecurityConstants.DATA_SCOPE_ALL) {
+                allowAll = true;
+                break;
+            }
+            if (scope == SecurityConstants.DATA_SCOPE_SELF) {
+                allowSelf = true;
+            } else if (scope == SecurityConstants.DATA_SCOPE_DEPT) {
+                allowDeptIds.add(dept.getId());
+            } else if (scope == SecurityConstants.DATA_SCOPE_DEPT_AND_CHILD) {
+                allowDeptIds.add(dept.getId());
+                includeChildren = true;
+            } else if (scope == SecurityConstants.DATA_SCOPE_CUSTOM) {
+                allowDeptIds.add(dept.getId());
+            }
+        }
+
+        if (allowAll) {
+            return;
+        }
+
+        List<Long> scopedDeptIds = includeChildren ? expandDeptIds(allowDeptIds) : allowDeptIds;
+        if (scopedDeptIds.isEmpty()) {
+            if (allowSelf) {
+                wrapper.eq(Post::getUserId, userId);
+            } else {
+                wrapper.eq(Post::getUserId, userId);
+            }
+            return;
+        }
+
+        String deptIdSql = scopedDeptIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        String inSql = "SELECT id FROM users WHERE deleted = 0 AND dept_id IN (" + deptIdSql + ")";
+
+        if (allowSelf) {
+            wrapper.and(w -> w.eq(Post::getUserId, userId).or().inSql(Post::getUserId, inSql));
+        } else {
+            wrapper.inSql(Post::getUserId, inSql);
+        }
+    }
+
+    private List<Long> expandDeptIds(List<Long> deptIds) {
+        if (deptIds == null || deptIds.isEmpty()) {
+            return List.of();
+        }
+        List<com.campus.wall.entity.system.SysDept> allDepts = deptMapper.selectList(null);
+        Map<Long, List<Long>> childrenMap = new HashMap<>();
+        for (com.campus.wall.entity.system.SysDept dept : allDepts) {
+            childrenMap.computeIfAbsent(dept.getParentId(), key -> new ArrayList<>()).add(dept.getId());
+        }
+        List<Long> result = new ArrayList<>();
+        for (Long rootId : deptIds) {
+            collectDeptChildren(rootId, childrenMap, result);
+        }
+        return result.stream().distinct().collect(Collectors.toList());
+    }
+
+    private void collectDeptChildren(Long deptId, Map<Long, List<Long>> childrenMap, List<Long> result) {
+        if (deptId == null) {
+            return;
+        }
+        result.add(deptId);
+        List<Long> children = childrenMap.get(deptId);
+        if (children != null) {
+            for (Long childId : children) {
+                collectDeptChildren(childId, childrenMap, result);
+            }
+        }
     }
 
     @Override
@@ -355,9 +532,14 @@ public class PostServiceImpl implements PostService {
         }
 
         List<Post> posts = postMapper.selectBatchIds(postIds);
+        List<Long> filteredPostIds = posts.stream()
+                .map(Post::getId)
+                .collect(Collectors.toList());
+        Map<Long, List<String>> boardsMap = loadBoardsMap(filteredPostIds);
+
         List<PostVO> records = posts.stream()
                 .filter(p -> p.getStatus() != STATUS_DELETED)
-                .map(post -> toPostVO(post, false))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId())))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, bookmarks.getTotal(), bookmarks.getCurrent(), bookmarks.getSize());
@@ -389,8 +571,13 @@ public class PostServiceImpl implements PostService {
         Page<Post> postPage = new Page<>(page, size);
         IPage<Post> result = postMapper.fullTextSearch(postPage, keyword.trim());
 
+        List<Long> postIds = result.getRecords().stream()
+                .map(Post::getId)
+                .collect(Collectors.toList());
+        Map<Long, List<String>> boardsMap = loadBoardsMap(postIds);
+
         List<PostVO> records = result.getRecords().stream()
-                .map(post -> toPostVO(post, false))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId())))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
@@ -404,9 +591,15 @@ public class PostServiceImpl implements PostService {
         return post;
     }
 
-    private PostVO toPostVO(Post post, boolean includeFiles) {
+    private PostVO toPostVO(Post post, boolean includeFiles, List<String> boards) {
         PostVO vo = new PostVO();
         BeanUtils.copyProperties(post, vo);
+        if (boards != null && !boards.isEmpty()) {
+            vo.setBoards(boards);
+            vo.setBoard(boards.get(0));
+        } else {
+            vo.setBoards(List.of());
+        }
 
         // 处理作者信息
         if (Boolean.TRUE.equals(post.getIsAnonymous())) {
@@ -456,5 +649,54 @@ public class PostServiceImpl implements PostService {
         }
 
         return vo;
+    }
+
+    private void savePostBoards(Long postId, List<String> boards) {
+        if (boards == null || boards.isEmpty()) {
+            return;
+        }
+        for (String board : boards) {
+            PostBoard postBoard = new PostBoard();
+            postBoard.setPostId(postId);
+            postBoard.setBoard(board);
+            postBoardMapper.insert(postBoard);
+        }
+    }
+
+    private void replacePostBoards(Long postId, List<String> boards) {
+        postBoardMapper.delete(new LambdaQueryWrapper<PostBoard>()
+                .eq(PostBoard::getPostId, postId));
+        savePostBoards(postId, boards);
+    }
+
+    private List<String> loadBoards(Long postId) {
+        List<PostBoard> records = postBoardMapper.selectList(
+                new LambdaQueryWrapper<PostBoard>()
+                        .eq(PostBoard::getPostId, postId)
+        );
+        if (records.isEmpty()) {
+            return List.of();
+        }
+        List<String> boards = new ArrayList<>();
+        for (PostBoard record : records) {
+            boards.add(record.getBoard());
+        }
+        return boards;
+    }
+
+    private Map<Long, List<String>> loadBoardsMap(List<Long> postIds) {
+        Map<Long, List<String>> map = new HashMap<>();
+        if (postIds == null || postIds.isEmpty()) {
+            return map;
+        }
+        List<PostBoard> records = postBoardMapper.selectList(
+                new LambdaQueryWrapper<PostBoard>()
+                        .in(PostBoard::getPostId, postIds)
+        );
+        for (PostBoard record : records) {
+            map.computeIfAbsent(record.getPostId(), key -> new ArrayList<>())
+                    .add(record.getBoard());
+        }
+        return map;
     }
 }

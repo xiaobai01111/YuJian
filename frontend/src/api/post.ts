@@ -12,6 +12,7 @@ export interface FileVO {
 export interface PostVO {
     id: number
     board: string
+    boards?: string[]
     title: string
     content: string
     isAnonymous: boolean
@@ -21,6 +22,7 @@ export interface PostVO {
     location?: string
     lostTime?: string
     status: number
+    showOnHome?: boolean
     likeCount: number
     commentCount: number
     viewCount: number
@@ -41,10 +43,12 @@ export interface PostQueryDTO {
     keyword?: string
     orderBy?: string
     lostFoundType?: string
+    showOnHome?: boolean
 }
 
 export interface PostCreateDTO {
-    board: string
+    boards: string[]
+    board?: string
     title?: string
     content: string
     isAnonymous?: boolean
@@ -53,10 +57,15 @@ export interface PostCreateDTO {
     location?: string
     lostTime?: string
     fileIds?: number[]
+    showOnHome?: boolean
 }
 
 export function getPostList(params: PostQueryDTO) {
     return request.get('/api/v1/posts', { params })
+}
+
+export function getConsolePostList(params: PostQueryDTO) {
+    return request.get('/api/v1/console/posts', { params })
 }
 
 export function getPostDetail(id: number) {
@@ -93,4 +102,8 @@ export function unbookmarkPost(id: number) {
 
 export function resolvePost(id: number) {
     return request.put(`/api/v1/posts/${id}/resolve`)
+}
+
+export function searchPosts(params: { keyword: string; board?: string; page?: number; size?: number }) {
+    return request.get('/api/v1/posts/search', { params })
 }

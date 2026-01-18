@@ -32,6 +32,8 @@ public class SysDept implements Serializable {
 
     private Integer status;
 
+    private Integer dataScope;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

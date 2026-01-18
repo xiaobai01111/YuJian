@@ -193,6 +193,12 @@ const router = createRouter({
                     meta: { title: '公告管理', icon: 'bell' }
                 },
                 {
+                    path: 'post',
+                    name: 'PostManagement',
+                    component: () => import('@/views/console/post/index.vue'),
+                    meta: { title: '帖子管理', icon: 'post' }
+                },
+                {
                     path: 'announcement',
                     name: 'AnnouncementManagement',
                     component: () => import('@/views/console/notice/index.vue'),

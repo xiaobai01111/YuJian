@@ -6,9 +6,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.entity.system.SysRole;
+import com.campus.wall.entity.system.SysRoleDept;
 import com.campus.wall.entity.system.SysRoleMenu;
 import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
+import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMenuMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
@@ -39,6 +41,7 @@ public class RoleServiceImpl implements RoleService {
     private final SysRoleMenuMapper sysRoleMenuMapper;
     private final SysMenuMapper sysMenuMapper;
     private final SysUserRoleMapper sysUserRoleMapper;
+    private final SysRoleDeptMapper sysRoleDeptMapper;
     private final UserMapper userMapper;
     private final UserService userService;
     private final OperLogService operLogService;
@@ -246,6 +249,45 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
+    public List<Long> getRoleDeptIds(Long roleId) {
+        if (roleId == null) {
+            return List.of();
+        }
+        return sysRoleDeptMapper.selectDeptIdsByRoleId(roleId);
+    }
+
+    @Override
+    @Transactional
+    public RoleVO assignDepts(Long roleId, List<Long> deptIds) {
+        SysRole role = sysRoleMapper.selectById(roleId);
+        if (role == null) {
+            throw new BusinessException("角色不存在");
+        }
+        if (isAdminRole(role)) {
+            throw new BusinessException("管理员角色不允许修改数据权限");
+        }
+        sysRoleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, roleId));
+
+        if (deptIds == null) {
+            deptIds = List.of();
+        }
+        for (Long deptId : deptIds) {
+            SysRoleDept roleDept = new SysRoleDept();
+            roleDept.setRoleId(roleId);
+            roleDept.setDeptId(deptId);
+            sysRoleDeptMapper.insert(roleDept);
+        }
+
+        HashMap<String, Object> after = new HashMap<>();
+        after.put("deptIds", deptIds);
+        operLogService.log(StpUtil.getLoginIdAsLong(), null, "role", roleId, "dept_assign", null, null, after, null);
+
+        RoleVO vo = toRoleVO(role, false);
+        vo.setDeptIds(deptIds);
+        return vo;
+    }
+
+    @Override
     public List<UserVO> getRoleUsers(Long roleId) {
         List<Long> userIds = sysUserRoleMapper.selectUserIdsByRoleId(roleId);
         if (userIds == null || userIds.isEmpty()) {
@@ -304,6 +346,8 @@ public class RoleServiceImpl implements RoleService {
             List<Long> menuIds = sysMenuMapper.selectMenuIdsByRoleId(role.getId());
             vo.setMenuIds(menuIds);
         }
+        List<Long> deptIds = sysRoleDeptMapper.selectDeptIdsByRoleId(role.getId());
+        vo.setDeptIds(deptIds);
         return vo;
     }
 }

@@ -29,4 +29,7 @@ public class RoleDTO {
 
     @Schema(description = "菜单ID列表")
     private List<Long> menuIds;
+
+    @Schema(description = "数据权限部门ID列表")
+    private List<Long> deptIds;
 }

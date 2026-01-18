@@ -15,6 +15,7 @@ public class DeptTreeVO {
     private String phone;
     private String email;
     private Integer status;
+    private Integer dataScope;
     private LocalDateTime createdAt;
     private List<DeptTreeVO> children;
 }

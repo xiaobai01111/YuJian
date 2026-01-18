@@ -1,6 +1,7 @@
 package com.campus.wall.service.post.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.util.BoardUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -10,8 +11,10 @@ import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.post.CommentCreateDTO;
 import com.campus.wall.entity.post.Comment;
 import com.campus.wall.entity.post.Post;
+import com.campus.wall.entity.post.PostBoard;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.post.CommentMapper;
+import com.campus.wall.mapper.post.PostBoardMapper;
 import com.campus.wall.mapper.post.PostMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.content.AnonymousMappingService;
@@ -39,6 +42,7 @@ public class CommentServiceImpl implements CommentService {
 
     private final CommentMapper commentMapper;
     private final PostMapper postMapper;
+    private final PostBoardMapper postBoardMapper;
     private final UserMapper userMapper;
     private final SensitiveWordService sensitiveWordService;
     private final AnonymousMappingService anonymousMappingService;
@@ -48,7 +52,7 @@ public class CommentServiceImpl implements CommentService {
     private static final int STATUS_DELETED = 1;
 
     // 树洞板块
-    private static final String BOARD_TREE_HOLE = "tree-hole";
+    private static final String BOARD_TREE_HOLE = BoardUtil.BOARD_TREE_HOLE;
 
     @Override
     @Transactional
@@ -87,7 +91,7 @@ public class CommentServiceImpl implements CommentService {
         comment.setStatus(STATUS_NORMAL);
 
         // 树洞帖子分配匿名标识
-        if (BOARD_TREE_HOLE.equals(post.getBoard()) || Boolean.TRUE.equals(post.getIsAnonymous())) {
+        if (isTreeHolePost(post) || Boolean.TRUE.equals(post.getIsAnonymous())) {
             if (isOwner) {
                 comment.setAnonymousId("楼主");
             } else {
@@ -140,6 +144,7 @@ public class CommentServiceImpl implements CommentService {
         if (post == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
+        boolean isAnonymousPost = isTreeHolePost(post) || Boolean.TRUE.equals(post.getIsAnonymous());
 
         // 查询所有评论
         List<Comment> comments = commentMapper.selectList(
@@ -150,7 +155,7 @@ public class CommentServiceImpl implements CommentService {
         );
 
         // 转换为树形结构
-        return buildCommentTree(comments, post);
+        return buildCommentTree(comments, post, isAnonymousPost);
     }
 
     @Override
@@ -160,6 +165,7 @@ public class CommentServiceImpl implements CommentService {
         if (post == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
+        boolean isAnonymousPost = isTreeHolePost(post) || Boolean.TRUE.equals(post.getIsAnonymous());
 
         Page<Comment> commentPage = new Page<>(page, size);
 
@@ -194,11 +200,11 @@ public class CommentServiceImpl implements CommentService {
         Map<Long, List<Comment>> finalChildrenMap = childrenMap;
         List<CommentVO> records = result.getRecords().stream()
                 .map(comment -> {
-                    CommentVO vo = toCommentVO(comment, post);
+                    CommentVO vo = toCommentVO(comment, post, isAnonymousPost);
                     List<Comment> commentChildren = finalChildrenMap.get(comment.getId());
                     if (commentChildren != null) {
                         vo.setChildren(commentChildren.stream()
-                                .map(c -> toCommentVO(c, post))
+                                .map(c -> toCommentVO(c, post, isAnonymousPost))
                                 .collect(Collectors.toList()));
                     }
                     return vo;
@@ -208,7 +214,7 @@ public class CommentServiceImpl implements CommentService {
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
     }
 
-    private List<CommentVO> buildCommentTree(List<Comment> comments, Post post) {
+    private List<CommentVO> buildCommentTree(List<Comment> comments, Post post, boolean isAnonymousPost) {
         // 分离一级评论和子评论
         Map<Long, List<Comment>> childrenMap = comments.stream()
                 .filter(c -> c.getParentId() != null)
@@ -217,8 +223,8 @@ public class CommentServiceImpl implements CommentService {
         List<CommentVO> rootComments = new ArrayList<>();
         for (Comment comment : comments) {
             if (comment.getParentId() == null) {
-                CommentVO vo = toCommentVO(comment, post);
-                vo.setChildren(buildChildren(comment.getId(), childrenMap, post));
+                CommentVO vo = toCommentVO(comment, post, isAnonymousPost);
+                vo.setChildren(buildChildren(comment.getId(), childrenMap, post, isAnonymousPost));
                 rootComments.add(vo);
             }
         }
@@ -226,7 +232,7 @@ public class CommentServiceImpl implements CommentService {
         return rootComments;
     }
 
-    private List<CommentVO> buildChildren(Long parentId, Map<Long, List<Comment>> childrenMap, Post post) {
+    private List<CommentVO> buildChildren(Long parentId, Map<Long, List<Comment>> childrenMap, Post post, boolean isAnonymousPost) {
         List<Comment> children = childrenMap.get(parentId);
         if (children == null) {
             return new ArrayList<>();
@@ -234,14 +240,14 @@ public class CommentServiceImpl implements CommentService {
 
         return children.stream()
                 .map(c -> {
-                    CommentVO vo = toCommentVO(c, post);
-                    vo.setChildren(buildChildren(c.getId(), childrenMap, post));
+                    CommentVO vo = toCommentVO(c, post, isAnonymousPost);
+                    vo.setChildren(buildChildren(c.getId(), childrenMap, post, isAnonymousPost));
                     return vo;
                 })
                 .collect(Collectors.toList());
     }
 
-    private CommentVO toCommentVO(Comment comment, Post post) {
+    private CommentVO toCommentVO(Comment comment, Post post, boolean isAnonymousPost) {
         CommentVO vo = new CommentVO();
         vo.setId(comment.getId());
         vo.setPostId(comment.getPostId());
@@ -252,9 +258,6 @@ public class CommentServiceImpl implements CommentService {
         vo.setCreatedAt(comment.getCreatedAt());
 
         // 处理作者信息
-        boolean isAnonymousPost = BOARD_TREE_HOLE.equals(post.getBoard()) 
-                || Boolean.TRUE.equals(post.getIsAnonymous());
-
         if (isAnonymousPost) {
             // 匿名帖子不显示作者信息，使用 anonymousId
             vo.setAuthor(null);
@@ -271,5 +274,20 @@ public class CommentServiceImpl implements CommentService {
         }
 
         return vo;
+    }
+
+    private boolean isTreeHolePost(Post post) {
+        if (post == null) {
+            return false;
+        }
+        String normalizedBoard = BoardUtil.normalizeBoardKey(post.getBoard());
+        if (BOARD_TREE_HOLE.equals(normalizedBoard)) {
+            return true;
+        }
+        return postBoardMapper.selectCount(
+                new LambdaQueryWrapper<PostBoard>()
+                        .eq(PostBoard::getPostId, post.getId())
+                        .eq(PostBoard::getBoard, BOARD_TREE_HOLE)
+        ) > 0;
     }
 }

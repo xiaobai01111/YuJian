@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.system.RoleDTO;
 import com.campus.wall.dto.system.RoleDeleteDTO;
+import com.campus.wall.dto.system.RoleDeptDTO;
 import com.campus.wall.service.system.RoleService;
 import com.campus.wall.vo.user.UserVO;
 import com.campus.wall.vo.system.RoleVO;
@@ -83,6 +84,21 @@ public class RoleController {
     @PutMapping("/{id}/menus")
     public R<RoleVO> assignMenus(@PathVariable Long id, @RequestBody List<Long> menuIds) {
         RoleVO role = roleService.assignMenus(id, menuIds);
+        return R.ok(role);
+    }
+
+    @Operation(summary = "角色数据权限部门列表", description = "获取角色关联的部门ID列表")
+    @SaCheckPermission("system:role:assign")
+    @GetMapping("/{id}/depts")
+    public R<List<Long>> getRoleDepts(@PathVariable Long id) {
+        return R.ok(roleService.getRoleDeptIds(id));
+    }
+
+    @Operation(summary = "分配数据权限")
+    @SaCheckPermission("system:role:assign")
+    @PutMapping("/{id}/depts")
+    public R<RoleVO> assignDepts(@PathVariable Long id, @RequestBody RoleDeptDTO dto) {
+        RoleVO role = roleService.assignDepts(id, dto.getDeptIds());
         return R.ok(role);
     }
 

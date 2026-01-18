@@ -6,6 +6,7 @@ import com.campus.wall.common.BusinessException;
 import com.campus.wall.dto.system.DeptDeleteDTO;
 import com.campus.wall.entity.system.SysDept;
 import com.campus.wall.entity.user.User;
+import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
@@ -68,13 +69,37 @@ public class DeptServiceImpl implements DeptService {
     @Transactional
     public Long create(SysDept dept) {
         if (dept.getParentId() == null) {
-            dept.setParentId(0L);
+            dept.setParentId(SecurityConstants.SYSTEM_DEPT_ID);
+        }
+        if (dept.getParentId() == 0L) {
+            dept.setParentId(SecurityConstants.SYSTEM_DEPT_ID);
+        }
+        if (dept.getDeptName() != null) {
+            dept.setDeptName(dept.getDeptName().trim());
+        }
+        if (dept.getDeptName() == null || dept.getDeptName().isEmpty()) {
+            throw new BusinessException("部门名称不能为空");
         }
         if (dept.getSortOrder() == null) {
             dept.setSortOrder(0);
         }
         if (dept.getStatus() == null) {
             dept.setStatus(0);
+        }
+        if (dept.getDataScope() == null) {
+            dept.setDataScope(SecurityConstants.DATA_SCOPE_DEPT);
+        }
+        if (dept.getDataScope() < SecurityConstants.DATA_SCOPE_ALL || dept.getDataScope() > SecurityConstants.DATA_SCOPE_SELF) {
+            throw new BusinessException("数据权限范围不合法");
+        }
+        Long parentId = dept.getParentId();
+        Long existing = deptMapper.selectCount(
+            new LambdaQueryWrapper<SysDept>()
+                .eq(SysDept::getParentId, parentId)
+                .eq(SysDept::getDeptName, dept.getDeptName())
+        );
+        if (existing != null && existing > 0) {
+            throw new BusinessException("同级部门名称已存在");
         }
         deptMapper.insert(dept);
         return dept.getId();
@@ -86,6 +111,38 @@ public class DeptServiceImpl implements DeptService {
         SysDept existing = deptMapper.selectById(id);
         if (existing == null) {
             throw new BusinessException("部门不存在");
+        }
+
+        if (isSystemDept(existing.getId())) {
+            if (dept.getParentId() != null && !dept.getParentId().equals(existing.getParentId())) {
+                throw new BusinessException("系统部门不允许修改上级");
+            }
+            if (dept.getDataScope() != null && !dept.getDataScope().equals(existing.getDataScope())) {
+                throw new BusinessException("系统部门不允许修改数据范围");
+            }
+        }
+
+        if (dept.getParentId() != null && dept.getParentId() == 0L && !isSystemDept(existing.getId())) {
+            dept.setParentId(SecurityConstants.SYSTEM_DEPT_ID);
+        }
+
+        if (dept.getDeptName() != null) {
+            dept.setDeptName(dept.getDeptName().trim());
+            if (dept.getDeptName().isEmpty()) {
+                throw new BusinessException("部门名称不能为空");
+            }
+        }
+
+        Long targetParentId = dept.getParentId() != null ? dept.getParentId() : existing.getParentId();
+        String targetName = dept.getDeptName() != null ? dept.getDeptName() : existing.getDeptName();
+        Long sameNameCount = deptMapper.selectCount(
+            new LambdaQueryWrapper<SysDept>()
+                .eq(SysDept::getParentId, targetParentId)
+                .eq(SysDept::getDeptName, targetName)
+                .ne(SysDept::getId, id)
+        );
+        if (sameNameCount != null && sameNameCount > 0) {
+            throw new BusinessException("同级部门名称已存在");
         }
         
         // 防止循环上级：不能将自己或子孙部门设为上级
@@ -110,6 +167,12 @@ public class DeptServiceImpl implements DeptService {
         existing.setLeader(dept.getLeader());
         existing.setPhone(dept.getPhone());
         existing.setEmail(dept.getEmail());
+        if (dept.getDataScope() != null) {
+            if (dept.getDataScope() < SecurityConstants.DATA_SCOPE_ALL || dept.getDataScope() > SecurityConstants.DATA_SCOPE_SELF) {
+                throw new BusinessException("数据权限范围不合法");
+            }
+            existing.setDataScope(dept.getDataScope());
+        }
         // 状态变更使用专门的 updateStatus 方法
         
         deptMapper.updateById(existing);
@@ -149,6 +212,9 @@ public class DeptServiceImpl implements DeptService {
     @Override
     @Transactional
     public void updateStatus(Long id, Integer status) {
+        if (isSystemDept(id)) {
+            throw new BusinessException("系统部门不允许停用");
+        }
         SysDept dept = deptMapper.selectById(id);
         if (dept == null) {
             throw new BusinessException("部门不存在");
@@ -177,6 +243,9 @@ public class DeptServiceImpl implements DeptService {
     @Override
     @Transactional
     public void delete(Long id, DeptDeleteDTO dto) {
+        if (isSystemDept(id)) {
+            throw new BusinessException("系统部门不允许删除");
+        }
         SysDept dept = deptMapper.selectById(id);
         if (dept == null) {
             throw new BusinessException("部门不存在");
@@ -291,6 +360,7 @@ public class DeptServiceImpl implements DeptService {
         );
     }
 
+    @SuppressWarnings("unused")
     private void kickoutDeptUsers(Long deptId) {
         kickoutDeptUsers(List.of(deptId));
     }
@@ -342,6 +412,10 @@ public class DeptServiceImpl implements DeptService {
                 collectChildren(allDepts, dept.getId(), result);
             }
         }
+    }
+
+    private boolean isSystemDept(Long deptId) {
+        return deptId != null && deptId.equals(SecurityConstants.SYSTEM_DEPT_ID);
     }
 
     private UserVO toUserVO(User user) {

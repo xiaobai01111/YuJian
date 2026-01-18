@@ -27,7 +27,7 @@
       
       <div v-else-if="postList.length === 0" class="text-center py-12 border border-dashed border-base-300 rounded-2xl bg-base-100">
         <p class="text-base-content/60">暂无内容，快来发布第一条帖子吧！</p>
-        <button class="btn btn-primary btn-sm mt-4">发布帖子</button>
+        <button class="btn btn-primary btn-sm mt-4" @click="openPublish">发布帖子</button>
       </div>
 
       <div v-else v-for="post in postList" :key="post.id" class="card bg-base-100 shadow-sm hover:shadow-md transition-all border border-base-200 cursor-pointer" @click="goToDetail(post.id)">
@@ -94,44 +94,41 @@
       </div>
     </div>
   </div>
+
+  <PostPublishModal v-model="showPublish" :default-boards="defaultBoards" @success="fetchData" />
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getBoardLabel, normalizeBoardKey } from '@/utils/boards'
+import PostPublishModal from '@/components/post/PostPublishModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const titleMap: Record<string, string> = {
-  'Confessions': '表白墙',
-  'TreeHole': '树洞',
-  'Help': '求助问答',
-  'Market': '跳蚤市场',
-  'LostFound': '失物招领'
-}
-
-const title = computed(() => titleMap[route.name as string] || '板块')
+const boardKey = computed(() => normalizeBoardKey(route.name as string))
+const title = computed(() => (boardKey.value ? getBoardLabel(boardKey.value) : '板块'))
+const defaultBoards = computed(() => (boardKey.value ? [boardKey.value] : []))
 
 const postList = ref<PostVO[]>([])
 const loading = ref(false)
+const showPublish = ref(false)
 
 const queryParams = reactive<PostQueryDTO>({
   page: 1,
   size: 10,
-  board: route.name as string // Initial board
+  board: boardKey.value || undefined // Initial board
 })
 
 const fetchData = async () => {
   loading.value = true
   try {
-    // Map route name to board key if needed, assuming backend uses same keys or we map them
-    // Assuming backend accepts 'Confessions', 'TreeHole', etc. directly.
-    queryParams.board = route.name as string
+    queryParams.board = boardKey.value || undefined
     
     const res: any = await getPostList(queryParams)
-    postList.value = res.rows || []
+    postList.value = res.records || []
   } catch (error) {
     console.error('Failed to fetch posts', error)
   } finally {
@@ -146,6 +143,10 @@ const changePage = (page: number) => {
 
 const goToDetail = (id: number) => {
   router.push(`/posts/${id}`)
+}
+
+const openPublish = () => {
+  showPublish.value = true
 }
 
 const formatDate = (dateStr: string) => {

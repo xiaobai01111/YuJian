@@ -13,7 +13,10 @@ import java.util.List;
 @Schema(description = "创建帖子请求")
 public class PostCreateDTO {
 
-    @NotBlank(message = "板块不能为空")
+    @Schema(description = "板块标识列表（多选）")
+    private List<String> boards;
+
+    @Schema(description = "单板块标识（兼容旧客户端）")
     private String board;
 
     @Size(max = 200, message = "标题最多200个字符")
@@ -34,4 +37,7 @@ public class PostCreateDTO {
     private LocalDateTime lostTime;
 
     private List<Long> fileIds;
+
+    @Schema(description = "是否同步到首页展示")
+    private Boolean showOnHome = true;
 }

@@ -17,4 +17,6 @@ public class PostQueryDTO extends PageQueryDTO {
     private String keyword;
     private String orderBy = "latest";
     private String lostFoundType;
+    @Schema(description = "是否同步到首页展示")
+    private Boolean showOnHome;
 }

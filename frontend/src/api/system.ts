@@ -52,10 +52,8 @@ export interface RoleVO {
     roleKey: string
     status: number
     sortOrder: number
-    dataScope?: number
     remark?: string
     menuIds?: number[]
-    deptIds?: number[]
     createdAt: string
 }
 
@@ -80,10 +78,8 @@ export interface RoleDTO {
     roleKey: string
     sortOrder: number
     status: number
-    dataScope?: number
     remark?: string
     menuIds?: number[]
-    deptIds?: number[]
 }
 
 // --- Menu & Router ---
@@ -105,6 +101,7 @@ export interface DeptVO {
     phone?: string
     email?: string
     status: number
+    dataScope?: number
     createdAt?: string
     children?: DeptVO[]
 }
@@ -117,6 +114,7 @@ export interface DeptDTO {
     phone?: string
     email?: string
     status?: number
+    dataScope?: number
 }
 
 export function getDeptList() {
@@ -272,8 +270,12 @@ export function assignRoleMenus(roleId: number, menuIds: number[]) {
     return request.put(`/api/v1/system/roles/${roleId}/menus`, menuIds)
 }
 
-export function assignRoleDepts(roleId: number, deptIds: number[], dataScope: number) {
-    return request.put(`/api/v1/system/roles/${roleId}/depts`, { deptIds, dataScope })
+export function assignRoleDepts(roleId: number, deptIds: number[]) {
+    return request.put(`/api/v1/system/roles/${roleId}/depts`, { deptIds })
+}
+
+export function getRoleDeptIds(roleId: number) {
+    return request.get(`/api/v1/system/roles/${roleId}/depts`)
 }
 
 // --- Notice (公告) ---
@@ -432,4 +434,54 @@ export function updateAuthRule(id: number, data: AuthRuleDTO) {
 
 export function deleteAuthRule(id: number) {
     return request.delete(`/api/v1/system/auth-rules/${id}`)
+}
+
+// --- Statistics (统计) ---
+export interface DashboardStats {
+    totalUsers: number
+    todayNewUsers: number
+    totalPosts: number
+    todayPosts: number
+    yesterdayPosts: number
+    postGrowth: number
+    userGrowth: number
+    pendingVerifications?: number
+    pendingReports?: number
+    noticeTotal?: number
+    noticePublished?: number
+    noticeDraft?: number
+    noticeOffline?: number
+    noticePinned?: number
+    noticeExpiringSoon?: number
+    sensitiveWords?: number
+}
+
+export function getDashboardStats() {
+    return request.get<DashboardStats>('/api/v1/console/statistics/dashboard')
+}
+
+export interface RecentActivity {
+    userId: number
+    nickname: string
+    avatar: string | null
+    action: string
+    time: string
+    status: number
+    postId: number
+}
+
+export function getRecentActivities() {
+    return request.get<RecentActivity[]>('/api/v1/console/statistics/recent-activities')
+}
+
+export interface RecentNotice {
+    id: number
+    title: string
+    isPinned: boolean
+    publishedAt: string
+    status: number
+}
+
+export function getRecentNotices() {
+    return request.get<RecentNotice[]>('/api/v1/console/statistics/recent-notices')
 }

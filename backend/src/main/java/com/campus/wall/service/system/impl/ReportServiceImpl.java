@@ -9,8 +9,10 @@ import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.system.ReportCreateDTO;
 import com.campus.wall.dto.system.ReportHandleDTO;
 import com.campus.wall.entity.post.Post;
+import com.campus.wall.entity.post.PostBoard;
 import com.campus.wall.entity.system.Report;
 import com.campus.wall.entity.user.User;
+import com.campus.wall.mapper.post.PostBoardMapper;
 import com.campus.wall.mapper.post.PostMapper;
 import com.campus.wall.mapper.system.ReportMapper;
 import com.campus.wall.mapper.user.UserMapper;
@@ -38,6 +40,7 @@ public class ReportServiceImpl implements ReportService {
 
     private final ReportMapper reportMapper;
     private final PostMapper postMapper;
+    private final PostBoardMapper postBoardMapper;
     private final UserMapper userMapper;
     private final CreditService creditService;
 
@@ -167,7 +170,19 @@ public class ReportServiceImpl implements ReportService {
             PostVO postVO = new PostVO();
             postVO.setId(post.getId());
             postVO.setTitle(post.getTitle());
-            postVO.setBoard(post.getBoard());
+            List<String> boards = postBoardMapper.selectList(
+                            new LambdaQueryWrapper<PostBoard>()
+                                    .eq(PostBoard::getPostId, post.getId())
+                    ).stream()
+                    .map(PostBoard::getBoard)
+                    .collect(Collectors.toList());
+            if (!boards.isEmpty()) {
+                postVO.setBoard(boards.get(0));
+                postVO.setBoards(boards);
+            } else {
+                postVO.setBoard(post.getBoard());
+                postVO.setBoards(List.of());
+            }
             vo.setPost(postVO);
         }
 

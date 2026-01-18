@@ -15,6 +15,8 @@ public class PostVO {
 
     private Long id;
     private String board;
+    @Schema(description = "板块标识列表")
+    private List<String> boards;
     private String title;
     private String content;
     private Boolean isAnonymous;
@@ -23,6 +25,8 @@ public class PostVO {
     private String location;
     private LocalDateTime lostTime;
     private Integer status;
+    @Schema(description = "是否同步到首页展示")
+    private Boolean showOnHome;
     private Integer likeCount;
     private Integer commentCount;
     private Integer viewCount;

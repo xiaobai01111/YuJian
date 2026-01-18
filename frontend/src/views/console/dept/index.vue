@@ -29,23 +29,26 @@
         </div>
 
         <!-- Table -->
-        <div class="overflow-auto flex-1 min-h-0">
-          <table class="table table-md table-pin-rows">
+        <div class="card bg-base-100 shadow-sm border border-base-200">
+          <div class="card-body p-0">
+            <div class="overflow-x-auto">
+              <table class="table dept-table">
             <thead class="bg-base-200/30 text-base-content/70">
               <tr>
-                <th class="w-64">部门名称</th>
-                <th>负责人</th>
-                <th>联系电话</th>
-                <th>邮箱</th>
-                <th>排序</th>
-                <th>状态</th>
-                <th>创建时间</th>
-                <th class="text-center w-40">操作</th>
+                <th class="w-64" style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">部门名称</th>
+                <th style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">负责人</th>
+                <th style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">联系电话</th>
+                <th style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">邮箱</th>
+                <th style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">排序</th>
+                <th style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">数据范围</th>
+                <th style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">状态</th>
+                <th style="border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)">创建时间</th>
+                <th class="text-center w-40" style="border-bottom: 1px solid hsl(var(--b2) / 0.8)">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="8" class="text-center py-10">
+                <td colspan="9" class="text-center py-10">
                   <span class="loading loading-spinner loading-lg text-primary"></span>
                 </td>
               </tr>
@@ -64,7 +67,9 @@
                 />
               </template>
             </tbody>
-          </table>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -148,8 +153,13 @@
         <div class="space-y-4">
           <div class="form-control w-full">
             <label class="label"><span class="label-text font-medium">上级部门</span></label>
-            <select v-model="form.parentId" class="select select-bordered w-full">
-              <option :value="0">顶级部门</option>
+            <input
+              v-if="isEdit && currentId === SYSTEM_DEPT_ID"
+              class="input input-bordered w-full"
+              value="系统部门（顶级）"
+              disabled
+            />
+            <select v-else v-model="form.parentId" class="select select-bordered w-full">
               <option v-for="dept in flatDeptList" :key="dept.id" :value="dept.id">
                 {{ '　'.repeat(dept.level) + dept.deptName }}
               </option>
@@ -178,6 +188,19 @@
               <label class="label"><span class="label-text font-medium">排序</span></label>
               <input type="number" v-model="form.sortOrder" class="input input-bordered w-full" />
             </div>
+          </div>
+          <div class="form-control w-full">
+            <label class="label"><span class="label-text font-medium">数据范围</span></label>
+            <select v-model="form.dataScope" class="select select-bordered w-full" :disabled="isEdit && currentId === SYSTEM_DEPT_ID">
+              <option :value="1">全部数据权限</option>
+              <option :value="2">自定义数据权限</option>
+              <option :value="4">本部门及以下数据权限</option>
+              <option :value="3">本部门数据权限</option>
+              <option :value="5">仅本人数据权限</option>
+            </select>
+            <label v-if="isEdit && currentId === SYSTEM_DEPT_ID" class="label">
+              <span class="label-text-alt text-base-content/60">系统部门数据范围不可修改</span>
+            </label>
           </div>
           <div v-if="!isEdit" class="form-control">
             <label class="label cursor-pointer justify-start gap-4">
@@ -223,10 +246,12 @@ const DeptTreeRow = defineComponent({
       const paddingLeft = `${props.level * 24 + 16}px`
 
       const rows = []
+      const cellBorder = 'border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)'
+      const cellBorderLast = 'border-bottom: 1px solid hsl(var(--b2) / 0.8)'
       
       // Current row
-      rows.push(h('tr', { class: 'hover border-b border-base-100 last:border-0' }, [
-        h('td', { style: { paddingLeft } }, [
+      rows.push(h('tr', { class: 'hover' }, [
+        h('td', { style: `padding-left: ${paddingLeft}; ${cellBorder}` }, [
           h('div', { class: 'flex items-center gap-2' }, [
             hasChildren
               ? h('button', {
@@ -246,11 +271,14 @@ const DeptTreeRow = defineComponent({
             h('span', { class: 'font-medium' }, props.dept.deptName)
           ])
         ]),
-        h('td', {}, props.dept.leader || '-'),
-        h('td', {}, props.dept.phone || '-'),
-        h('td', { class: 'text-base-content/60' }, props.dept.email || '-'),
-        h('td', {}, props.dept.sortOrder),
-        h('td', {}, [
+        h('td', { style: cellBorder }, props.dept.leader || '-'),
+        h('td', { style: cellBorder }, props.dept.phone || '-'),
+        h('td', { class: 'text-base-content/60', style: cellBorder }, props.dept.email || '-'),
+        h('td', { style: cellBorder }, props.dept.sortOrder),
+        h('td', { style: cellBorder }, [
+          h('span', { class: `badge badge-sm ${getDataScopeClass(props.dept.dataScope)}` }, getDataScopeLabel(props.dept.dataScope))
+        ]),
+        h('td', { style: cellBorder }, [
           h('input', {
             type: 'checkbox',
             class: 'toggle toggle-primary toggle-sm',
@@ -258,8 +286,8 @@ const DeptTreeRow = defineComponent({
             onChange: () => emit('status-change', props.dept)
           })
         ]),
-        h('td', { class: 'text-base-content/60 text-sm' }, formatDate(props.dept.createdAt)),
-        h('td', {}, [
+        h('td', { class: 'text-base-content/60 text-sm', style: cellBorder }, formatDate(props.dept.createdAt)),
+        h('td', { style: cellBorderLast }, [
           h('div', { class: 'flex justify-center gap-2' }, [
             h('button', {
               class: 'btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100',
@@ -279,7 +307,7 @@ const DeptTreeRow = defineComponent({
                 h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 4v16m8-8H4' })
               ])
             ]),
-            h('button', {
+            props.dept.id === SYSTEM_DEPT_ID ? null : h('button', {
               class: 'btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100',
               title: '删除',
               onClick: () => emit('delete', props.dept)
@@ -318,21 +346,57 @@ const formatDate = (dateStr?: string) => {
   return new Date(dateStr).toLocaleString()
 }
 
+const getDataScopeLabel = (scope?: number) => {
+  switch (scope) {
+    case 1:
+      return '全部数据权限'
+    case 2:
+      return '自定义数据权限'
+    case 3:
+      return '本部门数据权限'
+    case 4:
+      return '本部门及以下数据权限'
+    case 5:
+      return '仅本人数据权限'
+    default:
+      return '-'
+  }
+}
+
+const getDataScopeClass = (scope?: number) => {
+  switch (scope) {
+    case 1:
+      return 'badge-success'
+    case 2:
+      return 'badge-warning'
+    case 3:
+      return 'badge-info'
+    case 4:
+      return 'badge-primary'
+    case 5:
+      return 'badge-ghost'
+    default:
+      return 'badge-ghost'
+  }
+}
+
 // --- State ---
 const loading = ref(false)
 const submitting = ref(false)
 const deptTree = ref<DeptVO[]>([])
 const expandedIds = ref<Set<number>>(new Set())
 const isExpanded = ref(true)
+const SYSTEM_DEPT_ID = 1
 
 const form = reactive<DeptDTO>({
-  parentId: 0,
+  parentId: SYSTEM_DEPT_ID,
   deptName: '',
   sortOrder: 0,
   leader: '',
   phone: '',
   email: '',
-  status: 0
+  status: 0,
+  dataScope: 3
 })
 const isEdit = ref(false)
 const currentId = ref<number>(0)
@@ -410,22 +474,24 @@ const openFormModal = (dept?: DeptVO | null, parentId?: number) => {
   if (dept) {
     isEdit.value = true
     currentId.value = dept.id
-    form.parentId = dept.parentId
+    form.parentId = dept.parentId === 0 ? SYSTEM_DEPT_ID : dept.parentId
     form.deptName = dept.deptName
     form.sortOrder = dept.sortOrder
     form.leader = dept.leader || ''
     form.phone = dept.phone || ''
     form.email = dept.email || ''
     form.status = dept.status
+    form.dataScope = dept.dataScope ?? 3
   } else {
     isEdit.value = false
-    form.parentId = parentId || 0
+    form.parentId = parentId || SYSTEM_DEPT_ID
     form.deptName = ''
     form.sortOrder = 0
     form.leader = ''
     form.phone = ''
     form.email = ''
     form.status = 0
+    form.dataScope = 3
   }
   const modal = document.getElementById('dept_form_modal') as HTMLDialogElement
   modal.showModal()
@@ -528,3 +594,23 @@ const handleStatusChange = async (dept: DeptVO) => {
   }
 }
 </script>
+
+<style scoped>
+.dept-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.dept-table :deep(th),
+.dept-table :deep(td) {
+  border-bottom: 1px solid hsl(var(--b2) / 0.8);
+  border-right: 1px solid hsl(var(--b2) / 0.8);
+}
+.dept-table :deep(th:last-child),
+.dept-table :deep(td:last-child) {
+  border-right: 0;
+}
+.dept-table :deep(tbody tr:last-child th),
+.dept-table :deep(tbody tr:last-child td) {
+  border-bottom: 0;
+}
+</style>
