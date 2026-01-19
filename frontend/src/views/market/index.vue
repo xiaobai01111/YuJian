@@ -56,7 +56,7 @@
         @click="openPostDetail(post.id)">
         <!-- Image -->
         <figure class="relative aspect-square bg-base-200">
-          <img v-if="post.files && post.files.length > 0" :src="post.files[0]?.url" 
+          <img v-if="post.files && post.files.length > 0" :src="resolveFileUrl(post.files[0]?.url)" 
             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="" />
           <div v-else class="w-full h-full flex items-center justify-center text-slate-300">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -162,6 +162,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
 

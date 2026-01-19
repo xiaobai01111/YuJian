@@ -68,6 +68,7 @@
                 <span class="font-medium text-slate-800">{{ post.isAnonymous ? '匿名用户' : (post.author?.nickname || '用户') }}</span>
                 <span class="text-xs text-slate-400">{{ formatDate(post.createdAt) }}</span>
                 <span v-if="post.isAnonymous" class="badge badge-ghost badge-xs">匿名</span>
+                <span v-if="post.status === 1" class="badge badge-success badge-sm">已解决</span>
               </div>
               
               <!-- Content -->
@@ -75,7 +76,7 @@
               
               <!-- Images -->
               <div v-if="post.files && post.files.length > 0" class="flex gap-2 mb-3">
-                <img v-for="file in post.files.slice(0, 3)" :key="file.id" :src="file.url" 
+                <img v-for="file in post.files.slice(0, 3)" :key="file.id" :src="resolveFileUrl(file.url)" 
                   class="w-20 h-20 object-cover rounded-lg border border-base-200" alt="" />
                 <div v-if="post.files.length > 3" class="w-20 h-20 bg-base-200 rounded-lg flex items-center justify-center text-slate-400 text-sm">
                   +{{ post.files.length - 3 }}
@@ -171,6 +172,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
 

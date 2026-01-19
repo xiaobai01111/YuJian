@@ -29,6 +29,12 @@
               </svg>
               分配菜单
             </button>
+            <button class="btn btn-outline btn-sm gap-2 font-normal" :disabled="!canAssignDept" @click="handleAssignDept">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+              </svg>
+              授权部门
+            </button>
           </div>
 
           <div class="flex gap-2">
@@ -57,14 +63,15 @@
                 <th>角色状态</th>
                 <th>角色排序</th>
                 <th>角色备注</th>
+                <th>部门权限</th>
                 <th>创建时间</th>
                 <th class="text-center w-40">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="9" class="text-center py-10">
-                   <span class="loading loading-spinner loading-lg text-primary"></span>
+                <td colspan="10" class="text-center py-10">
+                  <span class="loading loading-spinner loading-lg text-primary"></span>
                 </td>
               </tr>
               <tr v-else v-for="(role, index) in roleList" :key="role.id" class="hover">
@@ -85,6 +92,11 @@
                 </td>
                 <td>{{ role.sortOrder }}</td>
                 <td class="text-base-content/60 max-w-xs truncate" :title="role.remark || ''">{{ role.remark || '-' }}</td>
+                <td>
+                  <span v-if="isAdminRole(role)" class="badge badge-primary badge-sm">全部部门</span>
+                  <span v-else-if="getRoleDeptCount(role.id) > 0" class="badge badge-success badge-sm">已分配 {{ getRoleDeptCount(role.id) }} 个</span>
+                  <span v-else class="badge badge-ghost badge-sm">未分配</span>
+                </td>
                 <td class="text-base-content/60 text-sm">{{ formatDate(role.createdAt) }}</td>
                 <td>
                    <div class="flex justify-center gap-2">
@@ -290,7 +302,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers, getDeptTree, assignRoleDepts, getRoleDeptIds } from '@/api/system'
+import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers, getDeptTreeForRole, assignRoleDepts, getRoleDeptIds } from '@/api/system'
 import type { RoleVO, RoleDTO, MenuVO, UserVO, DeptVO } from '@/api/system'
 import { defineComponent, h, type PropType } from 'vue'
 
@@ -403,10 +415,7 @@ const DeptTreeItem: ReturnType<typeof defineComponent> = defineComponent({
             checked: isChecked,
             onChange: () => emit('toggle', props.dept.id, !isChecked)
           }),
-          h('span', { class: props.level === 0 ? 'text-sm font-medium' : 'text-sm text-base-content/70' }, [
-            prefix ? h('span', { class: 'font-mono text-xs text-base-content/40' }, prefix) : null,
-            props.dept.deptName
-          ])
+          h('span', { class: props.level === 0 ? 'text-sm font-medium' : 'text-sm text-base-content/70' }, props.dept.deptName)
         ]),
         hasChildren ? h('div', { class: 'border-l border-base-200 ml-3 pl-2' },
           props.dept.children!.map(child => h(DeptTreeItem, {
@@ -429,6 +438,7 @@ const menuTree = ref<MenuVO[]>([])
 const loadingMenus = ref(false)
 const loadingDepts = ref(false)
 const deptTree = ref<DeptVO[]>([])
+const roleDeptCounts = ref<Record<number, number>>({})
 
 const roleDeptRole = ref<RoleVO | null>(null)
 const roleDeptForm = reactive({
@@ -457,6 +467,8 @@ const deleteReason = ref('')
 const isAllSelected = computed(() => {
   return roleList.value.length > 0 && selectedIds.value.length === roleList.value.length
 })
+const selectedRole = computed(() => roleList.value.find(r => r.id === selectedIds.value[0]) || null)
+const canAssignDept = computed(() => selectedIds.value.length === 1 && !!selectedRole.value && !isAdminRole(selectedRole.value))
 
 
 onMounted(() => {
@@ -469,6 +481,7 @@ const fetchRoles = async () => {
   try {
     const res: any = await getRoleList()
     roleList.value = res || []
+    await loadRoleDeptCounts(roleList.value)
   } catch (error: any) {
     console.error(error)
     alert(error?.response?.data?.message || '获取角色列表失败')
@@ -657,6 +670,7 @@ const submitRoleDept = async () => {
     if (idx !== -1) {
       roleList.value[idx] = updated
     }
+    roleDeptCounts.value[roleDeptRole.value.id] = roleDeptForm.deptIds.length
     const modal = document.getElementById('role_dept_modal') as HTMLDialogElement
     modal.close()
   } catch (error: any) {
@@ -671,7 +685,7 @@ const ensureDeptTree = async () => {
   if (deptTree.value.length > 0) return
   loadingDepts.value = true
   try {
-    const res: any = await getDeptTree()
+    const res: any = await getDeptTreeForRole()
     deptTree.value = res || []
   } catch (error) {
     console.error(error)
@@ -855,6 +869,11 @@ const handleAssignMenu = () => {
     if (role) openMenuModal(role)
 }
 
+const handleAssignDept = () => {
+    const role = roleList.value.find(r => r.id === selectedIds.value[0])
+    if (role) openRoleDeptModal(role)
+}
+
 const toggleSelection = (id: number) => {
   if (selectedIds.value.includes(id)) {
     selectedIds.value = selectedIds.value.filter(i => i !== id)
@@ -902,6 +921,30 @@ const handleStatusChange = async (role: RoleVO) => {
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleString()
+}
+
+const getRoleDeptCount = (roleId: number) => {
+  return roleDeptCounts.value[roleId] || 0
+}
+
+const loadRoleDeptCounts = async (roles: RoleVO[]) => {
+  const map: Record<number, number> = {}
+  await Promise.all(
+    roles.map(async role => {
+      if (isAdminRole(role)) {
+        map[role.id] = 0
+        return
+      }
+      try {
+        const res: any = await getRoleDeptIds(role.id)
+        map[role.id] = Array.isArray(res) ? res.length : 0
+      } catch (error) {
+        console.error(error)
+        map[role.id] = 0
+      }
+    })
+  )
+  roleDeptCounts.value = map
 }
 
 const isAdminRole = (role: RoleVO) => {

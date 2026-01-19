@@ -6,9 +6,27 @@
           <h1 class="text-2xl font-bold">文件管理</h1>
           <p class="text-gray-500 mt-1">管理系统文件与分类</p>
         </div>
-        <button class="btn btn-sm btn-ghost" @click="reloadAll">
-          刷新
-        </button>
+        <div class="flex items-center gap-2">
+          <input ref="fileInput" type="file" class="hidden" multiple @change="handleUpload" />
+          <select v-if="canUpload" v-model="uploadVisibility" class="select select-sm">
+            <option value="PUBLIC">公有</option>
+            <option value="PRIVATE">私有</option>
+          </select>
+          <button v-if="canUpload" class="btn btn-sm btn-primary" :disabled="uploading" @click="openUpload">
+            {{ uploading ? '上传中...' : '上传文件' }}
+          </button>
+          <button
+            v-if="canDelete"
+            class="btn btn-sm btn-error btn-outline"
+            :disabled="selectedIds.length === 0 || deleting"
+            @click="handleBatchDelete"
+          >
+            批量删除
+          </button>
+          <button class="btn btn-sm btn-ghost" @click="reloadAll">
+            刷新
+          </button>
+        </div>
       </div>
 
       <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
@@ -47,22 +65,36 @@
                   <table class="table table-zebra">
                     <thead>
                       <tr>
+                        <th class="w-12">
+                          <input type="checkbox" class="checkbox checkbox-xs" :checked="isAllSelected" @change="toggleSelectAll" />
+                        </th>
                         <th class="w-16">ID</th>
                         <th>文件名</th>
                         <th class="w-32">分类</th>
                         <th class="w-32">类型</th>
+                        <th class="w-28">权限</th>
+                        <th class="w-32">上传者</th>
                         <th class="w-32">大小</th>
                         <th class="w-40">上传时间</th>
+                        <th class="w-24">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-if="loading">
-                        <td colspan="6" class="text-center py-6">加载中...</td>
+                        <td colspan="10" class="text-center py-6">加载中...</td>
                       </tr>
                       <tr v-else-if="files.length === 0">
-                        <td colspan="6" class="text-center py-6">暂无数据</td>
+                        <td colspan="10" class="text-center py-6">暂无数据</td>
                       </tr>
                       <tr v-else v-for="file in files" :key="file.id">
+                        <td>
+                          <input
+                            type="checkbox"
+                            class="checkbox checkbox-xs"
+                            :checked="selectedIds.includes(file.id)"
+                            @change="toggleSelect(file.id)"
+                          />
+                        </td>
                         <td>{{ file.id }}</td>
                         <td>
                           <div class="font-medium">{{ file.filename }}</div>
@@ -72,15 +104,38 @@
                           <span class="badge badge-ghost badge-sm">{{ getCategoryLabel(file.mimeType) }}</span>
                         </td>
                         <td class="text-sm text-slate-500">{{ file.mimeType || '-' }}</td>
+                        <td>
+                          <select
+                            v-if="canEditVisibility"
+                            class="select select-xs"
+                            :value="file.visibility || 'PRIVATE'"
+                            @change="event => handleVisibilityChange(file, (event.target as HTMLSelectElement).value)"
+                          >
+                            <option value="PUBLIC">公有</option>
+                            <option value="PRIVATE">私有</option>
+                          </select>
+                          <span v-else class="badge badge-ghost badge-sm">{{ getVisibilityLabel(file.visibility) }}</span>
+                        </td>
+                        <td class="text-sm text-slate-500">{{ file.uploaderName || '-' }}</td>
                         <td>{{ formatSize(file.size) }}</td>
                         <td class="text-sm text-slate-500">{{ formatDate(file.createdAt) }}</td>
+                        <td>
+                          <button
+                            v-if="canDelete"
+                            class="btn btn-xs btn-error btn-outline"
+                            @click="handleDelete(file.id)"
+                          >
+                            删除
+                          </button>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              <div class="flex justify-end pt-4">
+              <div class="flex items-center justify-between pt-4">
+                <div class="text-xs text-slate-500">已选 {{ selectedIds.length }} 项</div>
                 <div class="join">
                   <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
                   <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
@@ -97,7 +152,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getFileCategories, getFileList, type FileCategoryVO, type FileManageVO } from '@/api/system'
+import { usePermissionStore } from '@/stores/permission'
+import { batchDeleteConsoleFiles, deleteConsoleFile, getFileCategories, getFileList, updateConsoleFileVisibility, uploadConsoleFile, type FileCategoryVO, type FileManageVO } from '@/api/system'
 
 const categories = ref<FileCategoryVO[]>([])
 const activeCategory = ref('all')
@@ -108,6 +164,17 @@ const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const selectedIds = ref<number[]>([])
+const uploading = ref(false)
+const deleting = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploadVisibility = ref<'PUBLIC' | 'PRIVATE'>('PUBLIC')
+
+const permissionStore = usePermissionStore()
+const canUpload = computed(() => permissionStore.hasPermission(['system:file:upload']))
+const canDelete = computed(() => permissionStore.hasPermission(['system:file:delete']))
+const canEditVisibility = computed(() => permissionStore.hasPermission(['system:file:permission']))
+const isAllSelected = computed(() => files.value.length > 0 && files.value.every(file => selectedIds.value.includes(file.id)))
 
 const reloadAll = () => {
   fetchCategories()
@@ -139,9 +206,11 @@ const fetchFiles = async () => {
     })
     files.value = res?.records || []
     total.value = res?.total || 0
+    selectedIds.value = selectedIds.value.filter(id => files.value.some(file => file.id === id))
   } catch (error) {
     files.value = []
     total.value = 0
+    selectedIds.value = []
   } finally {
     loading.value = false
   }
@@ -167,6 +236,83 @@ const handleReset = () => {
 const changePage = (p: number) => {
   page.value = p
   fetchFiles()
+}
+
+const openUpload = () => {
+  fileInput.value?.click()
+}
+
+const handleUpload = async (event: Event) => {
+  if (!canUpload.value) return
+  const input = event.target as HTMLInputElement
+  const fileList = input.files ? Array.from(input.files) : []
+  if (fileList.length === 0) return
+  uploading.value = true
+  try {
+    await Promise.allSettled(fileList.map(file => uploadConsoleFile(file, undefined, uploadVisibility.value)))
+    reloadAll()
+  } finally {
+    uploading.value = false
+    if (input) input.value = ''
+  }
+}
+
+const toggleSelect = (id: number) => {
+  if (selectedIds.value.includes(id)) {
+    selectedIds.value = selectedIds.value.filter(item => item !== id)
+  } else {
+    selectedIds.value.push(id)
+  }
+}
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedIds.value = []
+  } else {
+    selectedIds.value = files.value.map(file => file.id)
+  }
+}
+
+const handleDelete = async (id: number) => {
+  if (!canDelete.value) return
+  if (!confirm('确认删除该文件吗？')) return
+  deleting.value = true
+  try {
+    await deleteConsoleFile(id)
+    reloadAll()
+  } finally {
+    deleting.value = false
+  }
+}
+
+const handleBatchDelete = async () => {
+  if (!canDelete.value || selectedIds.value.length === 0) return
+  if (!confirm(`确认删除选中的 ${selectedIds.value.length} 个文件吗？`)) return
+  deleting.value = true
+  try {
+    await batchDeleteConsoleFiles(selectedIds.value)
+    selectedIds.value = []
+    reloadAll()
+  } finally {
+    deleting.value = false
+  }
+}
+
+const handleVisibilityChange = async (file: FileManageVO, visibility: string) => {
+  if (!canEditVisibility.value) return
+  const next = visibility.toUpperCase()
+  if (file.visibility === next) return
+  try {
+    await updateConsoleFileVisibility(file.id, next)
+    file.visibility = next
+    fetchFiles()
+  } catch (error) {
+    fetchFiles()
+  }
+}
+
+const getVisibilityLabel = (visibility?: string) => {
+  return visibility?.toUpperCase() === 'PUBLIC' ? '公有' : '私有'
 }
 
 const formatSize = (size?: number) => {

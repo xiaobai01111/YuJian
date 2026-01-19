@@ -26,6 +26,8 @@ public class Report implements Serializable {
 
     private Integer status;
 
+    private Integer deleted;
+
     private Long handlerId;
 
     private String result;

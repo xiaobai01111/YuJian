@@ -19,4 +19,10 @@ public interface FileManageService {
     PageResult<FileVO> queryGallery(FileQueryDTO query);
 
     List<FileCategoryVO> listGalleryCategories();
+
+    void deleteFile(Long fileId);
+
+    void deleteFiles(List<Long> fileIds);
+
+    void updateVisibility(Long fileId, String visibility);
 }

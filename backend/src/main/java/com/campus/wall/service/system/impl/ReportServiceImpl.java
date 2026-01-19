@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.ResultCode;
+import com.campus.wall.dto.system.ReportBatchHandleDTO;
 import com.campus.wall.dto.system.ReportCreateDTO;
 import com.campus.wall.dto.system.ReportHandleDTO;
 import com.campus.wall.entity.post.Post;
@@ -16,7 +17,9 @@ import com.campus.wall.mapper.post.PostBoardMapper;
 import com.campus.wall.mapper.post.PostMapper;
 import com.campus.wall.mapper.system.ReportMapper;
 import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.service.security.DataScopeService;
 import com.campus.wall.service.system.ReportService;
+import com.campus.wall.service.system.OperLogService;
 import com.campus.wall.service.user.CreditService;
 import com.campus.wall.vo.post.PostVO;
 import com.campus.wall.vo.system.ReportVO;
@@ -25,9 +28,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -43,6 +48,8 @@ public class ReportServiceImpl implements ReportService {
     private final PostBoardMapper postBoardMapper;
     private final UserMapper userMapper;
     private final CreditService creditService;
+    private final DataScopeService dataScopeService;
+    private final OperLogService operLogService;
 
     // 举报状态：0待处理 1已处理
     private static final int STATUS_PENDING = 0;
@@ -76,6 +83,7 @@ public class ReportServiceImpl implements ReportService {
         report.setPostId(dto.getPostId());
         report.setReason(dto.getReason());
         report.setStatus(STATUS_PENDING);
+        report.setDeleted(0);
 
         reportMapper.insert(report);
 
@@ -86,35 +94,98 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public void handleReport(Long reportId, ReportHandleDTO dto) {
-        Long handlerId = StpUtil.getLoginIdAsLong();
+        handleReportInternal(reportId, dto.getResult(), dto.getRemark());
+    }
 
+    @Override
+    @Transactional
+    public void handleReports(ReportBatchHandleDTO dto) {
+        if (dto == null || dto.getIds() == null || dto.getIds().isEmpty()) {
+            return;
+        }
+        for (Long reportId : dto.getIds()) {
+            handleReportInternal(reportId, dto.getResult(), dto.getRemark());
+        }
+    }
+
+    @Override
+    @Transactional
+    public void deleteReportByAdmin(Long reportId, String reason) {
         Report report = reportMapper.selectById(reportId);
         if (report == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "举报不存在");
         }
-
-        if (report.getStatus() == STATUS_HANDLED) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "该举报已处理");
+        Post post = postMapper.selectById(report.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
-
-        report.setStatus(STATUS_HANDLED);
-        report.setHandlerId(handlerId);
-        report.setResult(dto.getResult());
-        report.setHandledAt(LocalDateTime.now());
-
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权删除该举报");
+        }
+        if (!Objects.equals(operatorId, report.getReporterId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        }
+        if (report.getDeleted() != null && report.getDeleted() == 1) {
+            return;
+        }
+        report.setDeleted(1);
         reportMapper.updateById(report);
+        operLogService.log(operatorId, null, "report", reportId, "delete", reason, null, null, null);
+        log.info("管理员删除举报: {}", reportId);
+    }
 
-        // 如果举报核实（结果包含"核实"或"违规"），扣除被举报用户信用分
-        String result = dto.getResult().toLowerCase();
-        if (result.contains("核实") || result.contains("违规") || result.contains("verified")) {
-            Post post = postMapper.selectById(report.getPostId());
-            if (post != null) {
-                creditService.penalizeForFraud(post.getUserId());
-                log.info("举报核实，扣除用户 {} 信用分", post.getUserId());
-            }
+    @Override
+    @Transactional
+    public void restoreReportByAdmin(Long reportId, String reason) {
+        Report report = reportMapper.selectById(reportId);
+        if (report == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "举报不存在");
         }
+        Post post = postMapper.selectById(report.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权恢复该举报");
+        }
+        if (!Objects.equals(operatorId, report.getReporterId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        }
+        if (report.getDeleted() == null || report.getDeleted() == 0) {
+            return;
+        }
+        report.setDeleted(0);
+        reportMapper.updateById(report);
+        operLogService.log(operatorId, null, "report", reportId, "restore", reason, null, null, null);
+        log.info("管理员恢复举报: {}", reportId);
+    }
 
-        log.info("管理员 {} 处理举报 {}: {}", handlerId, reportId, dto.getResult());
+    @Override
+    @Transactional
+    public void purgeReportByAdmin(Long reportId, String reason) {
+        Report report = reportMapper.selectById(reportId);
+        if (report == null) {
+            return;
+        }
+        Post post = postMapper.selectById(report.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权删除该举报");
+        }
+        if (!Objects.equals(operatorId, report.getReporterId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        }
+        if (report.getDeleted() == null || report.getDeleted() == 0) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "该举报未在回收站");
+        }
+        reportMapper.deleteById(reportId);
+        operLogService.log(operatorId, null, "report", reportId, "purge", reason, null, null, null);
+        log.info("管理员彻底删除举报: {}", reportId);
     }
 
     @Override
@@ -122,13 +193,35 @@ public class ReportServiceImpl implements ReportService {
         Page<Report> reportPage = new Page<>(page, size);
 
         LambdaQueryWrapper<Report> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Report::getDeleted, 0);
         if (status != null) {
             wrapper.eq(Report::getStatus, status);
         }
+        applyReportDataScope(wrapper);
         wrapper.orderByDesc(Report::getCreatedAt);
 
         Page<Report> result = reportMapper.selectPage(reportPage, wrapper);
 
+        List<ReportVO> records = result.getRecords().stream()
+                .map(this::toReportVO)
+                .collect(Collectors.toList());
+
+        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    @Override
+    public PageResult<ReportVO> queryDeletedReports(Integer status, int page, int size) {
+        Page<Report> reportPage = new Page<>(page, size);
+
+        LambdaQueryWrapper<Report> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Report::getDeleted, 1);
+        if (status != null) {
+            wrapper.eq(Report::getStatus, status);
+        }
+        applyReportDataScope(wrapper);
+        wrapper.orderByDesc(Report::getCreatedAt);
+
+        Page<Report> result = reportMapper.selectPage(reportPage, wrapper);
         List<ReportVO> records = result.getRecords().stream()
                 .map(this::toReportVO)
                 .collect(Collectors.toList());
@@ -142,6 +235,10 @@ public class ReportServiceImpl implements ReportService {
         if (report == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "举报不存在");
         }
+        if (report.getDeleted() != null && report.getDeleted() == 1) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "举报不存在");
+        }
+        ensureCanAccessReport(report);
         return toReportVO(report);
     }
 
@@ -199,5 +296,75 @@ public class ReportServiceImpl implements ReportService {
         }
 
         return vo;
+    }
+
+    private void applyReportDataScope(LambdaQueryWrapper<Report> wrapper) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(userId);
+        if (scope.isAllowAll()) {
+            return;
+        }
+        String postInSql = dataScopeService.buildPostInSql(scope, userId);
+        String selfPostSql = "SELECT id FROM posts WHERE user_id = " + userId;
+        if (postInSql == null || postInSql.isEmpty()) {
+            wrapper.inSql(Report::getPostId, selfPostSql);
+            return;
+        }
+        if (scope.isAllowSelf()) {
+            wrapper.and(w -> w.inSql(Report::getPostId, postInSql).or().inSql(Report::getPostId, selfPostSql));
+        } else {
+            wrapper.inSql(Report::getPostId, postInSql);
+        }
+    }
+
+    private void ensureCanAccessReport(Report report) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        Post post = postMapper.selectById(report.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权查看该举报");
+        }
+    }
+
+    private void handleReportInternal(Long reportId, String result, String remark) {
+        Long handlerId = StpUtil.getLoginIdAsLong();
+
+        Report report = reportMapper.selectById(reportId);
+        if (report == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "举报不存在");
+        }
+        if (report.getDeleted() != null && report.getDeleted() == 1) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "该举报已删除");
+        }
+        Post post = postMapper.selectById(report.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        if (!dataScopeService.canAccessUser(handlerId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权处理该举报");
+        }
+        if (!handlerId.equals(post.getUserId()) && !StringUtils.hasText(remark)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写处理说明");
+        }
+        if (report.getStatus() == STATUS_HANDLED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "该举报已处理");
+        }
+
+        report.setStatus(STATUS_HANDLED);
+        report.setHandlerId(handlerId);
+        report.setResult(result);
+        report.setHandledAt(LocalDateTime.now());
+        reportMapper.updateById(report);
+
+        String normalized = result != null ? result.toLowerCase() : "";
+        if (normalized.contains("核实") || normalized.contains("违规") || normalized.contains("verified")) {
+            creditService.penalizeForFraud(post.getUserId());
+            log.info("举报核实，扣除用户 {} 信用分", post.getUserId());
+        }
+
+        operLogService.log(handlerId, null, "report", reportId, "handle", remark, null, null, null);
+        log.info("管理员 {} 处理举报 {}: {}", handlerId, reportId, result);
     }
 }

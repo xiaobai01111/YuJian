@@ -67,6 +67,7 @@
               <div class="flex items-center gap-2 mb-2">
                 <span class="font-medium text-slate-800">树洞{{ post.id }}</span>
                 <span class="text-xs text-slate-400">{{ formatDate(post.createdAt) }}</span>
+                <span v-if="post.status === 1" class="badge badge-success badge-sm">已解决</span>
               </div>
               
               <!-- Content -->

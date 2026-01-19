@@ -51,7 +51,10 @@
         >
           <div class="card-body p-5">
             <div class="flex items-start justify-between gap-3 mb-2">
-              <h3 class="font-bold text-slate-800 text-base line-clamp-1">{{ post.title || '校园动态' }}</h3>
+              <div class="flex items-center gap-2 min-w-0">
+                <h3 class="font-bold text-slate-800 text-base line-clamp-1">{{ post.title || '校园动态' }}</h3>
+                <span v-if="post.status === 1" class="badge badge-success badge-sm">已解决</span>
+              </div>
               <div class="flex flex-wrap gap-1">
                 <span
                   v-for="board in getPostBoards(post)"
@@ -67,7 +70,7 @@
               <img
                 v-for="file in post.files.slice(0, 3)"
                 :key="file.id"
-                :src="file.url"
+                :src="resolveFileUrl(file.url)"
                 class="w-20 h-20 object-cover rounded-lg border border-base-200"
                 alt=""
               />
@@ -226,6 +229,7 @@ import { ref, reactive, onMounted, h } from 'vue'
 import { getPublicNotices, type NoticeVO } from '@/api/system'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
 import { getBoardLabel, normalizeBoardKeys } from '@/utils/boards'
+import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
 

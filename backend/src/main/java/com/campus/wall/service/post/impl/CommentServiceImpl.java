@@ -9,8 +9,10 @@ import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.ResultCode;
 import com.campus.wall.constant.RateLimitConstants;
+import com.campus.wall.dto.post.CommentBatchDeleteDTO;
 import com.campus.wall.dto.post.CommentCreateDTO;
 import com.campus.wall.dto.post.CommentQueryDTO;
+import com.campus.wall.dto.post.CommentUpdateDTO;
 import com.campus.wall.entity.post.Comment;
 import com.campus.wall.entity.post.Post;
 import com.campus.wall.entity.post.PostBoard;
@@ -22,7 +24,9 @@ import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.content.AnonymousMappingService;
 import com.campus.wall.service.content.SensitiveWordService;
 import com.campus.wall.service.post.CommentService;
+import com.campus.wall.service.security.DataScopeService;
 import com.campus.wall.service.security.RateLimitService;
+import com.campus.wall.service.system.OperLogService;
 import com.campus.wall.vo.post.CommentVO;
 import com.campus.wall.vo.post.CommentConsoleVO;
 import com.campus.wall.vo.user.UserVO;
@@ -30,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,6 +58,8 @@ public class CommentServiceImpl implements CommentService {
     private final SensitiveWordService sensitiveWordService;
     private final AnonymousMappingService anonymousMappingService;
     private final RateLimitService rateLimitService;
+    private final DataScopeService dataScopeService;
+    private final OperLogService operLogService;
 
     // 评论状态：0正常 1已删除
     private static final int STATUS_NORMAL = 0;
@@ -152,10 +159,21 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    public void deleteCommentByAdmin(Long commentId) {
+    public void deleteCommentByAdmin(Long commentId, String reason) {
         Comment comment = commentMapper.selectById(commentId);
         if (comment == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "评论不存在");
+        }
+        Post post = postMapper.selectById(comment.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
+        }
+        if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
         }
         if (comment.getStatus() != null && comment.getStatus() == STATUS_DELETED) {
             return;
@@ -163,7 +181,88 @@ public class CommentServiceImpl implements CommentService {
         comment.setStatus(STATUS_DELETED);
         commentMapper.updateById(comment);
         postMapper.updateCommentCount(comment.getPostId(), -1);
+        operLogService.log(operatorId, null, "comment", commentId, "delete", reason, null, null, null);
         log.info("管理员删除评论: {}", commentId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCommentsByAdmin(CommentBatchDeleteDTO dto) {
+        if (dto == null || dto.getIds() == null || dto.getIds().isEmpty()) {
+            return;
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        List<Comment> comments = commentMapper.selectBatchIds(dto.getIds());
+        if (comments == null || comments.isEmpty()) {
+            return;
+        }
+
+        Map<Long, Post> postMap = loadPostMap(comments);
+        boolean needReason = comments.stream()
+                .filter(Objects::nonNull)
+                .anyMatch(comment -> !Objects.equals(operatorId, comment.getUserId()));
+        if (needReason && !StringUtils.hasText(dto.getReason())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        }
+
+        Map<Long, Integer> postDecrement = new HashMap<>();
+        for (Comment comment : comments) {
+            if (comment == null) {
+                continue;
+            }
+            Post post = postMap.get(comment.getPostId());
+            if (post == null) {
+                throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+            }
+            if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
+            }
+            if (comment.getStatus() != null && comment.getStatus() == STATUS_DELETED) {
+                continue;
+            }
+            comment.setStatus(STATUS_DELETED);
+            commentMapper.updateById(comment);
+            postDecrement.merge(comment.getPostId(), 1, Integer::sum);
+            operLogService.log(operatorId, null, "comment", comment.getId(), "delete", dto.getReason(), null, null, null);
+        }
+        for (Map.Entry<Long, Integer> entry : postDecrement.entrySet()) {
+            postMapper.updateCommentCount(entry.getKey(), -entry.getValue());
+        }
+        log.info("管理员批量删除评论: {}", dto.getIds().size());
+    }
+
+    @Override
+    @Transactional
+    public void updateCommentByAdmin(Long commentId, CommentUpdateDTO dto, String reason) {
+        Comment comment = commentMapper.selectById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "评论不存在");
+        }
+        if (comment.getStatus() != null && comment.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的评论无法修改");
+        }
+        Post post = postMapper.selectById(comment.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
+        }
+        if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        }
+        String content = dto.getContent() != null ? dto.getContent().trim() : "";
+        if (content.isEmpty()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "评论内容不能为空");
+        }
+        if (sensitiveWordService.containsSensitiveWord(content)) {
+            throw new BusinessException(ResultCode.CONTENT_CONTAINS_SENSITIVE_WORD, "评论包含敏感词");
+        }
+        comment.setContent(content);
+        commentMapper.updateById(comment);
+        operLogService.log(operatorId, null, "comment", commentId, "update", reason, null, null, null);
+        log.info("管理员修改评论: {}", commentId);
     }
 
     @Override
@@ -259,11 +358,15 @@ public class CommentServiceImpl implements CommentService {
         }
         if (query.getStatus() != null) {
             wrapper.eq(Comment::getStatus, query.getStatus());
+        } else {
+            wrapper.eq(Comment::getStatus, STATUS_NORMAL);
         }
         if (query.getKeyword() != null && !query.getKeyword().trim().isEmpty()) {
             wrapper.like(Comment::getContent, query.getKeyword().trim());
         }
         wrapper.orderByDesc(Comment::getCreatedAt);
+
+        applyCommentDataScope(wrapper);
 
         Page<Comment> result = commentMapper.selectPage(commentPage, wrapper);
 
@@ -291,6 +394,79 @@ public class CommentServiceImpl implements CommentService {
                 .collect(Collectors.toList());
 
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    @Override
+    @Transactional
+    public void restoreCommentByAdmin(Long commentId, String reason) {
+        Comment comment = commentMapper.selectById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "评论不存在");
+        }
+        if (comment.getStatus() == null || comment.getStatus() != STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "评论未处于删除状态");
+        }
+        Post post = postMapper.selectById(comment.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
+        }
+        if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        }
+        comment.setStatus(STATUS_NORMAL);
+        commentMapper.updateById(comment);
+        postMapper.updateCommentCount(comment.getPostId(), 1);
+        operLogService.log(operatorId, null, "comment", commentId, "restore", reason, null, null, null);
+        log.info("管理员恢复评论: {}", commentId);
+    }
+
+    @Override
+    @Transactional
+    public void purgeCommentByAdmin(Long commentId, String reason) {
+        Comment comment = commentMapper.selectById(commentId);
+        if (comment == null) {
+            return;
+        }
+        if (comment.getStatus() == null || comment.getStatus() != STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "评论未处于删除状态");
+        }
+        Post post = postMapper.selectById(comment.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
+        }
+        if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        }
+        commentMapper.deleteById(commentId);
+        operLogService.log(operatorId, null, "comment", commentId, "purge", reason, null, null, null);
+        log.info("管理员彻底删除评论: {}", commentId);
+    }
+
+    private void applyCommentDataScope(LambdaQueryWrapper<Comment> wrapper) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(userId);
+        if (scope.isAllowAll()) {
+            return;
+        }
+        String postInSql = dataScopeService.buildPostInSql(scope, userId);
+        String selfPostSql = "SELECT id FROM posts WHERE user_id = " + userId;
+        if (postInSql == null || postInSql.isEmpty()) {
+            wrapper.inSql(Comment::getPostId, selfPostSql);
+            return;
+        }
+        if (scope.isAllowSelf()) {
+            wrapper.and(w -> w.inSql(Comment::getPostId, postInSql).or().inSql(Comment::getPostId, selfPostSql));
+        } else {
+            wrapper.inSql(Comment::getPostId, postInSql);
+        }
     }
 
     private List<CommentVO> buildCommentTree(List<Comment> comments, Post post, boolean isAnonymousPost, Map<Long, User> userMap) {
@@ -375,6 +551,28 @@ public class CommentServiceImpl implements CommentService {
         for (User user : users) {
             if (user != null) {
                 map.put(user.getId(), user);
+            }
+        }
+        return map;
+    }
+
+    private Map<Long, Post> loadPostMap(List<Comment> comments) {
+        Map<Long, Post> map = new HashMap<>();
+        if (comments == null || comments.isEmpty()) {
+            return map;
+        }
+        List<Long> postIds = comments.stream()
+                .map(Comment::getPostId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (postIds.isEmpty()) {
+            return map;
+        }
+        List<Post> posts = postMapper.selectBatchIds(postIds);
+        for (Post post : posts) {
+            if (post != null) {
+                map.put(post.getId(), post);
             }
         }
         return map;

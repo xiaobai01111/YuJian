@@ -71,7 +71,7 @@
             <!-- Image -->
             <div class="flex-shrink-0">
               <div class="w-24 h-24 rounded-xl bg-base-200 overflow-hidden">
-                <img v-if="post.files && post.files.length > 0" :src="post.files[0]?.url" 
+                <img v-if="post.files && post.files.length > 0" :src="resolveFileUrl(post.files[0]?.url)" 
                   class="w-full h-full object-cover" alt="" />
                 <div v-else class="w-full h-full flex items-center justify-center text-slate-300">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -88,7 +88,7 @@
                   <span class="badge" :class="postType === 'lost' ? 'badge-error' : 'badge-success'">
                     {{ postType === 'lost' ? '寻物' : '招领' }}
                   </span>
-                  <span v-if="post.status === 1" class="badge badge-ghost">已找到</span>
+                  <span v-if="post.status === 1" class="badge badge-success badge-sm">已找到</span>
                 </div>
                 <span class="text-xs text-slate-400">{{ formatDate(post.createdAt) }}</span>
               </div>
@@ -193,6 +193,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
 

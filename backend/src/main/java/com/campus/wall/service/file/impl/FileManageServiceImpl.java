@@ -2,12 +2,18 @@ package com.campus.wall.service.file.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
-import com.campus.wall.config.MinioConfig;
+import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.system.FileQueryDTO;
 import com.campus.wall.entity.file.FileRecord;
+import com.campus.wall.entity.user.User;
+import com.campus.wall.enums.file.FileVisibility;
 import com.campus.wall.mapper.file.FileRecordMapper;
+import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.service.file.FileAccessService;
 import com.campus.wall.service.file.FileManageService;
+import com.campus.wall.service.storage.StorageProvider;
 import com.campus.wall.vo.file.FileCategoryVO;
 import com.campus.wall.vo.file.FileVO;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +25,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 文件管理服务实现
@@ -53,7 +62,8 @@ public class FileManageServiceImpl implements FileManageService {
     );
 
     private final FileRecordMapper fileRecordMapper;
-    private final MinioConfig minioConfig;
+    private final FileAccessService fileAccessService;
+    private final UserMapper userMapper;
 
     @Override
     public PageResult<FileVO> queryFiles(FileQueryDTO query) {
@@ -66,8 +76,10 @@ public class FileManageServiceImpl implements FileManageService {
             new Page<>(query.getPage(), query.getSize()), wrapper
         );
 
-        List<FileVO> records = page.getRecords().stream()
-            .map(this::toFileVO)
+        List<FileRecord> recordList = page.getRecords();
+        Map<Long, User> userMap = loadUserMap(recordList);
+        List<FileVO> records = recordList.stream()
+            .map(record -> toFileVO(record, userMap))
             .toList();
 
         return PageResult.of(records, page.getTotal(), page.getSize(), page.getCurrent());
@@ -107,8 +119,10 @@ public class FileManageServiceImpl implements FileManageService {
             new Page<>(query.getPage(), query.getSize()), wrapper
         );
 
-        List<FileVO> records = page.getRecords().stream()
-            .map(this::toFileVO)
+        List<FileRecord> recordList = page.getRecords();
+        Map<Long, User> userMap = loadUserMap(recordList);
+        List<FileVO> records = recordList.stream()
+            .map(record -> toFileVO(record, userMap))
             .toList();
 
         return PageResult.of(records, page.getTotal(), page.getSize(), page.getCurrent());
@@ -136,6 +150,62 @@ public class FileManageServiceImpl implements FileManageService {
             result.add(buildCategory(key, GALLERY_LABELS.getOrDefault(key, key), counts.getOrDefault(key, 0L)));
         }
         return result;
+    }
+
+    @Override
+    public void deleteFile(Long fileId) {
+        if (fileId == null) {
+            return;
+        }
+        FileRecord record = fileRecordMapper.selectById(fileId);
+        if (record == null) {
+            return;
+        }
+        deleteRecord(record);
+    }
+
+    @Override
+    public void deleteFiles(List<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return;
+        }
+        List<FileRecord> records = fileRecordMapper.selectBatchIds(fileIds);
+        for (FileRecord record : records) {
+            if (record != null) {
+                deleteRecord(record);
+            }
+        }
+    }
+
+    @Override
+    public void updateVisibility(Long fileId, String visibility) {
+        if (fileId == null) {
+            return;
+        }
+        FileRecord record = fileRecordMapper.selectById(fileId);
+        if (record == null) {
+            return;
+        }
+        FileVisibility target = parseVisibility(visibility);
+        if (target.getCode().equalsIgnoreCase(record.getVisibility())) {
+            return;
+        }
+        record.setVisibility(target.getCode());
+        fileRecordMapper.updateById(record);
+    }
+
+    private void deleteRecord(FileRecord record) {
+        try {
+            if (StringUtils.hasText(record.getPath())) {
+                StorageProvider provider = fileAccessService.getProvider(record.getStorageProvider());
+                if (provider != null) {
+                    provider.delete(record.getPath());
+                }
+            }
+            fileRecordMapper.deleteById(record.getId());
+        } catch (Exception e) {
+            throw new BusinessException(ResultCode.INTERNAL_ERROR);
+        }
     }
 
     private FileCategoryVO buildCategory(String key, String label, long count) {
@@ -240,20 +310,59 @@ public class FileManageServiceImpl implements FileManageService {
         return "image/other";
     }
 
-    private FileVO toFileVO(FileRecord record) {
+    private FileVO toFileVO(FileRecord record, Map<Long, User> userMap) {
         FileVO vo = new FileVO();
         BeanUtils.copyProperties(record, vo);
-        vo.setUrl(buildFileUrl(record.getPath()));
+        vo.setUploaderId(record.getUserId());
+        vo.setUploaderName(resolveUploaderName(record.getUserId(), userMap));
+        vo.setUrl(fileAccessService.buildAccessUrl(record));
         return vo;
     }
 
-    private String buildFileUrl(String path) {
-        if (!StringUtils.hasText(path)) {
+    private Map<Long, User> loadUserMap(List<FileRecord> records) {
+        if (records == null || records.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> userIds = records.stream()
+            .map(FileRecord::getUserId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        List<User> users = userMapper.selectBatchIds(userIds);
+        Map<Long, User> map = new HashMap<>();
+        for (User user : users) {
+            if (user != null) {
+                map.put(user.getId(), user);
+            }
+        }
+        return map;
+    }
+
+    private String resolveUploaderName(Long userId, Map<Long, User> userMap) {
+        if (userId == null || userMap == null) {
             return null;
         }
-        String endpoint = minioConfig.getEndpoint();
-        String bucket = minioConfig.getBucketName();
-        String base = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
-        return base + "/" + bucket + "/" + path;
+        User user = userMap.get(userId);
+        if (user == null) {
+            return null;
+        }
+        if (StringUtils.hasText(user.getNickname())) {
+            return user.getNickname();
+        }
+        return user.getUsername();
+    }
+
+    private FileVisibility parseVisibility(String visibility) {
+        if (!StringUtils.hasText(visibility)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "visibility不能为空");
+        }
+        for (FileVisibility item : FileVisibility.values()) {
+            if (item.getCode().equalsIgnoreCase(visibility.trim())) {
+                return item;
+            }
+        }
+        throw new BusinessException(ResultCode.BAD_REQUEST, "visibility不合法");
     }
 }

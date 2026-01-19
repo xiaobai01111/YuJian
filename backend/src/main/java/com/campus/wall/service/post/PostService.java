@@ -29,7 +29,7 @@ public interface PostService {
     /**
      * 控制台编辑帖子
      */
-    void updatePostByAdmin(Long postId, PostUpdateDTO dto);
+    void updatePostByAdmin(Long postId, PostUpdateDTO dto, String reason);
 
     /**
      * 删除帖子
@@ -39,7 +39,17 @@ public interface PostService {
     /**
      * 控制台删除帖子
      */
-    void deletePostByAdmin(Long postId);
+    void deletePostByAdmin(Long postId, String reason);
+
+    /**
+     * 回收站恢复帖子
+     */
+    void restorePostByAdmin(Long postId, String reason);
+
+    /**
+     * 回收站彻底删除帖子
+     */
+    void purgePostByAdmin(Long postId, String reason);
 
     /**
      * 获取帖子详情
@@ -89,7 +99,7 @@ public interface PostService {
     /**
      * 控制台标记已解决
      */
-    void markAsResolvedByAdmin(Long postId);
+    void markAsResolvedByAdmin(Long postId, String reason);
 
     /**
      * 全文搜索帖子

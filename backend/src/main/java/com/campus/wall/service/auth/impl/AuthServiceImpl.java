@@ -135,7 +135,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 执行登录
-        StpUtil.login(user.getId());
+        StpUtil.login(user.getId(),true);
         bindTokenSession(user);
         recordOnlineToken();
 

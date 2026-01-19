@@ -47,8 +47,8 @@
 
             <!-- Images -->
             <div v-if="post.files && post.files.length > 0" class="mt-6 grid gap-2" :class="getImageGridClass(post.files.length)">
-              <div v-for="file in post.files" :key="file.id" class="relative group cursor-pointer" @click="openImage(file.url)">
-                <img :src="file.url" class="rounded-xl w-full h-full object-cover max-h-96 hover:opacity-95 transition-opacity" loading="lazy" />
+              <div v-for="file in post.files" :key="file.id" class="relative group cursor-pointer" @click="openImage(resolveFileUrl(file.url))">
+                <img :src="resolveFileUrl(file.url)" class="rounded-xl w-full h-full object-cover max-h-96 hover:opacity-95 transition-opacity" loading="lazy" />
               </div>
             </div>
 
@@ -150,6 +150,7 @@ import { useRoute } from 'vue-router'
 import { getPostDetail, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
 import { useUserStore } from '@/stores/user'
 import { getBoardLabel, getBoardPath, getPostBoards } from '@/utils/boards'
+import { resolveFileUrl } from '@/utils/file'
 
 const route = useRoute()
 const userStore = useUserStore()

@@ -153,7 +153,8 @@ public class StatisticsController {
         if (canReport) {
             Long pendingReports = reportMapper.selectCount(
                 applyReportScope(new LambdaQueryWrapper<Report>()
-                    .eq(Report::getStatus, 0), scope, userId, scopedPostInSql)
+                    .eq(Report::getStatus, 0)
+                    .eq(Report::getDeleted, 0), scope, userId, scopedPostInSql)
             );
             stats.put("pendingReports", pendingReports);
         }
@@ -307,6 +308,7 @@ public class StatisticsController {
         List<Report> reports = reportMapper.selectList(
             applyReportScope(new LambdaQueryWrapper<Report>()
                 .eq(Report::getStatus, 0)
+                .eq(Report::getDeleted, 0)
                 .orderByDesc(Report::getCreatedAt)
                 .last("LIMIT 6"), scope, userId, scopedPostInSql)
         );

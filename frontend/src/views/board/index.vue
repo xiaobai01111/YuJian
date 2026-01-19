@@ -32,8 +32,11 @@
 
       <div v-else v-for="post in postList" :key="post.id" class="card bg-base-100 shadow-sm hover:shadow-md transition-all border border-base-200 cursor-pointer" @click="goToDetail(post.id)">
         <div class="card-body p-6">
-          <div class="flex justify-between items-start">
-            <h2 class="card-title text-lg font-bold text-base-content mb-2 line-clamp-1">{{ post.title }}</h2>
+          <div class="flex justify-between items-start gap-3">
+            <div class="flex items-center gap-2 min-w-0">
+              <h2 class="card-title text-lg font-bold text-base-content mb-2 line-clamp-1">{{ post.title }}</h2>
+              <span v-if="post.status === 1" class="badge badge-success badge-sm">已解决</span>
+            </div>
             <div class="badge badge-ghost badge-sm" v-if="post.category">{{ post.category }}</div>
           </div>
           
@@ -44,7 +47,7 @@
             <img 
               v-for="file in post.files.slice(0, 3)" 
               :key="file.id" 
-              :src="file.url" 
+              :src="resolveFileUrl(file.url)" 
               class="w-24 h-24 object-cover rounded-lg border border-base-200" 
               alt="attachment" 
             />
@@ -103,6 +106,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
 import { getBoardLabel, normalizeBoardKey } from '@/utils/boards'
+import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 
 const route = useRoute()

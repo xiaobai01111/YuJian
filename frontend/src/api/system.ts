@@ -125,6 +125,10 @@ export function getDeptTree() {
     return request.get('/api/v1/system/dept/tree')
 }
 
+export function getDeptTreeForRole() {
+    return request.get('/api/v1/system/roles/dept-tree')
+}
+
 export function createDept(data: DeptDTO) {
     return request.post('/api/v1/system/dept', data)
 }
@@ -482,11 +486,15 @@ export interface FileCategoryVO {
 
 export interface FileManageVO {
     id: number
+    uploaderId?: number
+    uploaderName?: string
     filename: string
     path: string
     url?: string
     size?: number
     mimeType?: string
+    storageProvider?: string
+    visibility?: string
     createdAt?: string
 }
 
@@ -511,6 +519,54 @@ export function getGalleryCategories() {
 
 export function getGalleryList(params?: FileQuery) {
     return request.get<PageResult<FileManageVO>>('/api/v1/console/gallery', { params })
+}
+
+export function uploadConsoleFile(file: File, targetType?: string, visibility?: string) {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (targetType) {
+        formData.append('type', targetType)
+    }
+    if (visibility) {
+        formData.append('visibility', visibility)
+    }
+    return request.post<FileManageVO>('/api/v1/console/files/upload', formData)
+}
+
+export function deleteConsoleFile(id: number) {
+    return request.delete(`/api/v1/console/files/${id}`)
+}
+
+export function batchDeleteConsoleFiles(ids: number[]) {
+    return request.post('/api/v1/console/files/batch-delete', { ids })
+}
+
+export function uploadConsoleGallery(file: File, targetType?: string, visibility?: string) {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (targetType) {
+        formData.append('type', targetType)
+    }
+    if (visibility) {
+        formData.append('visibility', visibility)
+    }
+    return request.post<FileManageVO>('/api/v1/console/gallery/upload', formData)
+}
+
+export function deleteConsoleGallery(id: number) {
+    return request.delete(`/api/v1/console/gallery/${id}`)
+}
+
+export function batchDeleteConsoleGallery(ids: number[]) {
+    return request.post('/api/v1/console/gallery/batch-delete', { ids })
+}
+
+export function updateConsoleFileVisibility(id: number, visibility: string) {
+    return request.post(`/api/v1/console/files/${id}/visibility`, { visibility })
+}
+
+export function updateConsoleGalleryVisibility(id: number, visibility: string) {
+    return request.post(`/api/v1/console/gallery/${id}/visibility`, { visibility })
 }
 
 // --- Oper Log ---

@@ -108,12 +108,12 @@ export function resolvePost(id: number) {
     return request.put(`/api/v1/posts/${id}/resolve`)
 }
 
-export function deleteConsolePost(id: number) {
-    return request.delete(`/api/v1/console/posts/${id}`)
+export function deleteConsolePost(id: number, reason?: string) {
+    return request.delete(`/api/v1/console/posts/${id}`, { params: reason ? { reason } : {} })
 }
 
-export function resolveConsolePost(id: number) {
-    return request.put(`/api/v1/console/posts/${id}/resolve`)
+export function resolveConsolePost(id: number, reason?: string) {
+    return request.put(`/api/v1/console/posts/${id}/resolve`, null, { params: reason ? { reason } : {} })
 }
 
 export function searchPosts(params: { keyword: string; board?: string; page?: number; size?: number }) {

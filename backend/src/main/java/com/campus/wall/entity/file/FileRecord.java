@@ -38,6 +38,10 @@ public class FileRecord implements Serializable {
 
     private String storageClass;
 
+    private String storageProvider;
+
+    private String visibility;
+
     private LocalDateTime lastAccessedAt;
 
     @TableField(fill = FieldFill.INSERT)

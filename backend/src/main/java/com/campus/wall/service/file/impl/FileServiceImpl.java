@@ -5,24 +5,24 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.ResultCode;
-import com.campus.wall.config.MinioConfig;
+import com.campus.wall.config.StorageProperties;
 import com.campus.wall.entity.file.FileRecord;
+import com.campus.wall.enums.file.FileVisibility;
+import com.campus.wall.enums.file.StorageProviderType;
 import com.campus.wall.mapper.file.FileRecordMapper;
+import com.campus.wall.service.file.FileAccessService;
 import com.campus.wall.service.content.ContentModerationService;
 import com.campus.wall.service.file.FileService;
+import com.campus.wall.service.storage.StorageProvider;
+import com.campus.wall.service.storage.StorageProviderRegistry;
 import com.campus.wall.vo.file.FileVO;
-import io.minio.BucketExistsArgs;
-import io.minio.MakeBucketArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.RemoveObjectArgs;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Set;
@@ -39,15 +39,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FileServiceImpl implements FileService {
 
-    private final MinioClient minioClient;
-    private final MinioConfig minioConfig;
     private final FileRecordMapper fileRecordMapper;
     private final ContentModerationService contentModerationService;
+    private final StorageProviderRegistry storageProviderRegistry;
+    private final StorageProperties storageProperties;
+    private final FileAccessService fileAccessService;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
             "image/jpeg", "image/png", "image/webp"
     );
-    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    private static final long MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+    private static final long MAX_FILE_SIZE = 200L * 1024 * 1024; // 200MB
     
     // Magic bytes for file type validation
     private static final byte[] JPEG_MAGIC = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
@@ -55,44 +57,49 @@ public class FileServiceImpl implements FileService {
     private static final byte[] WEBP_MAGIC = new byte[]{0x52, 0x49, 0x46, 0x46}; // RIFF
 
     @Override
-    public FileVO uploadFile(MultipartFile file, String targetType) {
-        validateFile(file);
+    public FileVO uploadFile(MultipartFile file, String targetType, String visibility) {
+        validateFile(file, targetType);
 
         try {
             Long userId = StpUtil.getLoginIdAsLong();
-            // 确保 bucket 存在
-            ensureBucketExists();
 
             // 生成文件路径
             String originalFilename = file.getOriginalFilename();
             String extension = getFileExtension(originalFilename);
             String objectName = generateObjectName(targetType, extension);
-
-            // 上传到 MinIO
-            try (InputStream inputStream = file.getInputStream()) {
-                minioClient.putObject(PutObjectArgs.builder()
-                        .bucket(minioConfig.getBucketName())
-                        .object(objectName)
-                        .stream(inputStream, file.getSize(), -1)
-                        .contentType(file.getContentType())
-                        .build());
+            FileVisibility resolvedVisibility = resolveVisibility(targetType, visibility);
+            StorageProvider provider = resolvePrimaryProvider();
+            String storedPath;
+            try {
+                storedPath = provider.store(file, objectName);
+            } catch (Exception primaryError) {
+                StorageProvider fallback = resolveFallbackProvider();
+                if (fallback == null || fallback.getType() == provider.getType()) {
+                    throw primaryError;
+                }
+                storedPath = fallback.store(file, objectName);
+                provider = fallback;
             }
 
             // 保存文件记录
             FileRecord record = new FileRecord();
             record.setUserId(userId);
             record.setFilename(originalFilename);
-            record.setPath(objectName);
+            record.setPath(storedPath);
             record.setSize(file.getSize());
             record.setMimeType(file.getContentType());
             record.setTargetType(targetType);
             record.setStatus(0);
             record.setAuditStatus(0); // 待审核
             record.setStorageClass("STANDARD");
+            record.setStorageProvider(provider.getType().getCode());
+            record.setVisibility(resolvedVisibility.getCode());
             fileRecordMapper.insert(record);
 
-            String fileUrl = buildFileUrl(record.getPath());
-            contentModerationService.asyncModerateImage(record.getId(), fileUrl);
+            String fileUrl = fileAccessService.buildAccessUrl(record);
+            if (isAllowedImageType(record.getMimeType())) {
+                contentModerationService.asyncModerateImage(record.getId(), fileUrl);
+            }
 
             return toFileVO(record);
 
@@ -115,10 +122,10 @@ public class FileServiceImpl implements FileService {
         }
 
         try {
-            minioClient.removeObject(RemoveObjectArgs.builder()
-                    .bucket(minioConfig.getBucketName())
-                    .object(record.getPath())
-                    .build());
+            StorageProvider provider = fileAccessService.getProvider(record.getStorageProvider());
+            if (provider != null) {
+                provider.delete(record.getPath());
+            }
             fileRecordMapper.deleteById(fileId);
         } catch (Exception e) {
             log.error("文件删除失败", e);
@@ -167,10 +174,10 @@ public class FileServiceImpl implements FileService {
         List<FileRecord> filesToDelete = fileRecordMapper.selectFilesToDelete();
         for (FileRecord record : filesToDelete) {
             try {
-                minioClient.removeObject(RemoveObjectArgs.builder()
-                        .bucket(minioConfig.getBucketName())
-                        .object(record.getPath())
-                        .build());
+                StorageProvider provider = fileAccessService.getProvider(record.getStorageProvider());
+                if (provider != null) {
+                    provider.delete(record.getPath());
+                }
                 fileRecordMapper.deleteById(record.getId());
             } catch (Exception e) {
                 log.error("清理孤儿文件失败: {}", record.getPath(), e);
@@ -178,31 +185,45 @@ public class FileServiceImpl implements FileService {
         }
     }
 
-    private void validateFile(MultipartFile file) {
+    private void validateFile(MultipartFile file, String targetType) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "文件不能为空");
         }
 
         // 文件大小校验
-        if (file.getSize() > MAX_FILE_SIZE) {
+        long limit = requiresImageOnly(targetType) ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+        if (file.getSize() > limit) {
             throw new BusinessException(ResultCode.FILE_SIZE_EXCEEDED);
         }
 
         // Content-Type 校验
         String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_IMAGE_TYPES.contains(contentType)) {
+        if (contentType == null) {
+            throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED);
+        }
+        boolean imageOnly = requiresImageOnly(targetType);
+        if (contentType.startsWith("image/")) {
+            if (!ALLOWED_IMAGE_TYPES.contains(contentType)) {
+                throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED);
+            }
+        } else if (imageOnly) {
             throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED);
         }
         
         // Magic bytes 校验（防止伪造 Content-Type）
-        try {
-            byte[] header = new byte[12];
-            file.getInputStream().read(header);
-            if (!isValidImageMagic(header, contentType)) {
-                throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED, "文件内容与类型不匹配");
+        if (contentType.startsWith("image/")) {
+            try (java.io.InputStream inputStream = file.getInputStream()) {
+                byte[] header = new byte[12];
+                int readBytes = inputStream.read(header);
+                if (readBytes < header.length) {
+                    throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED, "文件内容与类型不匹配");
+                }
+                if (!isValidImageMagic(header, contentType)) {
+                    throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED, "文件内容与类型不匹配");
+                }
+            } catch (java.io.IOException e) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "无法读取文件内容");
             }
-        } catch (java.io.IOException e) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "无法读取文件内容");
         }
     }
     
@@ -223,15 +244,8 @@ public class FileServiceImpl implements FileService {
         return true;
     }
 
-    private void ensureBucketExists() throws Exception {
-        boolean found = minioClient.bucketExists(BucketExistsArgs.builder()
-                .bucket(minioConfig.getBucketName())
-                .build());
-        if (!found) {
-            minioClient.makeBucket(MakeBucketArgs.builder()
-                    .bucket(minioConfig.getBucketName())
-                    .build());
-        }
+    private boolean isAllowedImageType(String contentType) {
+        return contentType != null && ALLOWED_IMAGE_TYPES.contains(contentType);
     }
 
     private String generateObjectName(String targetType, String extension) {
@@ -251,16 +265,65 @@ public class FileServiceImpl implements FileService {
         Objects.requireNonNull(record, "文件记录不能为空");
         FileVO vo = new FileVO();
         BeanUtils.copyProperties(record, vo);
+        if (FileVisibility.fromCode(record.getVisibility()) == FileVisibility.PRIVATE) {
+            vo.setPath(null);
+        }
+        vo.setUploaderId(record.getUserId());
+        vo.setUrl(fileAccessService.buildAccessUrl(record));
         return vo;
     }
 
-    private String buildFileUrl(String path) {
-        if (path == null || path.isBlank()) {
-            return null;
+    private FileVisibility resolveVisibility(String targetType) {
+        if (targetType == null || targetType.isBlank()) {
+            return FileVisibility.PRIVATE;
         }
-        String endpoint = minioConfig.getEndpoint();
-        String bucket = minioConfig.getBucketName();
-        String base = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
-        return base + "/" + bucket + "/" + path;
+        String key = targetType.trim().toLowerCase();
+        return switch (key) {
+            case "file", "gallery", "public", "package", "resource" -> FileVisibility.PUBLIC;
+            default -> FileVisibility.PRIVATE;
+        };
+    }
+
+    private FileVisibility resolveVisibility(String targetType, String requestedVisibility) {
+        if (StringUtils.hasText(requestedVisibility) && canOverrideVisibility()) {
+            for (FileVisibility item : FileVisibility.values()) {
+                if (item.getCode().equalsIgnoreCase(requestedVisibility.trim())) {
+                    return item;
+                }
+            }
+            throw new BusinessException(ResultCode.BAD_REQUEST, "visibility不合法");
+        }
+        return resolveVisibility(targetType);
+    }
+
+    private boolean canOverrideVisibility() {
+        return StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())
+                || StpUtil.hasPermission("system:file:upload")
+                || StpUtil.hasPermission("system:gallery:upload");
+    }
+
+    private boolean requiresImageOnly(String targetType) {
+        if (targetType == null || targetType.isBlank()) {
+            return true;
+        }
+        String key = targetType.trim().toLowerCase();
+        return switch (key) {
+            case "file", "public", "package", "resource" -> false;
+            default -> true;
+        };
+    }
+
+    private StorageProvider resolvePrimaryProvider() {
+        StorageProviderType type = storageProperties.getPrimaryProvider();
+        StorageProvider provider = storageProviderRegistry.getProvider(type);
+        if (provider == null) {
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "存储提供者不可用");
+        }
+        return provider;
+    }
+
+    private StorageProvider resolveFallbackProvider() {
+        StorageProviderType type = storageProperties.getFallbackProvider();
+        return storageProviderRegistry.getProvider(type);
     }
 }

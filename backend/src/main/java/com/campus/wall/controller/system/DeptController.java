@@ -37,13 +37,16 @@ public class DeptController {
     public R<List<DeptTreeVO>> tree() {
         List<SysDept> allDepts = deptService.listAll();
         List<DeptTreeVO> tree = buildTree(allDepts, 0L);
+        if (tree.isEmpty() && !allDepts.isEmpty()) {
+            tree = buildRootTree(allDepts);
+        }
         return R.ok(tree);
     }
 
     private List<DeptTreeVO> buildTree(List<SysDept> depts, Long parentId) {
         List<DeptTreeVO> result = new ArrayList<>();
         for (SysDept dept : depts) {
-            if (dept.getParentId().equals(parentId)) {
+            if (java.util.Objects.equals(dept.getParentId(), parentId)) {
                 DeptTreeVO vo = new DeptTreeVO();
                 vo.setId(dept.getId());
                 vo.setParentId(dept.getParentId());
@@ -66,6 +69,45 @@ public class DeptController {
             }
         }
         return result;
+    }
+
+    private List<DeptTreeVO> buildRootTree(List<SysDept> depts) {
+        List<DeptTreeVO> roots = new ArrayList<>();
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (SysDept dept : depts) {
+            if (dept.getId() != null) {
+                ids.add(dept.getId());
+            }
+        }
+        for (SysDept dept : depts) {
+            Long parentId = dept.getParentId();
+            boolean isRoot = parentId == null
+                || parentId == 0L
+                || !ids.contains(parentId)
+                || parentId.equals(dept.getId());
+            if (isRoot) {
+                DeptTreeVO vo = new DeptTreeVO();
+                vo.setId(dept.getId());
+                vo.setParentId(dept.getParentId());
+                vo.setDeptName(dept.getDeptName());
+                vo.setSortOrder(dept.getSortOrder());
+                vo.setLeader(dept.getLeader());
+                vo.setPhone(dept.getPhone());
+                vo.setEmail(dept.getEmail());
+                vo.setStatus(dept.getStatus());
+                Integer dataScope = dept.getDataScope();
+                if (dataScope == null) {
+                    dataScope = dept.getId() != null && dept.getId().equals(SecurityConstants.SYSTEM_DEPT_ID)
+                        ? SecurityConstants.DATA_SCOPE_ALL
+                        : SecurityConstants.DATA_SCOPE_DEPT;
+                }
+                vo.setDataScope(dataScope);
+                vo.setCreatedAt(dept.getCreatedAt());
+                vo.setChildren(buildTree(depts, dept.getId()));
+                roots.add(vo);
+            }
+        }
+        return roots;
     }
 
     @Operation(summary = "获取部门详情")

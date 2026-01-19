@@ -237,8 +237,10 @@ const handlePublishSuccess = () => {
 
 const handleResolve = async (post: PostVO) => {
   if (!confirm(`确认将帖子「${post.title}」标记为已解决？`)) return
+  const reason = prompt('请输入操作原因（必填）')
+  if (!reason || !reason.trim()) return
   try {
-    await resolveConsolePost(post.id)
+    await resolveConsolePost(post.id, reason.trim())
     await loadPosts()
   } catch (error: any) {
     alert(error?.message || '操作失败')
@@ -247,8 +249,10 @@ const handleResolve = async (post: PostVO) => {
 
 const handleDelete = async (post: PostVO) => {
   if (!confirm(`确认删除帖子「${post.title}」？`)) return
+  const reason = prompt('请输入操作原因（必填）')
+  if (!reason || !reason.trim()) return
   try {
-    await deleteConsolePost(post.id)
+    await deleteConsolePost(post.id, reason.trim())
     await loadPosts()
   } catch (error: any) {
     alert(error?.message || '删除失败')

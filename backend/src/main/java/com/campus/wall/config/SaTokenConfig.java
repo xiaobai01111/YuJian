@@ -51,6 +51,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                             // 公告公开接口
                             "/api/v1/notices/public",
                             "/api/v1/notices/public/**",
+                            // 私有文件预览（签名校验）
+                            "/api/v1/files/preview/**",
                             // 公开查询接口（仅健康检查，其他需登录）
                             "/api/health",
                             "/api/v1/posts"

@@ -227,8 +227,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public int batchAssignByQuery(UserBatchAssignDTO dto, Long operatorId) {
-        if ((dto.getRoleIds() == null || dto.getRoleIds().isEmpty()) && dto.getDeptId() == null) {
-            throw new BusinessException("请选择要分配的角色或部门");
+        if (dto.getRoleIds() == null || dto.getRoleIds().isEmpty()) {
+            throw new BusinessException("请选择要分配的角色");
         }
 
         String roleMode = dto.getRoleMode() == null ? "REPLACE" : dto.getRoleMode().toUpperCase();
@@ -254,10 +254,6 @@ public class UserServiceImpl implements UserService {
                 Long userId = user.getId();
                 if (isSystemAdminUserId(userId)) {
                     continue;
-                }
-
-                if (dto.getDeptId() != null && !Objects.equals(user.getDeptId(), dto.getDeptId())) {
-                    userMapper.updateDept(userId, dto.getDeptId());
                 }
 
                 if (dto.getRoleIds() != null && !dto.getRoleIds().isEmpty()) {

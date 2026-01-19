@@ -21,23 +21,23 @@ import com.campus.wall.mapper.post.BookmarkMapper;
 import com.campus.wall.mapper.post.LikeMapper;
 import com.campus.wall.mapper.post.PostBoardMapper;
 import com.campus.wall.mapper.post.PostMapper;
-import com.campus.wall.mapper.system.SysDeptMapper;
-import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.content.SensitiveWordService;
 import com.campus.wall.service.file.FileService;
 import com.campus.wall.service.post.PostService;
+import com.campus.wall.service.security.DataScopeService;
 import com.campus.wall.vo.file.FileVO;
 import com.campus.wall.vo.post.PostVO;
 import com.campus.wall.vo.user.UserVO;
-import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.constant.RateLimitConstants;
 import com.campus.wall.service.security.RateLimitService;
+import com.campus.wall.service.system.OperLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -62,12 +62,12 @@ public class PostServiceImpl implements PostService {
     private final BookmarkMapper bookmarkMapper;
     private final PostBoardMapper postBoardMapper;
     private final UserMapper userMapper;
-    private final SysRoleDeptMapper sysRoleDeptMapper;
-    private final SysDeptMapper deptMapper;
     private final FileService fileService;
     private final SensitiveWordService sensitiveWordService;
     private final com.campus.wall.service.user.CreditService creditService;
     private final RateLimitService rateLimitService;
+    private final DataScopeService dataScopeService;
+    private final OperLogService operLogService;
 
     // 帖子状态：0正常 1已解决 2已删除
     private static final int STATUS_NORMAL = 0;
@@ -254,9 +254,10 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
-    public void updatePostByAdmin(Long postId, PostUpdateDTO dto) {
+    public void updatePostByAdmin(Long postId, PostUpdateDTO dto, String reason) {
         Long userId = StpUtil.getLoginIdAsLong();
         Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "update");
 
         // 敏感词检测
         if (dto.getTitle() != null && sensitiveWordService.containsSensitiveWord(dto.getTitle())) {
@@ -336,14 +337,40 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
-    public void deletePostByAdmin(Long postId) {
+    public void deletePostByAdmin(Long postId, String reason) {
         Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "delete");
         if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
             return;
         }
         post.setStatus(STATUS_DELETED);
         postMapper.updateById(post);
         log.info("控制台删除帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void restorePostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "restore");
+        if (post.getStatus() == null || post.getStatus() != STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "帖子未处于删除状态");
+        }
+        post.setStatus(STATUS_NORMAL);
+        postMapper.updateById(post);
+        log.info("控制台恢复帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void purgePostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "purge");
+        if (post.getStatus() == null || post.getStatus() != STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "帖子未处于删除状态");
+        }
+        postMapper.deleteById(postId);
+        log.info("控制台彻底删除帖子: {}", postId);
     }
 
     @Override
@@ -359,7 +386,7 @@ public class PostServiceImpl implements PostService {
         postMapper.incrementViewCount(postId);
 
         List<String> boards = loadBoards(postId);
-        return toPostVO(post, true, boards, null);
+        return toPostVO(post, true, boards, null, false);
     }
 
     @Override
@@ -375,6 +402,9 @@ public class PostServiceImpl implements PostService {
     private PageResult<PostVO> queryPostsInternal(PostQueryDTO query, boolean defaultNormalStatus, boolean applyDataScope) {
         Page<Post> page = new Page<>(query.getPage(), query.getSize());
         LambdaQueryWrapper<Post> wrapper = buildWrapper(query, defaultNormalStatus);
+        if (applyDataScope && query.getStatus() == null) {
+            wrapper.ne(Post::getStatus, STATUS_DELETED);
+        }
         if (applyDataScope) {
             applyPostDataScope(wrapper);
         }
@@ -388,7 +418,7 @@ public class PostServiceImpl implements PostService {
         PostUserContext context = buildPostUserContext(result.getRecords());
 
         List<PostVO> records = result.getRecords().stream()
-                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context, applyDataScope))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
@@ -441,102 +471,34 @@ public class PostServiceImpl implements PostService {
 
     private void applyPostDataScope(LambdaQueryWrapper<Post> wrapper) {
         Long userId = StpUtil.getLoginIdAsLong();
-        if (SecurityUtil.isSuperAdmin()) {
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(userId);
+        if (scope.isAllowAll()) {
             return;
         }
-
-        List<Long> deptIds = sysRoleDeptMapper.selectDeptIdsByUserId(userId);
-        if (deptIds == null) {
-            deptIds = new ArrayList<>();
-        }
-        User user = userMapper.selectById(userId);
-        if (user != null && user.getDeptId() != null) {
-            if (!deptIds.contains(user.getDeptId())) {
-                deptIds.add(user.getDeptId());
-            }
-        }
-
-        if (deptIds.isEmpty()) {
+        String userInSql = dataScopeService.buildUserInSql(scope);
+        if (userInSql == null || userInSql.isEmpty()) {
             wrapper.eq(Post::getUserId, userId);
             return;
         }
-
-        List<com.campus.wall.entity.system.SysDept> depts = deptMapper.selectBatchIds(deptIds);
-        boolean allowAll = false;
-        boolean allowSelf = false;
-        List<Long> allowDeptIds = new ArrayList<>();
-        boolean includeChildren = false;
-
-        for (com.campus.wall.entity.system.SysDept dept : depts) {
-            if (dept == null) continue;
-            Integer scope = dept.getDataScope() != null ? dept.getDataScope() : SecurityConstants.DATA_SCOPE_DEPT;
-            if (scope == SecurityConstants.DATA_SCOPE_ALL) {
-                allowAll = true;
-                break;
-            }
-            if (scope == SecurityConstants.DATA_SCOPE_SELF) {
-                allowSelf = true;
-            } else if (scope == SecurityConstants.DATA_SCOPE_DEPT) {
-                allowDeptIds.add(dept.getId());
-            } else if (scope == SecurityConstants.DATA_SCOPE_DEPT_AND_CHILD) {
-                allowDeptIds.add(dept.getId());
-                includeChildren = true;
-            } else if (scope == SecurityConstants.DATA_SCOPE_CUSTOM) {
-                allowDeptIds.add(dept.getId());
-            }
-        }
-
-        if (allowAll) {
-            return;
-        }
-
-        List<Long> scopedDeptIds = includeChildren ? expandDeptIds(allowDeptIds) : allowDeptIds;
-        if (scopedDeptIds.isEmpty()) {
-            if (allowSelf) {
-                wrapper.eq(Post::getUserId, userId);
-            } else {
-                wrapper.eq(Post::getUserId, userId);
-            }
-            return;
-        }
-
-        String deptIdSql = scopedDeptIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-        String inSql = "SELECT id FROM users WHERE deleted = 0 AND dept_id IN (" + deptIdSql + ")";
-
-        if (allowSelf) {
-            wrapper.and(w -> w.eq(Post::getUserId, userId).or().inSql(Post::getUserId, inSql));
+        if (scope.isAllowSelf()) {
+            wrapper.and(w -> w.eq(Post::getUserId, userId).or().inSql(Post::getUserId, userInSql));
         } else {
-            wrapper.inSql(Post::getUserId, inSql);
+            wrapper.inSql(Post::getUserId, userInSql);
         }
     }
 
-    private List<Long> expandDeptIds(List<Long> deptIds) {
-        if (deptIds == null || deptIds.isEmpty()) {
-            return List.of();
+    private void assertCanManagePost(Post post, String reason, String action) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
-        List<com.campus.wall.entity.system.SysDept> allDepts = deptMapper.selectList(null);
-        Map<Long, List<Long>> childrenMap = new HashMap<>();
-        for (com.campus.wall.entity.system.SysDept dept : allDepts) {
-            childrenMap.computeIfAbsent(dept.getParentId(), key -> new ArrayList<>()).add(dept.getId());
+        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该帖子");
         }
-        List<Long> result = new ArrayList<>();
-        for (Long rootId : deptIds) {
-            collectDeptChildren(rootId, childrenMap, result);
+        if (!Objects.equals(operatorId, post.getUserId()) && !StringUtils.hasText(reason)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
         }
-        return result.stream().distinct().collect(Collectors.toList());
-    }
-
-    private void collectDeptChildren(Long deptId, Map<Long, List<Long>> childrenMap, List<Long> result) {
-        if (deptId == null) {
-            return;
-        }
-        result.add(deptId);
-        List<Long> children = childrenMap.get(deptId);
-        if (children != null) {
-            for (Long childId : children) {
-                collectDeptChildren(childId, childrenMap, result);
-            }
-        }
+        operLogService.log(operatorId, null, "post", post.getId(), action, reason, null, null, null);
     }
 
     @Override
@@ -646,7 +608,7 @@ public class PostServiceImpl implements PostService {
 
         List<PostVO> records = posts.stream()
                 .filter(p -> p.getStatus() != STATUS_DELETED)
-                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context, false))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, bookmarks.getTotal(), bookmarks.getCurrent(), bookmarks.getSize());
@@ -671,8 +633,9 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
-    public void markAsResolvedByAdmin(Long postId) {
+    public void markAsResolvedByAdmin(Long postId, String reason) {
         Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "resolve");
         if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法标记");
         }
@@ -697,7 +660,7 @@ public class PostServiceImpl implements PostService {
         PostUserContext context = buildPostUserContext(result.getRecords());
 
         List<PostVO> records = result.getRecords().stream()
-                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context, false))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
@@ -711,7 +674,7 @@ public class PostServiceImpl implements PostService {
         return post;
     }
 
-    private PostVO toPostVO(Post post, boolean includeFiles, List<String> boards, PostUserContext context) {
+    private PostVO toPostVO(Post post, boolean includeFiles, List<String> boards, PostUserContext context, boolean revealAnonymous) {
         PostVO vo = new PostVO();
         BeanUtils.copyProperties(post, vo);
         if (boards != null && !boards.isEmpty()) {
@@ -722,7 +685,7 @@ public class PostServiceImpl implements PostService {
         }
 
         // 处理作者信息
-        if (Boolean.TRUE.equals(post.getIsAnonymous())) {
+        if (Boolean.TRUE.equals(post.getIsAnonymous()) && !revealAnonymous) {
             // 匿名帖子不显示作者信息
             vo.setAuthor(null);
         } else {

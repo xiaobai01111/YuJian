@@ -60,7 +60,11 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
 -- 系统工具子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
     (40, 5, '文件管理', '/console/tool/file', 'views/console/tool/file/index.vue', 1, 'file', 1, TRUE, 0),
-    (41, 5, '图库管理', '/console/tool/gallery', 'views/console/tool/gallery/index.vue', 1, 'image', 2, TRUE, 0);
+    (41, 5, '图库管理', '/console/tool/gallery', 'views/console/tool/gallery/index.vue', 1, 'image', 2, TRUE, 0),
+    (24, 5, '回收站', '/console/recycle', 'Layout', 0, 'recycle', 3, TRUE, 0),
+    (25, 24, '帖子回收站', '/console/recycle/post', 'views/console/recycle/post.vue', 1, 'recycle', 1, TRUE, 0),
+    (26, 24, '评论回收站', '/console/recycle/comment', 'views/console/recycle/comment.vue', 1, 'recycle', 2, TRUE, 0),
+    (27, 24, '举报回收站', '/console/recycle/report', 'views/console/recycle/report.vue', 1, 'recycle', 3, TRUE, 0);
 
 -- 按钮权限
 INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, status) VALUES
@@ -121,6 +125,12 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (273, 35, '删除阻止名单', 'system:blocklist:delete', 2, 4, TRUE, 0),
     (280, 40, '查询文件', 'system:file:list', 2, 1, TRUE, 0),
     (281, 41, '查询图库', 'system:gallery:list', 2, 1, TRUE, 0),
+    (282, 40, '上传文件', 'system:file:upload', 2, 2, TRUE, 0),
+    (283, 40, '删除文件', 'system:file:delete', 2, 3, TRUE, 0),
+    (284, 41, '上传图库', 'system:gallery:upload', 2, 2, TRUE, 0),
+    (285, 41, '删除图库', 'system:gallery:delete', 2, 3, TRUE, 0),
+    (286, 40, '设置文件权限', 'system:file:permission', 2, 4, TRUE, 0),
+    (287, 41, '设置图库权限', 'system:gallery:permission', 2, 4, TRUE, 0),
 
     (180, 18, '编辑资料', 'system:profile:edit', 2, 1, TRUE, 0),
     (181, 18, '修改密码', 'system:profile:password', 2, 2, TRUE, 0),
@@ -142,12 +152,26 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
 
     (210, 21, '查询评论', 'content:comment:list', 2, 1, TRUE, 0),
     (211, 21, '删除评论', 'content:comment:delete', 2, 2, TRUE, 0),
+    (212, 21, '编辑评论', 'content:comment:edit', 2, 3, TRUE, 0),
+    (213, 21, '批量删除评论', 'content:comment:batch-delete', 2, 4, TRUE, 0),
 
     (220, 22, '查询举报', 'content:report:list', 2, 1, TRUE, 0),
     (221, 22, '处理举报', 'content:report:handle', 2, 2, TRUE, 0),
+    (222, 22, '批量处理举报', 'content:report:batch-handle', 2, 3, TRUE, 0),
+    (223, 22, '删除举报', 'content:report:delete', 2, 4, TRUE, 0),
 
     (230, 23, '查询审核', 'content:verification:list', 2, 1, TRUE, 0),
-    (231, 23, '处理审核', 'content:verification:handle', 2, 2, TRUE, 0);
+    (231, 23, '处理审核', 'content:verification:handle', 2, 2, TRUE, 0),
+
+    (300, 25, '查看帖子回收站', 'content:recycle:post:list', 2, 1, TRUE, 0),
+    (301, 25, '恢复帖子', 'content:recycle:post:restore', 2, 2, TRUE, 0),
+    (302, 25, '彻底删除帖子', 'content:recycle:post:purge', 2, 3, TRUE, 0),
+    (310, 26, '查看评论回收站', 'content:recycle:comment:list', 2, 1, TRUE, 0),
+    (311, 26, '恢复评论', 'content:recycle:comment:restore', 2, 2, TRUE, 0),
+    (312, 26, '彻底删除评论', 'content:recycle:comment:purge', 2, 3, TRUE, 0),
+    (320, 27, '查看举报回收站', 'content:recycle:report:list', 2, 1, TRUE, 0),
+    (321, 27, '恢复举报', 'content:recycle:report:restore', 2, 2, TRUE, 0),
+    (322, 27, '彻底删除举报', 'content:recycle:report:purge', 2, 3, TRUE, 0);
 
 SELECT setval('sys_menus_id_seq', (SELECT MAX(id) FROM sys_menus));
 
@@ -158,6 +182,8 @@ SELECT 1, id FROM sys_menus;
 -- 版主角色：内容管理 + 个人中心
 INSERT INTO sys_role_menus (role_id, menu_id) VALUES
     (2, 1),
-    (2, 3), (2, 20), (2, 21), (2, 22), (2, 23),
-    (2, 200), (2, 210), (2, 211), (2, 220), (2, 221), (2, 230), (2, 231),
+    (2, 3), (2, 20), (2, 21), (2, 22), (2, 23), (2, 24), (2, 25), (2, 26), (2, 27),
+    (2, 200), (2, 210), (2, 211), (2, 212), (2, 213),
+    (2, 220), (2, 221), (2, 222), (2, 223), (2, 230), (2, 231),
+    (2, 300), (2, 301), (2, 302), (2, 310), (2, 311), (2, 312), (2, 320), (2, 321), (2, 322),
     (2, 18);

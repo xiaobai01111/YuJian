@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import jakarta.validation.Valid;
 
@@ -46,24 +47,28 @@ public class PostConsoleController {
     @Operation(summary = "控制台编辑帖子")
     @SaCheckPermission("content:post:edit")
     @PutMapping("/{id}")
-    public R<Void> update(@PathVariable Long id, @Valid @RequestBody PostUpdateDTO dto) {
-        postService.updatePostByAdmin(id, dto);
+    public R<Void> update(@PathVariable Long id,
+                          @Valid @RequestBody PostUpdateDTO dto,
+                          @RequestParam(value = "reason", required = false) String reason) {
+        postService.updatePostByAdmin(id, dto, reason);
         return R.ok();
     }
 
     @Operation(summary = "控制台删除帖子")
     @SaCheckPermission("content:post:delete")
     @DeleteMapping("/{id}")
-    public R<Void> delete(@PathVariable Long id) {
-        postService.deletePostByAdmin(id);
+    public R<Void> delete(@PathVariable Long id,
+                          @RequestParam(value = "reason", required = false) String reason) {
+        postService.deletePostByAdmin(id, reason);
         return R.ok();
     }
 
     @Operation(summary = "控制台标记已解决")
     @SaCheckPermission("content:post:resolve")
     @PutMapping("/{id}/resolve")
-    public R<Void> resolve(@PathVariable Long id) {
-        postService.markAsResolvedByAdmin(id);
+    public R<Void> resolve(@PathVariable Long id,
+                           @RequestParam(value = "reason", required = false) String reason) {
+        postService.markAsResolvedByAdmin(id, reason);
         return R.ok();
     }
 }

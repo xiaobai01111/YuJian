@@ -13,6 +13,7 @@ import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.DeptService;
 import com.campus.wall.service.system.OperLogService;
 import com.campus.wall.service.user.UserService;
+import com.campus.wall.vo.system.DeptTreeVO;
 import com.campus.wall.vo.user.UserVO;
 import com.campus.wall.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
@@ -50,14 +51,80 @@ public class DeptServiceImpl implements DeptService {
         return buildTree(allDepts, 0L);
     }
 
+    @Override
+    public List<DeptTreeVO> getDeptTree() {
+        List<SysDept> allDepts = listAll();
+        List<DeptTreeVO> tree = buildDeptTreeVO(allDepts, 0L);
+        if (tree.isEmpty() && !allDepts.isEmpty()) {
+            tree = buildRootDeptTreeVO(allDepts);
+        }
+        return tree;
+    }
+
     private List<SysDept> buildTree(List<SysDept> depts, Long parentId) {
         List<SysDept> result = new ArrayList<>();
         for (SysDept dept : depts) {
-            if (dept.getParentId().equals(parentId)) {
+            if (java.util.Objects.equals(dept.getParentId(), parentId)) {
                 result.add(dept);
             }
         }
         return result;
+    }
+
+    private List<DeptTreeVO> buildDeptTreeVO(List<SysDept> depts, Long parentId) {
+        List<DeptTreeVO> result = new ArrayList<>();
+        for (SysDept dept : depts) {
+            if (java.util.Objects.equals(dept.getParentId(), parentId)) {
+                DeptTreeVO vo = toDeptTreeVO(dept);
+                vo.setChildren(buildDeptTreeVO(depts, dept.getId()));
+                result.add(vo);
+            }
+        }
+        return result;
+    }
+
+    private List<DeptTreeVO> buildRootDeptTreeVO(List<SysDept> depts) {
+        List<DeptTreeVO> roots = new ArrayList<>();
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (SysDept dept : depts) {
+            if (dept.getId() != null) {
+                ids.add(dept.getId());
+            }
+        }
+        for (SysDept dept : depts) {
+            Long parentId = dept.getParentId();
+            boolean isRoot = parentId == null
+                || parentId == 0L
+                || !ids.contains(parentId)
+                || parentId.equals(dept.getId());
+            if (isRoot) {
+                DeptTreeVO vo = toDeptTreeVO(dept);
+                vo.setChildren(buildDeptTreeVO(depts, dept.getId()));
+                roots.add(vo);
+            }
+        }
+        return roots;
+    }
+
+    private DeptTreeVO toDeptTreeVO(SysDept dept) {
+        DeptTreeVO vo = new DeptTreeVO();
+        vo.setId(dept.getId());
+        vo.setParentId(dept.getParentId());
+        vo.setDeptName(dept.getDeptName());
+        vo.setSortOrder(dept.getSortOrder());
+        vo.setLeader(dept.getLeader());
+        vo.setPhone(dept.getPhone());
+        vo.setEmail(dept.getEmail());
+        vo.setStatus(dept.getStatus());
+        Integer dataScope = dept.getDataScope();
+        if (dataScope == null) {
+            dataScope = dept.getId() != null && dept.getId().equals(SecurityConstants.SYSTEM_DEPT_ID)
+                ? SecurityConstants.DATA_SCOPE_ALL
+                : SecurityConstants.DATA_SCOPE_DEPT;
+        }
+        vo.setDataScope(dataScope);
+        vo.setCreatedAt(dept.getCreatedAt());
+        return vo;
     }
 
     @Override

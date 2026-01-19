@@ -281,6 +281,7 @@ CREATE TABLE posts (
     board VARCHAR(20) NOT NULL,
     title VARCHAR(200),
     content TEXT NOT NULL,
+    search_vector tsvector,
     is_anonymous BOOLEAN DEFAULT FALSE,
     category VARCHAR(50),
     price DECIMAL(10, 2),
@@ -304,6 +305,18 @@ COMMENT ON COLUMN posts.show_on_home IS '是否同步首页展示';
 CREATE INDEX idx_posts_user ON posts(user_id);
 CREATE INDEX idx_posts_board ON posts(board);
 CREATE INDEX idx_posts_status ON posts(status);
+CREATE INDEX idx_posts_search_vector ON posts USING GIN (search_vector);
+
+CREATE OR REPLACE FUNCTION posts_search_vector_update() RETURNS trigger AS $$
+BEGIN
+    NEW.search_vector := to_tsvector('simple', coalesce(NEW.title, '') || ' ' || coalesce(NEW.content, ''));
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER posts_search_vector_update
+BEFORE INSERT OR UPDATE OF title, content ON posts
+FOR EACH ROW EXECUTE FUNCTION posts_search_vector_update();
 
 CREATE TABLE post_boards (
     id BIGSERIAL PRIMARY KEY,
@@ -399,6 +412,7 @@ CREATE TABLE reports (
     post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     reason VARCHAR(500) NOT NULL,
     status SMALLINT DEFAULT 0,
+    deleted SMALLINT DEFAULT 0,
     handler_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     result VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -435,6 +449,8 @@ CREATE TABLE files (
     status SMALLINT DEFAULT 0,
     audit_status SMALLINT DEFAULT 0,
     storage_class VARCHAR(50),
+    storage_provider VARCHAR(32) NOT NULL DEFAULT 'MINIO',
+    visibility VARCHAR(16) NOT NULL DEFAULT 'PRIVATE',
     last_accessed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -25,9 +25,10 @@ public class FileController {
     @PostMapping("/upload")
     public R<FileVO> upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "type", defaultValue = "post") String targetType) {
+            @RequestParam(value = "type", defaultValue = "post") String targetType,
+            @RequestParam(value = "visibility", required = false) String visibility) {
         StpUtil.checkLogin();
-        FileVO fileVO = fileService.uploadFile(file, targetType);
+        FileVO fileVO = fileService.uploadFile(file, targetType, visibility);
         return R.ok(fileVO);
     }
 

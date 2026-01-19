@@ -7,7 +7,9 @@ import com.campus.wall.dto.system.RoleDeleteDTO;
 import com.campus.wall.dto.system.RoleDeptDTO;
 import com.campus.wall.service.system.RoleService;
 import com.campus.wall.vo.user.UserVO;
+import com.campus.wall.vo.system.DeptTreeVO;
 import com.campus.wall.vo.system.RoleVO;
+import com.campus.wall.service.system.DeptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,6 +28,7 @@ import java.util.List;
 public class RoleController {
 
     private final RoleService roleService;
+    private final DeptService deptService;
 
     @Operation(summary = "角色列表", description = "获取所有角色")
     @SaCheckPermission("system:role:list")
@@ -107,5 +110,12 @@ public class RoleController {
     @GetMapping("/{id}/users")
     public R<List<UserVO>> users(@PathVariable Long id) {
         return R.ok(roleService.getRoleUsers(id));
+    }
+
+    @Operation(summary = "获取部门树（用于角色授权）", description = "获取部门树结构，用于角色数据权限分配")
+    @SaCheckPermission("system:role:assign")
+    @GetMapping("/dept-tree")
+    public R<List<DeptTreeVO>> getDeptTreeForRole() {
+        return R.ok(deptService.getDeptTree());
     }
 }

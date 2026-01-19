@@ -2,6 +2,7 @@ package com.campus.wall.service.system;
 
 import com.campus.wall.dto.system.DeptDeleteDTO;
 import com.campus.wall.entity.system.SysDept;
+import com.campus.wall.vo.system.DeptTreeVO;
 import com.campus.wall.vo.user.UserVO;
 
 import java.util.List;
@@ -11,6 +12,8 @@ public interface DeptService {
     List<SysDept> listAll();
 
     List<SysDept> getTree();
+
+    List<DeptTreeVO> getDeptTree();
 
     SysDept getById(Long id);
 

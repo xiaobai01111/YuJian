@@ -80,12 +80,6 @@
               </svg>
               批量分配角色
             </button>
-            <button v-if="userStore.hasPermission('system:user:role')" class="btn btn-outline btn-sm gap-2 font-normal" @click="openQueryAssignModal">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h4a1 1 0 011 1v3H3V4zm0 6h6v4H3v-4zm8-6h10a1 1 0 011 1v3H11V4zm0 6h10v4H11v-4zM3 16h6v4H4a1 1 0 01-1-1v-3zm8 0h10v3a1 1 0 01-1 1H11v-4z" />
-              </svg>
-              按条件分配
-            </button>
             <button v-if="userStore.hasPermission('system:user:export')" class="btn btn-warning btn-sm text-white gap-2 font-normal" @click="handleExport">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -236,56 +230,6 @@
     <DeleteConfirmModal ref="deleteConfirmModalRef" @confirm="confirmDelete" />
     <ImportModal ref="importModalRef" @success="fetchData" />
 
-    <!-- Query Assign Modal -->
-    <dialog ref="queryAssignModalRef" class="modal">
-      <div class="modal-box max-w-3xl">
-        <h3 class="font-bold text-lg mb-4">按条件批量分配</h3>
-        <div class="space-y-4">
-          <div class="alert">
-            <span>将根据当前搜索条件批量分配角色/部门。</span>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="form-control">
-              <label class="label"><span class="label-text">角色分配模式</span></label>
-              <select v-model="queryAssignForm.roleMode" class="select select-bordered">
-                <option value="REPLACE">覆盖角色</option>
-                <option value="ADD">追加角色</option>
-              </select>
-            </div>
-            <div class="form-control">
-              <label class="label"><span class="label-text">分配部门</span></label>
-              <select v-model="queryAssignForm.deptId" class="select select-bordered">
-                <option :value="null">不调整部门</option>
-                <option v-for="dept in deptOptions" :key="dept.id" :value="dept.id">
-                  {{ dept.name }}
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-control">
-            <label class="label"><span class="label-text">分配角色</span></label>
-            <div class="border border-base-200 rounded-lg p-3 max-h-48 overflow-auto bg-base-50">
-              <label v-for="role in allRoles" :key="role.id" class="flex items-center gap-2 py-1">
-                <input type="checkbox" class="checkbox checkbox-sm" :value="role.id" v-model="queryAssignForm.roleIds" />
-                <span>{{ role.roleName }}</span>
-              </label>
-              <div v-if="allRoles.length === 0" class="text-xs text-slate-400">暂无角色</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-action">
-          <button class="btn btn-ghost" @click="closeQueryAssignModal">取消</button>
-          <button class="btn btn-primary" :disabled="queryAssignLoading" @click="confirmQueryAssign">
-            <span v-if="queryAssignLoading" class="loading loading-spinner loading-sm"></span>
-            执行分配
-          </button>
-        </div>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
 
     <!-- Ban Reason Modal -->
     <dialog class="modal" :class="{ 'modal-open': showBanModal }">
@@ -316,8 +260,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getUserList, banUser, getRoleList, getDeptTree, deleteUsers, exportUsers, batchAssignUsersByQuery } from '@/api/system'
-import type { UserVO, RoleVO, DeptVO } from '@/api/system'
+import { getUserList, banUser, getRoleList, deleteUsers, exportUsers } from '@/api/system'
+import type { UserVO, RoleVO } from '@/api/system'
 import { useUserStore } from '@/stores/user'
 import UserFormModal from './components/UserFormModal.vue'
 import RoleAssignModal from './components/RoleAssignModal.vue'
@@ -335,7 +279,6 @@ const banReasonTouched = ref(false)
 const showSearch = ref(false)
 const userList = ref<UserVO[]>([])
 const allRoles = ref<RoleVO[]>([])
-const deptOptions = ref<{ id: number; name: string }[]>([])
 const total = ref(0)
 
 const queryParams = reactive({
@@ -354,13 +297,6 @@ const userFormModalRef = ref<InstanceType<typeof UserFormModal>>()
 const roleAssignModalRef = ref<InstanceType<typeof RoleAssignModal>>()
 const deleteConfirmModalRef = ref<InstanceType<typeof DeleteConfirmModal>>()
 const importModalRef = ref<InstanceType<typeof ImportModal>>()
-const queryAssignModalRef = ref<HTMLDialogElement | null>(null)
-const queryAssignLoading = ref(false)
-const queryAssignForm = reactive({
-  roleMode: 'REPLACE',
-  roleIds: [] as number[],
-  deptId: null as number | null
-})
 
 const isAllSelected = computed(() => {
   return userList.value.length > 0 && selectedIds.value.length === userList.value.length
@@ -403,26 +339,6 @@ const fetchRoles = async () => {
   } catch (error) {
     console.error(error)
   }
-}
-
-const fetchDeptOptions = async () => {
-  try {
-    const res: any = await getDeptTree()
-    deptOptions.value = flattenDepts(res || [])
-  } catch (error) {
-    console.error(error)
-  }
-}
-
-const flattenDepts = (nodes: DeptVO[], prefix = ''): { id: number; name: string }[] => {
-  const result: { id: number; name: string }[] = []
-  for (const node of nodes) {
-    result.push({ id: node.id, name: `${prefix}${node.deptName}` })
-    if (node.children && node.children.length > 0) {
-      result.push(...flattenDepts(node.children, `${prefix}— `))
-    }
-  }
-  return result
 }
 
 const handleSearch = () => {
@@ -563,44 +479,6 @@ const handleBatchAssignRole = () => {
   }
 }
 
-const openQueryAssignModal = async () => {
-  if (allRoles.value.length === 0) {
-    await fetchRoles()
-  }
-  if (deptOptions.value.length === 0) {
-    await fetchDeptOptions()
-  }
-  queryAssignForm.roleIds = []
-  queryAssignForm.deptId = null
-  queryAssignForm.roleMode = 'REPLACE'
-  queryAssignModalRef.value?.showModal()
-}
-
-const closeQueryAssignModal = () => {
-  queryAssignModalRef.value?.close()
-}
-
-const confirmQueryAssign = async () => {
-  if (queryAssignForm.roleIds.length === 0 && !queryAssignForm.deptId) {
-    alert('请选择要分配的角色或部门')
-    return
-  }
-  queryAssignLoading.value = true
-  try {
-    await batchAssignUsersByQuery({
-      ...queryParams,
-      roleIds: queryAssignForm.roleIds,
-      deptId: queryAssignForm.deptId,
-      roleMode: queryAssignForm.roleMode
-    })
-    closeQueryAssignModal()
-    fetchData()
-  } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '批量分配失败')
-  } finally {
-    queryAssignLoading.value = false
-  }
-}
 
 const handleExport = async () => {
   try {

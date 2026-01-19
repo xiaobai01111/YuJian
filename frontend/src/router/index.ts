@@ -199,6 +199,36 @@ const router = createRouter({
                     meta: { title: '帖子管理', icon: 'post' }
                 },
                 {
+                    path: 'comment',
+                    name: 'CommentManagement',
+                    component: () => import('@/views/console/comment/index.vue'),
+                    meta: { title: '评论管理', icon: 'message' }
+                },
+                {
+                    path: 'report',
+                    name: 'ReportManagement',
+                    component: () => import('@/views/console/report/index.vue'),
+                    meta: { title: '举报管理', icon: 'warning' }
+                },
+                {
+                    path: 'recycle/post',
+                    name: 'RecyclePost',
+                    component: () => import('@/views/console/recycle/post.vue'),
+                    meta: { title: '帖子回收站', icon: 'recycle' }
+                },
+                {
+                    path: 'recycle/comment',
+                    name: 'RecycleComment',
+                    component: () => import('@/views/console/recycle/comment.vue'),
+                    meta: { title: '评论回收站', icon: 'recycle' }
+                },
+                {
+                    path: 'recycle/report',
+                    name: 'RecycleReport',
+                    component: () => import('@/views/console/recycle/report.vue'),
+                    meta: { title: '举报回收站', icon: 'recycle' }
+                },
+                {
                     path: 'announcement',
                     name: 'AnnouncementManagement',
                     component: () => import('@/views/console/notice/index.vue'),
