@@ -9,6 +9,7 @@ import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.post.CommentCreateDTO;
+import com.campus.wall.dto.post.CommentQueryDTO;
 import com.campus.wall.entity.post.Comment;
 import com.campus.wall.entity.post.Post;
 import com.campus.wall.entity.post.PostBoard;
@@ -21,6 +22,7 @@ import com.campus.wall.service.content.AnonymousMappingService;
 import com.campus.wall.service.content.SensitiveWordService;
 import com.campus.wall.service.post.CommentService;
 import com.campus.wall.vo.post.CommentVO;
+import com.campus.wall.vo.post.CommentConsoleVO;
 import com.campus.wall.vo.user.UserVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -138,6 +140,22 @@ public class CommentServiceImpl implements CommentService {
     }
 
     @Override
+    @Transactional
+    public void deleteCommentByAdmin(Long commentId) {
+        Comment comment = commentMapper.selectById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "评论不存在");
+        }
+        if (comment.getStatus() != null && comment.getStatus() == STATUS_DELETED) {
+            return;
+        }
+        comment.setStatus(STATUS_DELETED);
+        commentMapper.updateById(comment);
+        postMapper.updateCommentCount(comment.getPostId(), -1);
+        log.info("管理员删除评论: {}", commentId);
+    }
+
+    @Override
     public List<CommentVO> getPostComments(Long postId) {
         // 获取帖子信息
         Post post = postMapper.selectById(postId);
@@ -206,6 +224,47 @@ public class CommentServiceImpl implements CommentService {
                         vo.setChildren(commentChildren.stream()
                                 .map(c -> toCommentVO(c, post, isAnonymousPost))
                                 .collect(Collectors.toList()));
+                    }
+                    return vo;
+                })
+                .collect(Collectors.toList());
+
+        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    @Override
+    public PageResult<CommentConsoleVO> queryCommentsForConsole(CommentQueryDTO query) {
+        Page<Comment> commentPage = new Page<>(query.getPage(), query.getSize());
+        LambdaQueryWrapper<Comment> wrapper = new LambdaQueryWrapper<>();
+        if (query.getPostId() != null) {
+            wrapper.eq(Comment::getPostId, query.getPostId());
+        }
+        if (query.getStatus() != null) {
+            wrapper.eq(Comment::getStatus, query.getStatus());
+        }
+        if (query.getKeyword() != null && !query.getKeyword().trim().isEmpty()) {
+            wrapper.like(Comment::getContent, query.getKeyword().trim());
+        }
+        wrapper.orderByDesc(Comment::getCreatedAt);
+
+        Page<Comment> result = commentMapper.selectPage(commentPage, wrapper);
+
+        List<CommentConsoleVO> records = result.getRecords().stream()
+                .map(comment -> {
+                    CommentConsoleVO vo = new CommentConsoleVO();
+                    vo.setId(comment.getId());
+                    vo.setPostId(comment.getPostId());
+                    vo.setContent(comment.getContent());
+                    vo.setStatus(comment.getStatus());
+                    vo.setCreatedAt(comment.getCreatedAt());
+
+                    User user = userMapper.selectById(comment.getUserId());
+                    if (user != null) {
+                        UserVO author = new UserVO();
+                        author.setId(user.getId());
+                        author.setUsername(user.getUsername());
+                        author.setNickname(user.getNickname());
+                        vo.setAuthor(author);
                     }
                     return vo;
                 })

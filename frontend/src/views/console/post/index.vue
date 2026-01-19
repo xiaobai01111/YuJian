@@ -143,14 +143,14 @@
     </div>
 
     <!-- Publish Modal -->
-    <PostPublishModal v-model="showPublish" @success="handlePublishSuccess" />
+    <PostPublishModal v-model="showPublish" :use-console-api="true" @success="handlePublishSuccess" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getConsolePostList, resolvePost, deletePost, type PostVO } from '@/api/post'
+import { getConsolePostList, resolveConsolePost, deleteConsolePost, type PostVO } from '@/api/post'
 import { BOARD_OPTIONS, getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
@@ -236,7 +236,7 @@ const handlePublishSuccess = () => {
 const handleResolve = async (post: PostVO) => {
   if (!confirm(`确认将帖子「${post.title}」标记为已解决？`)) return
   try {
-    await resolvePost(post.id)
+    await resolveConsolePost(post.id)
     await loadPosts()
   } catch (error: any) {
     alert(error?.message || '操作失败')
@@ -246,7 +246,7 @@ const handleResolve = async (post: PostVO) => {
 const handleDelete = async (post: PostVO) => {
   if (!confirm(`确认删除帖子「${post.title}」？`)) return
   try {
-    await deletePost(post.id)
+    await deleteConsolePost(post.id)
     await loadPosts()
   } catch (error: any) {
     alert(error?.message || '删除失败')

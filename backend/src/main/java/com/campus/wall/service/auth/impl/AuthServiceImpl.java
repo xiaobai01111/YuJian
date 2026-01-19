@@ -19,8 +19,11 @@ import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.auth.AuthService;
 import com.campus.wall.service.system.AuthRuleService;
+import com.campus.wall.service.system.LoginLogService;
 import com.campus.wall.vo.auth.LoginVO;
 import com.campus.wall.vo.auth.UserInfoVO;
+import com.campus.wall.util.IpUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +44,8 @@ public class AuthServiceImpl implements AuthService {
     private final IdentityVerificationMapper verificationMapper;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
     private final AuthRuleService authRuleService;
+    private final LoginLogService loginLogService;
+    private final HttpServletRequest request;
 
     private static final String EMAIL_CODE_PREFIX = "campus:verify:email:";
     private static final long EMAIL_CODE_TTL = 5 * 60; // 5分钟
@@ -86,16 +91,19 @@ public class AuthServiceImpl implements AuthService {
             new LambdaQueryWrapper<User>().eq(User::getUsername, dto.getUsername())
         );
         if (user == null) {
+            recordLoginLog(null, dto.getUsername(), 1, ResultCode.LOGIN_FAILED.getMessage());
             throw new BusinessException(ResultCode.LOGIN_FAILED);
         }
 
         // 验证密码
         if (!BCrypt.checkpw(dto.getPassword(), user.getPassword())) {
+            recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.LOGIN_FAILED.getMessage());
             throw new BusinessException(ResultCode.LOGIN_FAILED);
         }
 
         // 检查封禁状态
         if (user.getStatus() == 1) {
+            recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.USER_BANNED.getMessage());
             throw new BusinessException(ResultCode.USER_BANNED);
         }
 
@@ -103,6 +111,7 @@ public class AuthServiceImpl implements AuthService {
         if (user.getDeptId() != null) {
             var dept = deptMapper.selectById(user.getDeptId());
             if (dept != null && dept.getStatus() != null && dept.getStatus() == 1) {
+                recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.DEPT_DISABLED.getMessage());
                 throw new BusinessException(ResultCode.DEPT_DISABLED);
             }
         }
@@ -119,6 +128,7 @@ public class AuthServiceImpl implements AuthService {
         vo.setToken(StpUtil.getTokenValue());
         vo.setUserInfo(buildUserInfoVO(user));
 
+        recordLoginLog(user.getId(), user.getUsername(), 0, "登录成功");
         return vo;
     }
 
@@ -221,6 +231,16 @@ public class AuthServiceImpl implements AuthService {
 
         // 删除验证码
         redisTemplate.delete(key);
+    }
+
+    private void recordLoginLog(Long userId, String username, Integer status, String msg) {
+        try {
+            String ipaddr = request != null ? IpUtil.getClientIp(request) : null;
+            String userAgent = request != null ? request.getHeader("User-Agent") : null;
+            loginLogService.recordLogin(userId, username, status, msg, ipaddr, userAgent);
+        } catch (Exception e) {
+            // 记录登录日志失败不影响登录流程
+        }
     }
 
     @Override

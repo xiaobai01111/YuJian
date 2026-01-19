@@ -628,7 +628,7 @@ const openMenuModal = async (role: RoleVO) => {
   }
   try {
     const res: any = await getRoleMenuIds(role.id)
-    selectedMenuIds.value = res || []
+    selectedMenuIds.value = normalizeMenuSelection(menuTree.value, res || [])
   } catch (error: any) {
     console.error(error)
     alert(error?.response?.data?.message || '获取角色菜单失败')
@@ -735,13 +735,93 @@ const toggleDeptSelection = (target: number[] | undefined, id: number, checked: 
   }
 }
 
-const toggleMenuSelection = (id: number) => {
-  const index = selectedMenuIds.value.indexOf(id)
-  if (index === -1) {
-    selectedMenuIds.value.push(id)
-  } else {
-    selectedMenuIds.value.splice(index, 1)
+const findMenuPath = (menus: MenuVO[], targetId: number, path: MenuVO[] = []): MenuVO[] | null => {
+  for (const menu of menus) {
+    const nextPath = [...path, menu]
+    if (menu.id === targetId) {
+      return nextPath
+    }
+    if (menu.children && menu.children.length > 0) {
+      const found = findMenuPath(menu.children, targetId, nextPath)
+      if (found) {
+        return found
+      }
+    }
   }
+  return null
+}
+
+const collectMenuIds = (menu: MenuVO): number[] => {
+  const ids = [menu.id]
+  if (menu.children && menu.children.length > 0) {
+    for (const child of menu.children) {
+      ids.push(...collectMenuIds(child))
+    }
+  }
+  return ids
+}
+
+const hasSelectedDescendant = (menu: MenuVO, selected: Set<number>): boolean => {
+  if (!menu.children || menu.children.length === 0) {
+    return false
+  }
+  for (const child of menu.children) {
+    if (selected.has(child.id) || hasSelectedDescendant(child, selected)) {
+      return true
+    }
+  }
+  return false
+}
+
+const normalizeMenuSelection = (menus: MenuVO[], selectedIds: number[]): number[] => {
+  const selected = new Set(selectedIds)
+  const walk = (menu: MenuVO): boolean => {
+    if (!menu.children || menu.children.length === 0) {
+      return selected.has(menu.id)
+    }
+    let childSelected = false
+    for (const child of menu.children) {
+      if (walk(child)) {
+        childSelected = true
+      }
+    }
+    if (childSelected) {
+      selected.add(menu.id)
+    }
+    return selected.has(menu.id) || childSelected
+  }
+  for (const menu of menus) {
+    walk(menu)
+  }
+  return Array.from(selected)
+}
+
+const toggleMenuSelection = (id: number) => {
+  const path = findMenuPath(menuTree.value, id) || []
+  const target = path.length > 0 ? path[path.length - 1] : null
+  const ids = target ? collectMenuIds(target) : [id]
+  const selected = new Set(selectedMenuIds.value)
+  const isSelected = selected.has(id)
+
+  if (isSelected) {
+    ids.forEach(menuId => selected.delete(menuId))
+  } else {
+    ids.forEach(menuId => selected.add(menuId))
+  }
+
+  // 同步父级勾选状态：有子级勾选则父级勾选，全部取消则父级取消
+  if (path.length > 1) {
+    const parents = path.slice(0, -1)
+    for (const parent of parents) {
+      if (hasSelectedDescendant(parent, selected)) {
+        selected.add(parent.id)
+      } else {
+        selected.delete(parent.id)
+      }
+    }
+  }
+
+  selectedMenuIds.value = Array.from(selected)
 }
 
 const submitMenuPerms = async () => {

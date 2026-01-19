@@ -2,7 +2,9 @@ package com.campus.wall.service.post;
 
 import com.campus.wall.common.PageResult;
 import com.campus.wall.dto.post.CommentCreateDTO;
+import com.campus.wall.dto.post.CommentQueryDTO;
 import com.campus.wall.vo.post.CommentVO;
+import com.campus.wall.vo.post.CommentConsoleVO;
 
 import java.util.List;
 
@@ -22,6 +24,11 @@ public interface CommentService {
     void deleteComment(Long commentId);
 
     /**
+     * 管理端删除评论
+     */
+    void deleteCommentByAdmin(Long commentId);
+
+    /**
      * 获取帖子的评论列表（树形结构）
      */
     List<CommentVO> getPostComments(Long postId);
@@ -30,4 +37,9 @@ public interface CommentService {
      * 分页获取帖子评论
      */
     PageResult<CommentVO> getPostCommentsPage(Long postId, int page, int size);
+
+    /**
+     * 控制台评论列表
+     */
+    PageResult<CommentConsoleVO> queryCommentsForConsole(CommentQueryDTO query);
 }

@@ -106,13 +106,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
-import { createPost, type PostCreateDTO } from '@/api/post'
+import { createPost, createConsolePost, type PostCreateDTO } from '@/api/post'
 import { useUserStore } from '@/stores/user'
 import { BOARD_OPTIONS, normalizeBoardKeys } from '@/utils/boards'
 
 const props = defineProps<{
   modelValue: boolean
   defaultBoards?: string[]
+  useConsoleApi?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -208,7 +209,7 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    const res: any = await createPost(form)
+    const res: any = props.useConsoleApi ? await createConsolePost(form) : await createPost(form)
     const postId = typeof res === 'number' ? res : res?.id || res?.data?.id || 0
     emit('success', postId)
     close()

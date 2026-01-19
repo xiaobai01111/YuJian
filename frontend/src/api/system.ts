@@ -236,6 +236,47 @@ export function downloadUserTemplate() {
     return request.get('/api/v1/console/users/template', { responseType: 'blob' })
 }
 
+// --- Login Log ---
+export interface LoginLogVO {
+    id: number
+    userId?: number
+    username?: string
+    ipaddr?: string
+    loginLocation?: string
+    browser?: string
+    os?: string
+    status: number
+    msg?: string
+    userAgent?: string
+    loginTime?: string
+}
+
+export interface LoginLogQuery {
+    page?: number
+    size?: number
+    username?: string
+    ipaddr?: string
+    status?: number
+    loginTimeStart?: string
+    loginTimeEnd?: string
+}
+
+export function getLoginLogList(params?: LoginLogQuery) {
+    return request.get('/api/v1/console/login-logs', { params })
+}
+
+export function deleteLoginLog(id: number) {
+    return request.delete(`/api/v1/console/login-logs/${id}`)
+}
+
+export function clearLoginLogs() {
+    return request.delete('/api/v1/console/login-logs/clear')
+}
+
+export function exportLoginLogs(params?: LoginLogQuery) {
+    return request.get('/api/v1/console/login-logs/export', { params, responseType: 'blob' })
+}
+
 // --- Role ---
 export function getRoleList(params?: any) {
     return request.get('/api/v1/system/roles/list', { params })
@@ -454,6 +495,9 @@ export interface DashboardStats {
     noticePinned?: number
     noticeExpiringSoon?: number
     sensitiveWords?: number
+    loginSuccessToday?: number
+    loginFailToday?: number
+    loginTotalToday?: number
 }
 
 export function getDashboardStats() {
@@ -484,4 +528,52 @@ export interface RecentNotice {
 
 export function getRecentNotices() {
     return request.get<RecentNotice[]>('/api/v1/console/statistics/recent-notices')
+}
+
+export interface RecentReport {
+    id: number
+    reason: string
+    status: number
+    createdAt: string
+    reporterName: string
+    postId: number
+}
+
+export function getRecentReports() {
+    return request.get<RecentReport[]>('/api/v1/console/statistics/recent-reports')
+}
+
+export interface RecentVerification {
+    id: number
+    status: number
+    createdAt: string
+    userId: number
+    nickname: string
+}
+
+export function getRecentVerifications() {
+    return request.get<RecentVerification[]>('/api/v1/console/statistics/recent-verifications')
+}
+
+export interface RecentOperLog {
+    id: number
+    operatorName: string | null
+    action: string
+    targetType: string
+    ipAddress: string | null
+    createdAt: string
+}
+
+export function getRecentOperLogs() {
+    return request.get<RecentOperLog[]>('/api/v1/console/statistics/recent-oper-logs')
+}
+
+export interface LoginLogTrendItem {
+    date: string
+    success: number
+    fail: number
+}
+
+export function getLoginLogTrend() {
+    return request.get<LoginLogTrendItem[]>('/api/v1/console/statistics/login-log-trend')
 }

@@ -19,6 +19,20 @@
         </div>
       </div>
 
+      <div class="flex flex-wrap gap-3 mb-4">
+        <input v-model="queryParams.username" class="input input-bordered input-sm" placeholder="用户名" />
+        <input v-model="queryParams.ipaddr" class="input input-bordered input-sm" placeholder="登录IP" />
+        <select v-model="queryParams.status" class="select select-bordered select-sm">
+          <option value="">全部状态</option>
+          <option value="0">成功</option>
+          <option value="1">失败</option>
+        </select>
+        <input type="date" v-model="queryParams.loginTimeStart" class="input input-bordered input-sm" />
+        <input type="date" v-model="queryParams.loginTimeEnd" class="input input-bordered input-sm" />
+        <button class="btn btn-sm btn-primary" @click="handleSearch">搜索</button>
+        <button class="btn btn-sm btn-ghost" @click="handleReset">重置</button>
+      </div>
+
       <div class="overflow-x-auto min-h-[400px]">
         <table class="table table-zebra">
           <thead>
@@ -66,8 +80,8 @@
       <div class="flex justify-end mt-4">
         <div class="join">
           <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
-          <button class="join-item btn btn-sm">Page {{ page }}</button>
-          <button class="join-item btn btn-sm" :disabled="logList.length < pageSize" @click="changePage(page + 1)">»</button>
+          <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
+          <button class="join-item btn btn-sm" :disabled="page >= totalPages" @click="changePage(page + 1)">»</button>
         </div>
       </div>
     </div>
@@ -75,24 +89,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-
-interface LoginLog {
-  id: number
-  username: string
-  ipaddr: string
-  loginLocation: string
-  browser: string
-  os: string
-  status: number
-  msg?: string
-  loginTime: string
-}
+import { computed, onMounted, reactive, ref } from 'vue'
+import { clearLoginLogs, deleteLoginLog, exportLoginLogs, getLoginLogList, type LoginLogVO } from '@/api/system'
 
 const loading = ref(false)
-const logList = ref<LoginLog[]>([])
+const logList = ref<LoginLogVO[]>([])
 const page = ref(1)
 const pageSize = ref(10)
+const total = ref(0)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const queryParams = reactive({
+  username: '',
+  ipaddr: '',
+  status: '',
+  loginTimeStart: '',
+  loginTimeEnd: ''
+})
 
 onMounted(() => {
   fetchData()
@@ -100,14 +112,27 @@ onMounted(() => {
 
 const fetchData = async () => {
   loading.value = true
-  setTimeout(() => {
-    logList.value = [
-      { id: 1, username: 'admin', ipaddr: '127.0.0.1', loginLocation: '内网IP', browser: 'Chrome', os: 'Windows 10', status: 0, loginTime: '2026-01-12 19:00:00' },
-      { id: 2, username: 'test', ipaddr: '192.168.1.100', loginLocation: '内网IP', browser: 'Firefox', os: 'macOS', status: 0, loginTime: '2026-01-12 18:30:00' },
-      { id: 3, username: 'user1', ipaddr: '10.0.0.50', loginLocation: '内网IP', browser: 'Safari', os: 'iOS', status: 1, loginTime: '2026-01-12 18:00:00' },
-    ]
+  try {
+    const params: any = {
+      page: page.value,
+      size: pageSize.value
+    }
+    if (queryParams.username) params.username = queryParams.username
+    if (queryParams.ipaddr) params.ipaddr = queryParams.ipaddr
+    if (queryParams.status !== '') params.status = Number(queryParams.status)
+    if (queryParams.loginTimeStart) params.loginTimeStart = queryParams.loginTimeStart
+    if (queryParams.loginTimeEnd) params.loginTimeEnd = queryParams.loginTimeEnd
+
+    const res = await getLoginLogList(params)
+    logList.value = res?.records || []
+    total.value = res?.total || 0
+  } catch (error: any) {
+    logList.value = []
+    total.value = 0
+    alert(error?.message || error?.response?.data?.message || '获取登录日志失败')
+  } finally {
     loading.value = false
-  }, 500)
+  }
 }
 
 const changePage = (p: number) => {
@@ -115,22 +140,59 @@ const changePage = (p: number) => {
   fetchData()
 }
 
-const handleDelete = async (_log: LoginLog) => {
-  if (!confirm(`确定要删除该登录日志吗？`)) return
+const handleSearch = () => {
+  page.value = 1
   fetchData()
+}
+
+const handleReset = () => {
+  queryParams.username = ''
+  queryParams.ipaddr = ''
+  queryParams.status = ''
+  queryParams.loginTimeStart = ''
+  queryParams.loginTimeEnd = ''
+  page.value = 1
+  fetchData()
+}
+
+const handleDelete = async (log: LoginLogVO) => {
+  if (!confirm(`确定要删除该登录日志吗？`)) return
+  try {
+    await deleteLoginLog(log.id)
+    fetchData()
+  } catch (error: any) {
+    alert(error?.message || error?.response?.data?.message || '删除失败')
+  }
 }
 
 const handleClear = async () => {
   if (!confirm('确定要清空所有登录日志吗？此操作不可恢复！')) return
-  logList.value = []
+  try {
+    await clearLoginLogs()
+    page.value = 1
+    fetchData()
+  } catch (error: any) {
+    alert(error?.message || error?.response?.data?.message || '清空失败')
+  }
 }
 
-const handleExport = () => {
-  alert('导出功能开发中...')
+const handleExport = async () => {
+  try {
+    const res = await exportLoginLogs()
+    const blob = new Blob([res as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '登录日志.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error: any) {
+    alert(error?.message || error?.response?.data?.message || '导出失败')
+  }
 }
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-'
-  return dateStr
+  return new Date(dateStr).toLocaleString()
 }
 </script>

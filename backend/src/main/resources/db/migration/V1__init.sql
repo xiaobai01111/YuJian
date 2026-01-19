@@ -115,6 +115,28 @@ CREATE INDEX idx_oper_log_target ON sys_oper_log(target_type, target_id);
 CREATE INDEX idx_oper_log_action ON sys_oper_log(action);
 CREATE INDEX idx_oper_log_created ON sys_oper_log(created_at);
 
+CREATE TABLE sys_login_log (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT,
+    username VARCHAR(50),
+    ipaddr VARCHAR(64),
+    login_location VARCHAR(100),
+    browser VARCHAR(100),
+    os VARCHAR(100),
+    status SMALLINT DEFAULT 0,
+    msg VARCHAR(255),
+    user_agent TEXT,
+    login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE sys_login_log IS '登录日志表';
+COMMENT ON COLUMN sys_login_log.status IS '状态：0-成功，1-失败';
+COMMENT ON COLUMN sys_login_log.login_time IS '登录时间';
+
+CREATE INDEX idx_login_log_username ON sys_login_log(username);
+CREATE INDEX idx_login_log_status ON sys_login_log(status);
+CREATE INDEX idx_login_log_time ON sys_login_log(login_time);
+
 CREATE TABLE sys_notice (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,

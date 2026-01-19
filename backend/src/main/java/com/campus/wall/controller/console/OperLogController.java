@@ -1,0 +1,136 @@
+package com.campus.wall.controller.console;
+
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.wall.common.PageResult;
+import com.campus.wall.common.R;
+import com.campus.wall.dto.system.OperLogQueryDTO;
+import com.campus.wall.entity.system.SysOperLog;
+import com.campus.wall.mapper.system.SysOperLogMapper;
+import com.campus.wall.vo.system.OperLogVO;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import cn.hutool.poi.excel.ExcelUtil;
+import cn.hutool.poi.excel.ExcelWriter;
+
+@RestController
+@RequestMapping("/api/v1/console/oper-logs")
+@RequiredArgsConstructor
+public class OperLogController {
+
+    private final SysOperLogMapper operLogMapper;
+
+    @SaCheckPermission("system:operlog:list")
+    @GetMapping
+    public R<PageResult<OperLogVO>> list(OperLogQueryDTO query) {
+        LambdaQueryWrapper<SysOperLog> wrapper = buildWrapper(query);
+        wrapper.orderByDesc(SysOperLog::getCreatedAt);
+        Page<SysOperLog> page = operLogMapper.selectPage(new Page<>(query.getPage(), query.getSize()), wrapper);
+        List<OperLogVO> records = page.getRecords().stream()
+            .map(this::toVO)
+            .collect(Collectors.toList());
+        return R.ok(PageResult.of(records, page.getTotal(), page.getSize(), page.getCurrent()));
+    }
+
+    @SaCheckPermission("system:operlog:delete")
+    @DeleteMapping("/{id}")
+    public R<Void> delete(@PathVariable Long id) {
+        operLogMapper.deleteById(id);
+        return R.ok();
+    }
+
+    @SaCheckPermission("system:operlog:clear")
+    @DeleteMapping("/clear")
+    public R<Void> clear() {
+        operLogMapper.delete(new LambdaQueryWrapper<SysOperLog>());
+        return R.ok();
+    }
+
+    @SaCheckPermission("system:operlog:export")
+    @GetMapping("/export")
+    public void export(OperLogQueryDTO query, HttpServletResponse response) {
+        LambdaQueryWrapper<SysOperLog> wrapper = buildWrapper(query);
+        wrapper.orderByDesc(SysOperLog::getCreatedAt);
+        List<SysOperLog> logs = operLogMapper.selectList(wrapper);
+
+        ExcelWriter writer = ExcelUtil.getWriter(true);
+        writer.addHeaderAlias("operatorName", "操作人");
+        writer.addHeaderAlias("targetType", "目标类型");
+        writer.addHeaderAlias("targetId", "目标ID");
+        writer.addHeaderAlias("action", "动作");
+        writer.addHeaderAlias("reason", "原因");
+        writer.addHeaderAlias("ipAddress", "IP地址");
+        writer.addHeaderAlias("createdAt", "操作时间");
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (SysOperLog log : logs) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("operatorName", log.getOperatorName());
+            row.put("targetType", log.getTargetType());
+            row.put("targetId", log.getTargetId());
+            row.put("action", log.getAction());
+            row.put("reason", log.getReason());
+            row.put("ipAddress", log.getIpAddress());
+            row.put("createdAt", log.getCreatedAt());
+            rows.add(row);
+        }
+        writer.write(rows, true);
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8");
+        try {
+            String fileName = URLEncoder.encode("操作日志.xlsx", StandardCharsets.UTF_8);
+            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+            writer.flush(response.getOutputStream(), true);
+            writer.close();
+        } catch (IOException e) {
+            throw new RuntimeException("导出失败");
+        }
+    }
+
+    private OperLogVO toVO(SysOperLog log) {
+        OperLogVO vo = new OperLogVO();
+        BeanUtils.copyProperties(log, vo);
+        return vo;
+    }
+
+    private LambdaQueryWrapper<SysOperLog> buildWrapper(OperLogQueryDTO query) {
+        LambdaQueryWrapper<SysOperLog> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(query.getOperatorName())) {
+            wrapper.like(SysOperLog::getOperatorName, query.getOperatorName());
+        }
+        if (StringUtils.hasText(query.getTargetType())) {
+            wrapper.eq(SysOperLog::getTargetType, query.getTargetType());
+        }
+        if (StringUtils.hasText(query.getAction())) {
+            wrapper.eq(SysOperLog::getAction, query.getAction());
+        }
+        if (StringUtils.hasText(query.getStartTime())) {
+            LocalDate start = LocalDate.parse(query.getStartTime());
+            wrapper.ge(SysOperLog::getCreatedAt, start.atStartOfDay());
+        }
+        if (StringUtils.hasText(query.getEndTime())) {
+            LocalDate end = LocalDate.parse(query.getEndTime());
+            wrapper.le(SysOperLog::getCreatedAt, end.plusDays(1).atStartOfDay().minusNanos(1));
+        }
+        return wrapper;
+    }
+}

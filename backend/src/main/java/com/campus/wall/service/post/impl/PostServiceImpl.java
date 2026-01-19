@@ -156,6 +156,12 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    public Long createPostByAdmin(PostCreateDTO dto) {
+        return createPost(dto);
+    }
+
+    @Override
+    @Transactional
     public void updatePost(Long postId, PostUpdateDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
         Post post = getPostOrThrow(postId);
@@ -224,6 +230,69 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    public void updatePostByAdmin(Long postId, PostUpdateDTO dto) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        Post post = getPostOrThrow(postId);
+
+        // 敏感词检测
+        if (dto.getTitle() != null && sensitiveWordService.containsSensitiveWord(dto.getTitle())) {
+            throw new BusinessException(ResultCode.CONTENT_CONTAINS_SENSITIVE_WORD, "标题包含敏感词");
+        }
+        if (dto.getContent() != null && sensitiveWordService.containsSensitiveWord(dto.getContent())) {
+            throw new BusinessException(ResultCode.CONTENT_CONTAINS_SENSITIVE_WORD, "内容包含敏感词");
+        }
+
+        // 更新字段
+        if (dto.getTitle() != null) {
+            post.setTitle(dto.getTitle());
+        }
+        if (dto.getContent() != null) {
+            post.setContent(dto.getContent());
+        }
+        if (dto.getCategory() != null) {
+            post.setCategory(dto.getCategory());
+        }
+        if (dto.getPrice() != null) {
+            post.setPrice(dto.getPrice());
+        }
+        if (dto.getLocation() != null) {
+            post.setLocation(dto.getLocation());
+        }
+        if (dto.getLostTime() != null) {
+            post.setLostTime(dto.getLostTime());
+        }
+        if (dto.getShowOnHome() != null) {
+            post.setShowOnHome(dto.getShowOnHome());
+        }
+
+        // 更新板块（可选）
+        if (dto.getBoards() != null) {
+            List<String> boards = BoardUtil.normalizeBoardKeys(dto.getBoards());
+            if (boards.isEmpty()) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "板块不能为空或无效");
+            }
+            if (boards.contains(BOARD_MARKET) && !creditService.canPostInMarket(userId)) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "信用分不足，无法在市集发帖（需要60分以上）");
+            }
+            if (boards.contains(BOARD_TREE_HOLE)) {
+                post.setIsAnonymous(true);
+            }
+            post.setBoard(boards.get(0));
+            replacePostBoards(postId, boards);
+        }
+
+        postMapper.updateById(post);
+
+        // 处理文件变更
+        if (dto.getAddFileIds() != null && !dto.getAddFileIds().isEmpty()) {
+            fileService.bindFiles(dto.getAddFileIds(), postId, "post");
+        }
+
+        log.info("管理员 {} 更新帖子: {}", userId, postId);
+    }
+
+    @Override
+    @Transactional
     public void deletePost(Long postId) {
         Long userId = StpUtil.getLoginIdAsLong();
         Post post = getPostOrThrow(postId);
@@ -239,6 +308,18 @@ public class PostServiceImpl implements PostService {
         postMapper.updateById(post);
 
         log.info("用户 {} 删除帖子: {}", userId, postId);
+    }
+
+    @Override
+    @Transactional
+    public void deletePostByAdmin(Long postId) {
+        Post post = getPostOrThrow(postId);
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            return;
+        }
+        post.setStatus(STATUS_DELETED);
+        postMapper.updateById(post);
+        log.info("控制台删除帖子: {}", postId);
     }
 
     @Override
@@ -560,6 +641,18 @@ public class PostServiceImpl implements PostService {
         postMapper.updateById(post);
 
         log.info("用户 {} 标记帖子 {} 为已解决", userId, postId);
+    }
+
+    @Override
+    @Transactional
+    public void markAsResolvedByAdmin(Long postId) {
+        Post post = getPostOrThrow(postId);
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法标记");
+        }
+        post.setStatus(STATUS_RESOLVED);
+        postMapper.updateById(post);
+        log.info("控制台标记帖子 {} 为已解决", postId);
     }
 
     @Override

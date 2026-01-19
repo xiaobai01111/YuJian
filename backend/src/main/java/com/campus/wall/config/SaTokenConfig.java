@@ -17,8 +17,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class SaTokenConfig implements WebMvcConfigurer {
 
-    @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+    @Value("${cors.allowed-origins:}")
     private String allowedOrigins;
+
+    @Value("${cors.allowed-origin-patterns:}")
+    private String allowedOriginPatterns;
 
     @Override
     public void addInterceptors(@NonNull InterceptorRegistry registry) {
@@ -49,7 +52,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                             "/api/v1/notices/public",
                             "/api/v1/notices/public/**",
                             // 公开查询接口（仅健康检查，其他需登录）
-                            "/api/health"
+                            "/api/health",
+                            "/api/v1/posts"
                     )
                     .check(r -> StpUtil.checkLogin());
         })).addPathPatterns("/**");
@@ -57,12 +61,30 @@ public class SaTokenConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(@NonNull CorsRegistry registry) {
-        registry.addMapping("/**")
-                .allowedOrigins(allowedOrigins.split(","))
+        var registration = registry.addMapping("/**")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("Authorization", "X-Trace-Id")
                 .allowCredentials(true)
                 .maxAge(3600);
+
+        String[] origins = splitAndTrim(allowedOrigins);
+        if (origins.length > 0) {
+            registration.allowedOrigins(origins);
+        }
+        String[] patterns = splitAndTrim(allowedOriginPatterns);
+        if (patterns.length > 0) {
+            registration.allowedOriginPatterns(patterns);
+        }
+    }
+
+    private String[] splitAndTrim(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return new String[0];
+        }
+        return java.util.Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(v -> !v.isEmpty())
+                .toArray(String[]::new);
     }
 }

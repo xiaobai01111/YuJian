@@ -90,3 +90,8 @@ logging:
 app:
   security:
     super-admin-role-key: ${SUPER_ADMIN_ROLE_KEY:admin}
+
+# CORS（生产环境建议配置为官网域名，例如 https://campus.example.com）
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}

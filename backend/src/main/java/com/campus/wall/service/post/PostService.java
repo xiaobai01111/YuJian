@@ -17,14 +17,29 @@ public interface PostService {
     Long createPost(PostCreateDTO dto);
 
     /**
+     * 控制台创建帖子
+     */
+    Long createPostByAdmin(PostCreateDTO dto);
+
+    /**
      * 更新帖子
      */
     void updatePost(Long postId, PostUpdateDTO dto);
 
     /**
+     * 控制台编辑帖子
+     */
+    void updatePostByAdmin(Long postId, PostUpdateDTO dto);
+
+    /**
      * 删除帖子
      */
     void deletePost(Long postId);
+
+    /**
+     * 控制台删除帖子
+     */
+    void deletePostByAdmin(Long postId);
 
     /**
      * 获取帖子详情
@@ -70,6 +85,11 @@ public interface PostService {
      * 标记帖子为已解决
      */
     void markAsResolved(Long postId);
+
+    /**
+     * 控制台标记已解决
+     */
+    void markAsResolvedByAdmin(Long postId);
 
     /**
      * 全文搜索帖子

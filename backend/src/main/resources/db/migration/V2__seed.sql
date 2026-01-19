@@ -27,7 +27,8 @@ INSERT INTO sys_user_roles (user_id, role_id) VALUES (1, 1);
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
     (1, 0, '仪表盘', '/console/dashboard', 'views/console/dashboard/index.vue', 1, 'dashboard', 1, TRUE, 0),
     (2, 0, '系统管理', '/console', 'Layout', 0, 'setting', 2, TRUE, 0),
-    (3, 0, '内容管理', '/console', 'Layout', 0, 'document', 3, TRUE, 0);
+    (3, 0, '内容管理', '/console', 'Layout', 0, 'document', 3, TRUE, 0),
+    (4, 0, '系统监控', '/console', 'Layout', 0, 'monitor', 4, TRUE, 0);
 
 -- 系统管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
@@ -47,6 +48,15 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (21, 3, '评论管理', '/console/comment', 'views/console/comment/index.vue', 1, 'message', 2, TRUE, 0),
     (22, 3, '举报管理', '/console/report', 'views/console/report/index.vue', 1, 'warning', 3, TRUE, 0),
     (23, 3, '身份审核', '/console/verification', 'views/console/verification/index.vue', 1, 'id-card', 4, TRUE, 0);
+
+-- 系统监控子菜单
+INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
+    (30, 4, '定时任务', '/console/monitor/job', 'views/console/monitor/job/index.vue', 1, 'timer', 1, TRUE, 0),
+    (31, 4, '在线用户', '/console/monitor/online', 'views/console/monitor/online/index.vue', 1, 'users', 2, TRUE, 0),
+    (32, 4, '服务监控', '/console/monitor/server', 'views/console/monitor/server/index.vue', 1, 'server', 3, TRUE, 0),
+    (33, 4, 'Redis监控', '/console/monitor/redis', 'views/console/monitor/redis/index.vue', 1, 'redis', 4, TRUE, 0),
+    (34, 4, '数据缓存', '/console/monitor/cache', 'views/console/monitor/cache/index.vue', 1, 'cache', 5, TRUE, 0),
+    (35, 4, '阻止名单', '/console/monitor/blocklist', 'views/console/monitor/blocklist/index.vue', 1, 'block', 6, TRUE, 0);
 
 -- 按钮权限
 INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, status) VALUES
@@ -87,7 +97,33 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (154, 15, '下线公告', 'system:notice:offline', 2, 5, TRUE, 0),
     (155, 15, '删除公告', 'system:notice:delete', 2, 6, TRUE, 0),
 
+    (160, 17, '查询操作日志', 'system:operlog:list', 2, 1, TRUE, 0),
+    (161, 17, '删除操作日志', 'system:operlog:delete', 2, 2, TRUE, 0),
+    (162, 17, '清空操作日志', 'system:operlog:clear', 2, 3, TRUE, 0),
+    (163, 17, '导出操作日志', 'system:operlog:export', 2, 4, TRUE, 0),
+
+    (170, 16, '查询登录日志', 'system:loginlog:list', 2, 1, TRUE, 0),
+    (171, 16, '删除登录日志', 'system:loginlog:delete', 2, 2, TRUE, 0),
+    (172, 16, '清空登录日志', 'system:loginlog:clear', 2, 3, TRUE, 0),
+    (173, 16, '导出登录日志', 'system:loginlog:export', 2, 4, TRUE, 0),
+
+    (180, 18, '编辑资料', 'system:profile:edit', 2, 1, TRUE, 0),
+    (181, 18, '修改密码', 'system:profile:password', 2, 2, TRUE, 0),
+
+    (190, 1, '仪表盘-用户', 'system:dashboard:user', 2, 1, TRUE, 0),
+    (191, 1, '仪表盘-帖子', 'system:dashboard:post', 2, 2, TRUE, 0),
+    (192, 1, '仪表盘-公告', 'system:dashboard:notice', 2, 3, TRUE, 0),
+    (193, 1, '仪表盘-运维', 'system:dashboard:ops', 2, 4, TRUE, 0),
+    (194, 1, '仪表盘-登录', 'system:dashboard:login', 2, 5, TRUE, 0),
+    (195, 1, '仪表盘-操作日志', 'system:dashboard:operlog', 2, 6, TRUE, 0),
+    (196, 1, '仪表盘-举报', 'system:dashboard:report', 2, 7, TRUE, 0),
+    (197, 1, '仪表盘-审核', 'system:dashboard:verify', 2, 8, TRUE, 0),
+
     (200, 20, '查询帖子', 'content:post:list', 2, 1, TRUE, 0),
+    (201, 20, '新增帖子', 'content:post:add', 2, 2, TRUE, 0),
+    (202, 20, '编辑帖子', 'content:post:edit', 2, 3, TRUE, 0),
+    (203, 20, '删除帖子', 'content:post:delete', 2, 4, TRUE, 0),
+    (204, 20, '标记已解决', 'content:post:resolve', 2, 5, TRUE, 0),
 
     (210, 21, '查询评论', 'content:comment:list', 2, 1, TRUE, 0),
     (211, 21, '删除评论', 'content:comment:delete', 2, 2, TRUE, 0),

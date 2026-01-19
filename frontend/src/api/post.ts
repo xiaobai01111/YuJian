@@ -76,6 +76,10 @@ export function createPost(data: PostCreateDTO) {
     return request.post('/api/v1/posts', data)
 }
 
+export function createConsolePost(data: PostCreateDTO) {
+    return request.post('/api/v1/console/posts', data)
+}
+
 export function updatePost(id: number, data: any) {
     return request.put(`/api/v1/posts/${id}`, data)
 }
@@ -102,6 +106,14 @@ export function unbookmarkPost(id: number) {
 
 export function resolvePost(id: number) {
     return request.put(`/api/v1/posts/${id}/resolve`)
+}
+
+export function deleteConsolePost(id: number) {
+    return request.delete(`/api/v1/console/posts/${id}`)
+}
+
+export function resolveConsolePost(id: number) {
+    return request.put(`/api/v1/console/posts/${id}/resolve`)
 }
 
 export function searchPosts(params: { keyword: string; board?: string; page?: number; size?: number }) {

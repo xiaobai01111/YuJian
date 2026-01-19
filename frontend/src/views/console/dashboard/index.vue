@@ -104,34 +104,32 @@
         </div>
       </div>
 
-      <!-- Quick Actions -->
       <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
-          <h2 class="card-title mb-4">快捷操作</h2>
-          <div class="grid grid-cols-2 gap-4">
-            <button class="btn btn-outline btn-primary h-24 flex flex-col gap-2" v-permission="['system:notice:add']">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-              发布公告
-            </button>
-            <button class="btn btn-outline h-24 flex flex-col gap-2" v-permission="['content:verification:list']">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              审核日志
-            </button>
-            <button class="btn btn-outline h-24 flex flex-col gap-2" v-permission="['system:config:edit']">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-              系统设置
-            </button>
-            <button class="btn btn-outline text-error h-24 flex flex-col gap-2" v-permission="['system:cache:clear']">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              清理缓存
-            </button>
-          </div>
+          <h2 class="card-title mb-4">最新公告</h2>
+          <div v-if="!canNotice" class="py-8 text-center text-slate-400">无权限查看</div>
+          <div v-else-if="recentNoticesLoading" class="py-8 text-center text-slate-400">加载中...</div>
+          <div v-else-if="recentNotices.length === 0" class="py-8 text-center text-slate-400">暂无公告</div>
+          <ul v-else class="space-y-2 text-sm">
+            <li
+              v-for="notice in recentNotices"
+              :key="notice.id"
+              class="flex items-center justify-between gap-3 px-2 py-2 rounded-lg hover:bg-base-200/40 cursor-pointer transition-colors"
+              @click="openNoticeDetail(notice.id)"
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <span v-if="notice.isPinned" class="badge badge-xs badge-warning">置顶</span>
+                <span class="truncate">{{ notice.title }}</span>
+              </div>
+              <span class="text-slate-400 whitespace-nowrap">{{ formatRelativeTime(notice.publishedAt) }}</span>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
 
     <!-- Ops Overview -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div v-if="canNotice" class="card bg-base-100 shadow-xl">
         <div class="card-body">
           <div class="flex items-center justify-between mb-4">
@@ -161,20 +159,6 @@
             </div>
           </div>
 
-          <div class="mt-6">
-            <div class="text-sm font-medium mb-2">最新公告</div>
-            <div v-if="recentNoticesLoading" class="py-4 text-center text-slate-400">加载中...</div>
-            <div v-else-if="recentNotices.length === 0" class="py-4 text-center text-slate-400">暂无公告</div>
-            <ul v-else class="space-y-2">
-              <li v-for="notice in recentNotices" :key="notice.id" class="flex items-center justify-between text-sm">
-                <div class="flex items-center gap-2">
-                  <span v-if="notice.isPinned" class="badge badge-xs badge-warning">置顶</span>
-                  <span class="truncate max-w-[240px]">{{ notice.title }}</span>
-                </div>
-                <span class="text-slate-400">{{ formatRelativeTime(notice.publishedAt) }}</span>
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
 
@@ -197,13 +181,123 @@
           </div>
         </div>
       </div>
+
+      <div v-if="canLoginLog" class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title mb-4">登录概览</h2>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="flex justify-between">
+              <span class="text-slate-500">今日成功</span>
+              <span class="font-medium">{{ stats.loginSuccessToday ?? 0 }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">今日失败</span>
+              <span class="font-medium">{{ stats.loginFailToday ?? 0 }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">今日总计</span>
+              <span class="font-medium">{{ stats.loginTotalToday ?? 0 }}</span>
+            </div>
+          </div>
+          <div class="mt-4">
+            <div class="text-xs text-slate-400 mb-2">近7天趋势</div>
+            <div v-if="loginTrendLoading" class="text-xs text-slate-400">加载中...</div>
+            <div v-else-if="loginTrend.length === 0" class="text-xs text-slate-400">暂无数据</div>
+            <div v-else class="space-y-1 text-xs">
+              <div v-for="item in loginTrend" :key="item.date" class="flex items-center justify-between">
+                <span class="text-slate-500">{{ item.date }}</span>
+                <span class="text-success">✔ {{ item.success }}</span>
+                <span class="text-error">✖ {{ item.fail }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ops Lists -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div v-if="canReport" class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title mb-4">最新举报</h2>
+          <div v-if="recentReportsLoading" class="py-4 text-center text-slate-400">加载中...</div>
+          <div v-else-if="recentReports.length === 0" class="py-4 text-center text-slate-400">暂无举报</div>
+          <ul v-else class="space-y-3 text-sm">
+            <li v-for="report in recentReports" :key="report.id" class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-medium truncate">#{{ report.id }} {{ report.reporterName || '未知用户' }}</div>
+                <div class="text-slate-400 truncate">原因：{{ report.reason }}</div>
+              </div>
+              <span class="text-slate-400 whitespace-nowrap">{{ formatRelativeTime(report.createdAt) }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div v-if="canVerify" class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title mb-4">最新审核</h2>
+          <div v-if="recentVerificationsLoading" class="py-4 text-center text-slate-400">加载中...</div>
+          <div v-else-if="recentVerifications.length === 0" class="py-4 text-center text-slate-400">暂无审核</div>
+          <ul v-else class="space-y-3 text-sm">
+            <li v-for="item in recentVerifications" :key="item.id" class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-medium truncate">#{{ item.id }} {{ item.nickname || '未知用户' }}</div>
+                <div class="text-slate-400 truncate">待审核</div>
+              </div>
+              <span class="text-slate-400 whitespace-nowrap">{{ formatRelativeTime(item.createdAt) }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div v-if="canOperLog" class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title mb-4">最近操作日志</h2>
+          <div v-if="recentOperLogsLoading" class="py-4 text-center text-slate-400">加载中...</div>
+          <div v-else-if="recentOperLogs.length === 0" class="py-4 text-center text-slate-400">暂无日志</div>
+          <ul v-else class="space-y-3 text-sm">
+            <li v-for="log in recentOperLogs" :key="log.id" class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-medium truncate">#{{ log.id }} {{ log.operatorName || '系统' }}</div>
+                <div class="text-slate-400 truncate">{{ log.targetType }} / {{ log.action }}</div>
+              </div>
+              <span class="text-slate-400 whitespace-nowrap">{{ formatRelativeTime(log.createdAt) }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- Notice Detail Modal -->
+  <dialog class="modal" :class="{ 'modal-open': showNoticeDetail }">
+    <div class="modal-box max-w-2xl border-0 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span v-if="noticeDetail?.isPinned" class="badge badge-error">置顶</span>
+          <h3 class="font-bold text-lg">{{ noticeDetail?.title }}</h3>
+        </div>
+        <button class="btn btn-sm btn-circle btn-ghost" @click="showNoticeDetail = false">✕</button>
+      </div>
+      <div class="text-xs text-slate-400 mb-4">
+        发布时间：{{ noticeDetail?.publishedAt ? formatRelativeTime(noticeDetail.publishedAt) : '-' }}
+        <span v-if="noticeDetail?.createdByName" class="ml-4">发布者：{{ noticeDetail?.createdByName }}</span>
+      </div>
+      <div class="prose prose-sm max-w-none whitespace-pre-wrap text-slate-700">
+        {{ noticeDetail?.content }}
+      </div>
+      <div class="modal-action">
+        <button class="btn btn-sm" @click="showNoticeDetail = false">关闭</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop" @click="showNoticeDetail = false"><button>close</button></form>
+  </dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getDashboardStats, getRecentActivities, getRecentNotices, type DashboardStats, type RecentActivity, type RecentNotice } from '@/api/system'
+import { getDashboardStats, getRecentActivities, getRecentNotices, getRecentReports, getRecentVerifications, getRecentOperLogs, getNoticeDetail, getLoginLogTrend, type DashboardStats, type RecentActivity, type RecentNotice, type RecentReport, type RecentVerification, type RecentOperLog, type NoticeVO, type LoginLogTrendItem } from '@/api/system'
 import { formatRelativeTime } from '@/utils/time'
 import { usePermissionStore } from '@/stores/permission'
 
@@ -212,6 +306,16 @@ const activitiesLoading = ref(true)
 const activities = ref<RecentActivity[]>([])
 const recentNoticesLoading = ref(false)
 const recentNotices = ref<RecentNotice[]>([])
+const recentReportsLoading = ref(false)
+const recentReports = ref<RecentReport[]>([])
+const recentVerificationsLoading = ref(false)
+const recentVerifications = ref<RecentVerification[]>([])
+const recentOperLogsLoading = ref(false)
+const recentOperLogs = ref<RecentOperLog[]>([])
+const loginTrendLoading = ref(false)
+const loginTrend = ref<LoginLogTrendItem[]>([])
+const showNoticeDetail = ref(false)
+const noticeDetail = ref<NoticeVO | null>(null)
 const stats = reactive<DashboardStats>({
   totalUsers: 0,
   todayNewUsers: 0,
@@ -219,16 +323,21 @@ const stats = reactive<DashboardStats>({
   todayPosts: 0,
   yesterdayPosts: 0,
   postGrowth: 0,
-  userGrowth: 0
+  userGrowth: 0,
+  loginSuccessToday: 0,
+  loginFailToday: 0,
+  loginTotalToday: 0
 })
 
 const permissionStore = usePermissionStore()
-const canUserStats = computed(() => permissionStore.hasPermission('system:user:list'))
-const canPostStats = computed(() => permissionStore.hasPermission('content:post:list'))
-const canNotice = computed(() => permissionStore.hasPermission('system:notice:list'))
-const canVerify = computed(() => permissionStore.hasPermission('content:verification:list'))
-const canReport = computed(() => permissionStore.hasPermission('content:report:list'))
-const canSensitive = computed(() => permissionStore.hasPermission('system:sensitive-word:list'))
+const canUserStats = computed(() => permissionStore.hasPermission('system:dashboard:user'))
+const canPostStats = computed(() => permissionStore.hasPermission('system:dashboard:post'))
+const canNotice = computed(() => permissionStore.hasPermission('system:dashboard:notice'))
+const canVerify = computed(() => permissionStore.hasPermission('system:dashboard:verify'))
+const canReport = computed(() => permissionStore.hasPermission('system:dashboard:report'))
+const canSensitive = computed(() => permissionStore.hasPermission('system:dashboard:ops'))
+const canOperLog = computed(() => permissionStore.hasPermission('system:dashboard:operlog'))
+const canLoginLog = computed(() => permissionStore.hasPermission('system:dashboard:login'))
 
 const fetchStats = async () => {
   loading.value = true
@@ -274,6 +383,81 @@ const fetchRecentNotices = async () => {
   }
 }
 
+const fetchRecentReports = async () => {
+  if (!canReport.value) {
+    recentReports.value = []
+    return
+  }
+  recentReportsLoading.value = true
+  try {
+    const res: any = await getRecentReports()
+    recentReports.value = res || []
+  } catch (error) {
+    console.error('Failed to fetch recent reports', error)
+  } finally {
+    recentReportsLoading.value = false
+  }
+}
+
+const fetchRecentVerifications = async () => {
+  if (!canVerify.value) {
+    recentVerifications.value = []
+    return
+  }
+  recentVerificationsLoading.value = true
+  try {
+    const res: any = await getRecentVerifications()
+    recentVerifications.value = res || []
+  } catch (error) {
+    console.error('Failed to fetch recent verifications', error)
+  } finally {
+    recentVerificationsLoading.value = false
+  }
+}
+
+const fetchRecentOperLogs = async () => {
+  if (!canOperLog.value) {
+    recentOperLogs.value = []
+    return
+  }
+  recentOperLogsLoading.value = true
+  try {
+    const res: any = await getRecentOperLogs()
+    recentOperLogs.value = res || []
+  } catch (error) {
+    console.error('Failed to fetch recent oper logs', error)
+  } finally {
+    recentOperLogsLoading.value = false
+  }
+}
+
+const fetchLoginTrend = async () => {
+  if (!canLoginLog.value) {
+    loginTrend.value = []
+    return
+  }
+  loginTrendLoading.value = true
+  try {
+    const res: any = await getLoginLogTrend()
+    loginTrend.value = res || []
+  } catch (error) {
+    console.error('Failed to fetch login trend', error)
+  } finally {
+    loginTrendLoading.value = false
+  }
+}
+
+const openNoticeDetail = async (noticeId: number) => {
+  if (!canNotice.value) return
+  try {
+    const res: any = await getNoticeDetail(noticeId)
+    noticeDetail.value = res || null
+    showNoticeDetail.value = true
+  } catch (error) {
+    console.error('Failed to fetch notice detail', error)
+  }
+}
+
 const getStatusBadge = (status: number) => {
   switch (status) {
     case 0: return { class: 'badge-success', text: '正常' }
@@ -287,5 +471,9 @@ onMounted(() => {
   fetchStats()
   fetchActivities()
   fetchRecentNotices()
+  fetchRecentReports()
+  fetchRecentVerifications()
+  fetchRecentOperLogs()
+  fetchLoginTrend()
 })
 </script>

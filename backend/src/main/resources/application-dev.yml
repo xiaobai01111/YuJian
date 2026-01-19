@@ -37,3 +37,7 @@ sa-token:
 app:
   security:
     super-admin-role-key: admin
+
+# CORS（开发环境）
+cors:
+  allowed-origins: http://localhost:5173,http://10.253.247.250:5173
