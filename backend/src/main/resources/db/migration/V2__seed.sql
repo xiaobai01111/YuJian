@@ -107,6 +107,11 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (172, 16, '清空登录日志', 'system:loginlog:clear', 2, 3, TRUE, 0),
     (173, 16, '导出登录日志', 'system:loginlog:export', 2, 4, TRUE, 0),
 
+    (240, 31, '查询在线用户', 'system:online:list', 2, 1, TRUE, 0),
+    (241, 31, '强制下线', 'system:online:kickout', 2, 2, TRUE, 0),
+    (250, 32, '查看服务监控', 'system:monitor:server', 2, 1, TRUE, 0),
+    (260, 33, '查看Redis监控', 'system:monitor:redis', 2, 1, TRUE, 0),
+
     (180, 18, '编辑资料', 'system:profile:edit', 2, 1, TRUE, 0),
     (181, 18, '修改密码', 'system:profile:password', 2, 2, TRUE, 0),
 

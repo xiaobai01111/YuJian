@@ -11,6 +11,7 @@ import com.campus.wall.dto.auth.*;
 import com.campus.wall.entity.user.IdentityVerification;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.constant.SecurityConstants;
+import com.campus.wall.constant.CacheConstants;
 import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.mapper.system.SysDeptMapper;
@@ -118,6 +119,8 @@ public class AuthServiceImpl implements AuthService {
 
         // 执行登录
         StpUtil.login(user.getId());
+        bindTokenSession(user);
+        recordOnlineToken();
 
         // 更新登录时间
         user.setLoginDate(java.time.LocalDateTime.now());
@@ -134,6 +137,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void logout() {
+        clearOnlineToken();
         StpUtil.logout();
     }
 
@@ -240,6 +244,39 @@ public class AuthServiceImpl implements AuthService {
             loginLogService.recordLogin(userId, username, status, msg, ipaddr, userAgent);
         } catch (Exception e) {
             // 记录登录日志失败不影响登录流程
+        }
+    }
+
+    private void bindTokenSession(User user) {
+        var tokenSession = StpUtil.getTokenSession();
+        tokenSession.set(SecurityConstants.TOKEN_SESSION_USERNAME, user.getUsername());
+        tokenSession.set(SecurityConstants.TOKEN_SESSION_NICKNAME, user.getNickname());
+        String ipaddr = request != null ? IpUtil.getClientIp(request) : null;
+        String userAgent = request != null ? request.getHeader("User-Agent") : null;
+        tokenSession.set(SecurityConstants.TOKEN_SESSION_IP, ipaddr);
+        tokenSession.set(SecurityConstants.TOKEN_SESSION_USER_AGENT, userAgent);
+        tokenSession.set(SecurityConstants.TOKEN_SESSION_LOGIN_TIME, java.time.LocalDateTime.now().toString());
+    }
+
+    private void recordOnlineToken() {
+        try {
+            String token = StpUtil.getTokenValue();
+            if (token != null && !token.isBlank()) {
+                redisTemplate.opsForSet().add(CacheConstants.ONLINE_TOKENS, token);
+            }
+        } catch (Exception e) {
+            // 在线列表写入失败不影响登录
+        }
+    }
+
+    private void clearOnlineToken() {
+        try {
+            String token = StpUtil.getTokenValue();
+            if (token != null && !token.isBlank()) {
+                redisTemplate.opsForSet().remove(CacheConstants.ONLINE_TOKENS, token);
+            }
+        } catch (Exception e) {
+            // 在线列表清理失败不影响登出
         }
     }
 

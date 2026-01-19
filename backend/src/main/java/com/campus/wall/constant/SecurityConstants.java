@@ -63,6 +63,31 @@ public final class SecurityConstants {
     public static final String ALL_PERMISSION = "*";
 
     /**
+     * Token 会话：用户名
+     */
+    public static final String TOKEN_SESSION_USERNAME = "token_session_username";
+
+    /**
+     * Token 会话：昵称
+     */
+    public static final String TOKEN_SESSION_NICKNAME = "token_session_nickname";
+
+    /**
+     * Token 会话：登录 IP
+     */
+    public static final String TOKEN_SESSION_IP = "token_session_ip";
+
+    /**
+     * Token 会话：用户代理
+     */
+    public static final String TOKEN_SESSION_USER_AGENT = "token_session_user_agent";
+
+    /**
+     * Token 会话：登录时间
+     */
+    public static final String TOKEN_SESSION_LOGIN_TIME = "token_session_login_time";
+
+    /**
      * 市集发帖最低信用分
      */
     public static final int MARKET_MIN_CREDIT_SCORE = 60;

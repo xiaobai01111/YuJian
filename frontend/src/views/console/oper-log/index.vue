@@ -19,39 +19,47 @@
         </div>
       </div>
 
+      <div class="flex flex-wrap gap-3 mb-4">
+        <input v-model="queryParams.operatorName" class="input input-bordered input-sm" placeholder="操作人" />
+        <input v-model="queryParams.targetType" class="input input-bordered input-sm" placeholder="目标类型" />
+        <input v-model="queryParams.action" class="input input-bordered input-sm" placeholder="动作" />
+        <input type="date" v-model="queryParams.startTime" class="input input-bordered input-sm" />
+        <input type="date" v-model="queryParams.endTime" class="input input-bordered input-sm" />
+        <button class="btn btn-sm btn-primary" @click="handleSearch">搜索</button>
+        <button class="btn btn-sm btn-ghost" @click="handleReset">重置</button>
+      </div>
+
       <div class="overflow-x-auto min-h-[400px]">
         <table class="table table-zebra">
           <thead>
             <tr>
               <th>日志编号</th>
-              <th>操作模块</th>
-              <th>操作类型</th>
-              <th>操作人员</th>
+              <th>操作人</th>
+              <th>目标类型</th>
+              <th>动作</th>
               <th>操作IP</th>
-              <th>状态</th>
               <th>操作时间</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="8" class="text-center py-4">加载中...</td>
+              <td colspan="7" class="text-center py-4">加载中...</td>
             </tr>
             <tr v-else-if="logList.length === 0">
-              <td colspan="8" class="text-center py-4">暂无数据</td>
+              <td colspan="7" class="text-center py-4">暂无数据</td>
             </tr>
             <tr v-else v-for="log in logList" :key="log.id">
               <td>{{ log.id }}</td>
-              <td>{{ log.title }}</td>
-              <td><span class="badge badge-info badge-sm">{{ log.businessType }}</span></td>
-              <td>{{ log.operName }}</td>
-              <td><span class="badge badge-ghost">{{ log.operIp }}</span></td>
+              <td>{{ log.operatorName || '系统' }}</td>
+              <td>{{ getTargetTypeLabel(log.targetType) }}</td>
               <td>
-                <span :class="['badge', log.status === 0 ? 'badge-success' : 'badge-error']">
-                  {{ log.status === 0 ? '成功' : '失败' }}
+                <span class="badge badge-info badge-sm" :title="log.action || '-'">
+                  {{ getActionLabel(log.action) }}
                 </span>
               </td>
-              <td class="text-sm text-slate-500">{{ formatDate(log.operTime) }}</td>
+              <td><span class="badge badge-ghost">{{ log.ipAddress || '-' }}</span></td>
+              <td class="text-sm text-slate-500">{{ formatDate(log.createdAt) }}</td>
               <td>
                 <div class="flex gap-2">
                   <button class="btn btn-ghost btn-xs text-info" @click="viewDetail(log)">详情</button>
@@ -67,8 +75,8 @@
       <div class="flex justify-end mt-4">
         <div class="join">
           <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
-          <button class="join-item btn btn-sm">Page {{ page }}</button>
-          <button class="join-item btn btn-sm" :disabled="logList.length < pageSize" @click="changePage(page + 1)">»</button>
+          <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
+          <button class="join-item btn btn-sm" :disabled="page >= totalPages" @click="changePage(page + 1)">»</button>
         </div>
       </div>
     </div>
@@ -78,16 +86,17 @@
       <div class="modal-box max-w-2xl">
         <h3 class="font-bold text-lg">操作日志详情</h3>
         <div class="mt-4 space-y-2 text-sm">
-          <p><span class="font-semibold">操作模块：</span>{{ currentLog?.title }}</p>
-          <p><span class="font-semibold">操作类型：</span>{{ currentLog?.businessType }}</p>
-          <p><span class="font-semibold">请求方法：</span>{{ currentLog?.method }}</p>
-          <p><span class="font-semibold">请求URL：</span>{{ currentLog?.operUrl }}</p>
-          <p><span class="font-semibold">操作人员：</span>{{ currentLog?.operName }}</p>
-          <p><span class="font-semibold">操作IP：</span>{{ currentLog?.operIp }}</p>
-          <p><span class="font-semibold">请求参数：</span></p>
-          <pre class="bg-base-200 p-2 rounded text-xs overflow-auto max-h-32">{{ currentLog?.operParam }}</pre>
-          <p><span class="font-semibold">返回结果：</span></p>
-          <pre class="bg-base-200 p-2 rounded text-xs overflow-auto max-h-32">{{ currentLog?.jsonResult }}</pre>
+          <p><span class="font-semibold">操作人：</span>{{ currentLog?.operatorName || '系统' }}</p>
+          <p><span class="font-semibold">目标类型：</span>{{ getTargetTypeLabel(currentLog?.targetType) }}</p>
+          <p><span class="font-semibold">目标ID：</span>{{ currentLog?.targetId || '-' }}</p>
+          <p><span class="font-semibold">动作：</span>{{ getActionLabel(currentLog?.action) }}</p>
+          <p><span class="font-semibold">原因：</span>{{ currentLog?.reason || '-' }}</p>
+          <p><span class="font-semibold">IP：</span>{{ currentLog?.ipAddress || '-' }}</p>
+          <p><span class="font-semibold">操作时间：</span>{{ formatDate(currentLog?.createdAt) }}</p>
+          <p><span class="font-semibold">变更前：</span></p>
+          <pre class="bg-base-200 p-2 rounded text-xs overflow-auto max-h-32">{{ formatJson(currentLog?.beforeValue) }}</pre>
+          <p><span class="font-semibold">变更后：</span></p>
+          <pre class="bg-base-200 p-2 rounded text-xs overflow-auto max-h-32">{{ formatJson(currentLog?.afterValue) }}</pre>
         </div>
         <div class="modal-action">
           <form method="dialog">
@@ -100,27 +109,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-
-interface OperLog {
-  id: number
-  title: string
-  businessType: string
-  method: string
-  operUrl: string
-  operName: string
-  operIp: string
-  operParam?: string
-  jsonResult?: string
-  status: number
-  operTime: string
-}
+import { ref, onMounted, computed, reactive } from 'vue'
+import { clearOperLogs, deleteOperLog, exportOperLogs, getOperLogList, type OperLogVO } from '@/api/system'
 
 const loading = ref(false)
-const logList = ref<OperLog[]>([])
+const logList = ref<OperLogVO[]>([])
 const page = ref(1)
 const pageSize = ref(10)
-const currentLog = ref<OperLog | null>(null)
+const total = ref(0)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const currentLog = ref<OperLogVO | null>(null)
+const queryParams = reactive({
+  operatorName: '',
+  targetType: '',
+  action: '',
+  startTime: '',
+  endTime: ''
+})
 
 onMounted(() => {
   fetchData()
@@ -128,14 +133,27 @@ onMounted(() => {
 
 const fetchData = async () => {
   loading.value = true
-  setTimeout(() => {
-    logList.value = [
-      { id: 1, title: '用户管理', businessType: '新增', method: 'POST', operUrl: '/v1/users', operName: 'admin', operIp: '127.0.0.1', operParam: '{"username":"test"}', jsonResult: '{"code":200}', status: 0, operTime: '2026-01-12 19:00:00' },
-      { id: 2, title: '角色管理', businessType: '修改', method: 'PUT', operUrl: '/v1/roles/1', operName: 'admin', operIp: '127.0.0.1', operParam: '{"roleName":"管理员"}', jsonResult: '{"code":200}', status: 0, operTime: '2026-01-12 18:30:00' },
-      { id: 3, title: '菜单管理', businessType: '删除', method: 'DELETE', operUrl: '/v1/menus/5', operName: 'admin', operIp: '127.0.0.1', operParam: '{}', jsonResult: '{"code":500}', status: 1, operTime: '2026-01-12 18:00:00' },
-    ]
+  try {
+    const params: any = {
+      page: page.value,
+      size: pageSize.value
+    }
+    if (queryParams.operatorName) params.operatorName = queryParams.operatorName
+    if (queryParams.targetType) params.targetType = queryParams.targetType
+    if (queryParams.action) params.action = queryParams.action
+    if (queryParams.startTime) params.startTime = queryParams.startTime
+    if (queryParams.endTime) params.endTime = queryParams.endTime
+
+    const res = await getOperLogList(params)
+    logList.value = res?.records || []
+    total.value = res?.total || 0
+  } catch (error: any) {
+    logList.value = []
+    total.value = 0
+    alert(error?.message || error?.response?.data?.message || '获取操作日志失败')
+  } finally {
     loading.value = false
-  }, 500)
+  }
 }
 
 const changePage = (p: number) => {
@@ -143,28 +161,118 @@ const changePage = (p: number) => {
   fetchData()
 }
 
-const viewDetail = (log: OperLog) => {
+const handleSearch = () => {
+  page.value = 1
+  fetchData()
+}
+
+const handleReset = () => {
+  queryParams.operatorName = ''
+  queryParams.targetType = ''
+  queryParams.action = ''
+  queryParams.startTime = ''
+  queryParams.endTime = ''
+  page.value = 1
+  fetchData()
+}
+
+const viewDetail = (log: OperLogVO) => {
   currentLog.value = log
   const modal = document.getElementById('detail_modal') as HTMLDialogElement
   modal.showModal()
 }
 
-const handleDelete = async (_log: OperLog) => {
+const handleDelete = async (log: OperLogVO) => {
   if (!confirm(`确定要删除该操作日志吗？`)) return
-  fetchData()
+  try {
+    await deleteOperLog(log.id)
+    fetchData()
+  } catch (error: any) {
+    alert(error?.message || error?.response?.data?.message || '删除失败')
+  }
 }
 
 const handleClear = async () => {
   if (!confirm('确定要清空所有操作日志吗？此操作不可恢复！')) return
-  logList.value = []
+  try {
+    await clearOperLogs()
+    page.value = 1
+    fetchData()
+  } catch (error: any) {
+    alert(error?.message || error?.response?.data?.message || '清空失败')
+  }
 }
 
-const handleExport = () => {
-  alert('导出功能开发中...')
+const handleExport = async () => {
+  try {
+    const res = await exportOperLogs()
+    const blob = new Blob([res as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '操作日志.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error: any) {
+    alert(error?.message || error?.response?.data?.message || '导出失败')
+  }
 }
 
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr?: string) => {
   if (!dateStr) return '-'
-  return dateStr
+  return new Date(dateStr).toLocaleString()
+}
+
+const formatJson = (value: any) => {
+  if (value === null || value === undefined) return '-'
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch (error) {
+    return String(value)
+  }
+}
+
+const actionLabels: Record<string, string> = {
+  create: '新增',
+  update: '修改',
+  delete: '删除',
+  restore: '恢复',
+  ban: '封禁',
+  unban: '解封',
+  role_assign: '分配角色',
+  menu_assign: '分配菜单',
+  dept_assign: '分配部门',
+  status_change: '状态变更',
+  publish: '发布',
+  offline: '下线',
+  import: '导入',
+  export: '导出',
+  resolve: '标记已解决'
+}
+
+const targetTypeLabels: Record<string, string> = {
+  user: '用户',
+  role: '角色',
+  dept: '部门',
+  notice: '公告',
+  sensitive_word: '敏感词',
+  post: '帖子',
+  comment: '评论',
+  report: '举报',
+  auth_rule: '认证规则',
+  menu: '菜单',
+  login_log: '登录日志',
+  oper_log: '操作日志'
+}
+
+const getActionLabel = (action?: string | null) => {
+  if (!action) return '-'
+  return actionLabels[action] || action
+}
+
+const getTargetTypeLabel = (targetType?: string | null) => {
+  if (!targetType) return '-'
+  return targetTypeLabels[targetType] || targetType
 }
 </script>

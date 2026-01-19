@@ -5,9 +5,13 @@ import com.campus.wall.entity.system.SysOperLog;
 import com.campus.wall.mapper.system.SysOperLogMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.OperLogService;
+import com.campus.wall.util.IpUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Slf4j
 @Service
@@ -23,12 +27,12 @@ public class OperLogServiceImpl implements OperLogService {
         try {
             SysOperLog operLog = new SysOperLog();
             operLog.setOperatorId(operatorId);
-            operLog.setOperatorName(operatorName);
+            operLog.setOperatorName(resolveOperatorName(operatorId, operatorName));
             operLog.setTargetType(targetType);
             operLog.setTargetId(targetId);
             operLog.setAction(action);
             operLog.setReason(reason);
-            operLog.setIpAddress(ipAddress);
+            operLog.setIpAddress(resolveIp(ipAddress));
             operLog.setBeforeValue(beforeValue);
             operLog.setAfterValue(afterValue);
 
@@ -48,5 +52,31 @@ public class OperLogServiceImpl implements OperLogService {
         } catch (Exception e) {
             log.error("记录操作日志失败", e);
         }
+    }
+
+    private String resolveOperatorName(Long operatorId, String operatorName) {
+        if (StringUtils.hasText(operatorName)) {
+            return operatorName;
+        }
+        if (operatorId == null) {
+            return null;
+        }
+        var user = userMapper.selectById(operatorId);
+        return user != null ? user.getUsername() : null;
+    }
+
+    private String resolveIp(String ipAddress) {
+        if (StringUtils.hasText(ipAddress)) {
+            return ipAddress;
+        }
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                return IpUtil.getClientIp(attrs.getRequest());
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
     }
 }

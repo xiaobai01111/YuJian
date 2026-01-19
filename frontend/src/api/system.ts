@@ -277,6 +277,173 @@ export function exportLoginLogs(params?: LoginLogQuery) {
     return request.get('/api/v1/console/login-logs/export', { params, responseType: 'blob' })
 }
 
+// --- Online Users ---
+export interface OnlineUserVO {
+    token: string
+    userId: number
+    username?: string
+    nickname?: string
+    ipaddr?: string
+    userAgent?: string
+    loginTime?: string
+    lastActiveTime?: number
+    tokenTimeout?: number
+    tokenActiveTimeout?: number
+}
+
+export interface OnlineUserQuery {
+    page?: number
+    size?: number
+    keyword?: string
+    ipaddr?: string
+}
+
+export interface PageResult<T> {
+    records: T[]
+    total: number
+    size: number
+    current: number
+    pages: number
+}
+
+export function getOnlineUserList(params?: OnlineUserQuery) {
+    return request.get<PageResult<OnlineUserVO>>('/api/v1/console/online-users', { params })
+}
+
+export function kickoutOnlineUser(token: string) {
+    return request.post('/api/v1/console/online-users/kickout', { token })
+}
+
+// --- Server Monitor ---
+export interface ServerMonitorVO {
+    cpu: {
+        coreCount: number
+        userUsage: number
+        systemUsage: number
+        totalUsage: number
+        idleUsage: number
+    }
+    memory: {
+        total: string
+        used: string
+        free: string
+        usage: number
+    }
+    jvm: {
+        total: string
+        used: string
+        free: string
+        max: string
+        usage: number
+    }
+    server: {
+        hostName: string
+        hostIp: string
+        osName: string
+        osArch: string
+    }
+    javaInfo: {
+        javaName: string
+        javaVersion: string
+        startTime: string
+        runTime: string
+        javaHome: string
+        projectDir: string
+        inputArgs: string
+    }
+    disks: Array<{
+        mount: string
+        fileSystem: string
+        diskType: string
+        total: string
+        free: string
+        used: string
+        usage: number
+    }>
+}
+
+export function getServerMonitor() {
+    return request.get('/api/v1/console/monitor/server')
+}
+
+// --- Redis Monitor ---
+export interface RedisMonitorVO {
+    basic: {
+        version: string
+        runMode: string
+        port: string
+        connectedClients: string
+        uptimeDays: string
+        usedMemory: string
+        usedCpu: string
+        maxMemory: string
+        aofEnabled: string
+        rdbStatus: string
+        keyCount: string
+        networkInput: string
+        networkOutput: string
+    }
+    memory: {
+        used: string
+        usedPeak: string
+        usedRss: string
+        usedLua: string
+        fragmentationRatio: string
+        max: string
+    }
+    commandStats: Array<{
+        command: string
+        calls: number
+        usec: number
+        usecPerCall: number | null
+    }>
+}
+
+export function getRedisMonitor() {
+    return request.get('/api/v1/console/monitor/redis')
+}
+
+// --- Oper Log ---
+export interface OperLogVO {
+    id: number
+    operatorId?: number
+    operatorName?: string
+    targetType?: string
+    targetId?: number
+    action?: string
+    reason?: string
+    beforeValue?: any
+    afterValue?: any
+    ipAddress?: string
+    createdAt?: string
+}
+
+export interface OperLogQuery {
+    page?: number
+    size?: number
+    operatorName?: string
+    targetType?: string
+    action?: string
+    startTime?: string
+    endTime?: string
+}
+
+export function getOperLogList(params?: OperLogQuery) {
+    return request.get('/api/v1/console/oper-logs', { params })
+}
+
+export function deleteOperLog(id: number) {
+    return request.delete(`/api/v1/console/oper-logs/${id}`)
+}
+
+export function clearOperLogs() {
+    return request.delete('/api/v1/console/oper-logs/clear')
+}
+
+export function exportOperLogs(params?: OperLogQuery) {
+    return request.get('/api/v1/console/oper-logs/export', { params, responseType: 'blob' })
+}
+
 // --- Role ---
 export function getRoleList(params?: any) {
     return request.get('/api/v1/system/roles/list', { params })

@@ -53,6 +53,11 @@ public final class CacheConstants {
     public static final String RATE_LIMIT_POST = PREFIX + "rate:post:";
 
     /**
+     * 在线用户 Token 集合
+     */
+    public static final String ONLINE_TOKENS = PREFIX + "online:tokens";
+
+    /**
      * 默认缓存TTL（秒）
      */
     public static final int DEFAULT_TTL = 300;

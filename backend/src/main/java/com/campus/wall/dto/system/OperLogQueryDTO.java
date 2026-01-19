@@ -3,11 +3,13 @@ package com.campus.wall.dto.system;
 import com.campus.wall.dto.common.PageQueryDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  * 操作日志查询参数
  */
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class OperLogQueryDTO extends PageQueryDTO {
 
     @Schema(description = "操作人")

@@ -215,6 +215,42 @@ const router = createRouter({
                     name: 'ConsoleProfile',
                     component: () => import('@/views/console/profile/index.vue'),
                     meta: { title: '个人中心', icon: 'user' }
+                },
+                {
+                    path: 'monitor/job',
+                    name: 'MonitorJob',
+                    component: () => import('@/views/console/monitor/job/index.vue'),
+                    meta: { title: '定时任务', icon: 'timer' }
+                },
+                {
+                    path: 'monitor/online',
+                    name: 'MonitorOnline',
+                    component: () => import('@/views/console/monitor/online/index.vue'),
+                    meta: { title: '在线用户', icon: 'users' }
+                },
+                {
+                    path: 'monitor/server',
+                    name: 'MonitorServer',
+                    component: () => import('@/views/console/monitor/server/index.vue'),
+                    meta: { title: '服务监控', icon: 'server' }
+                },
+                {
+                    path: 'monitor/redis',
+                    name: 'MonitorRedis',
+                    component: () => import('@/views/console/monitor/redis/index.vue'),
+                    meta: { title: 'Redis监控', icon: 'redis' }
+                },
+                {
+                    path: 'monitor/cache',
+                    name: 'MonitorCache',
+                    component: () => import('@/views/console/monitor/cache/index.vue'),
+                    meta: { title: '数据缓存', icon: 'cache' }
+                },
+                {
+                    path: 'monitor/blocklist',
+                    name: 'MonitorBlocklist',
+                    component: () => import('@/views/console/monitor/blocklist/index.vue'),
+                    meta: { title: '阻止名单', icon: 'block' }
                 }
             ]
         },
