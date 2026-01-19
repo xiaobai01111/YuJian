@@ -49,6 +49,7 @@ public class ProfileController {
         if (!isAdmin && !currentUserId.equals(id)) {
             vo.setEmail(null);
             vo.setEduEmail(null);
+            vo.setPhone(null);
             vo.setCreditScore(null);
             vo.setRoleIds(null);
             vo.setStatus(null);

@@ -46,13 +46,11 @@ body,
     height: 100%;
     margin: 0;
     padding: 0;
-    transition: background-color 0.5s ease, color 0.5s ease !important;
+    transition: background-color 150ms ease, color 150ms ease;
 }
 
-*,
-*::before,
-*::after {
-    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 500ms !important;
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+    transition: none !important;
 }

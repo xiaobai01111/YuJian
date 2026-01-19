@@ -13,6 +13,21 @@ public final class RateLimitConstants {
     public static final int IP_LIMIT_PER_MINUTE = 60;
 
     /**
+     * 登录限流 - 每分钟请求数（按IP）
+     */
+    public static final int LOGIN_LIMIT_PER_MINUTE = 10;
+
+    /**
+     * 注册限流 - 每分钟请求数（按IP）
+     */
+    public static final int REGISTER_LIMIT_PER_MINUTE = 5;
+
+    /**
+     * 邮箱验证码限流 - 每分钟请求数（按用户）
+     */
+    public static final int EMAIL_CODE_LIMIT_PER_MINUTE = 3;
+
+    /**
      * 用户发帖限流 - 每分钟发帖数
      */
     public static final int POST_LIMIT_PER_MINUTE = 5;

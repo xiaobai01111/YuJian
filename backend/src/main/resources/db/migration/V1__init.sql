@@ -137,6 +137,29 @@ CREATE INDEX idx_login_log_username ON sys_login_log(username);
 CREATE INDEX idx_login_log_status ON sys_login_log(status);
 CREATE INDEX idx_login_log_time ON sys_login_log(login_time);
 
+CREATE TABLE sys_blocklist (
+    id BIGSERIAL PRIMARY KEY,
+    target_type VARCHAR(20) NOT NULL,
+    target_value VARCHAR(128) NOT NULL,
+    reason VARCHAR(255),
+    status SMALLINT NOT NULL DEFAULT 0,
+    expire_at TIMESTAMP,
+    created_by BIGINT,
+    updated_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE sys_blocklist IS '阻止名单';
+COMMENT ON COLUMN sys_blocklist.target_type IS '类型：IP/USER/DEVICE';
+COMMENT ON COLUMN sys_blocklist.target_value IS '目标值';
+COMMENT ON COLUMN sys_blocklist.status IS '状态：0-启用，1-停用';
+COMMENT ON COLUMN sys_blocklist.expire_at IS '过期时间';
+
+CREATE UNIQUE INDEX uk_sys_blocklist_target ON sys_blocklist(target_type, target_value);
+CREATE INDEX idx_sys_blocklist_status ON sys_blocklist(status);
+CREATE INDEX idx_sys_blocklist_expire ON sys_blocklist(expire_at);
+
 CREATE TABLE sys_notice (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,

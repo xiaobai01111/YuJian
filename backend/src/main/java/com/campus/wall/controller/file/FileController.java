@@ -21,7 +21,7 @@ public class FileController {
 
     private final FileService fileService;
 
-    @Operation(summary = "上传文件", description = "上传图片文件，支持 JPG/PNG/WEBP/GIF，最大 5MB")
+    @Operation(summary = "上传文件", description = "上传图片文件，支持 JPG/PNG/WEBP，最大 5MB")
     @PostMapping("/upload")
     public R<FileVO> upload(
             @RequestParam("file") MultipartFile file,

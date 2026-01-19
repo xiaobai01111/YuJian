@@ -28,7 +28,8 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (1, 0, '仪表盘', '/console/dashboard', 'views/console/dashboard/index.vue', 1, 'dashboard', 1, TRUE, 0),
     (2, 0, '系统管理', '/console', 'Layout', 0, 'setting', 2, TRUE, 0),
     (3, 0, '内容管理', '/console', 'Layout', 0, 'document', 3, TRUE, 0),
-    (4, 0, '系统监控', '/console', 'Layout', 0, 'monitor', 4, TRUE, 0);
+    (4, 0, '系统监控', '/console', 'Layout', 0, 'monitor', 4, TRUE, 0),
+    (5, 0, '系统工具', '/console', 'Layout', 0, 'tool', 5, TRUE, 0);
 
 -- 系统管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
@@ -51,12 +52,15 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
 
 -- 系统监控子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
-    (30, 4, '定时任务', '/console/monitor/job', 'views/console/monitor/job/index.vue', 1, 'timer', 1, TRUE, 0),
-    (31, 4, '在线用户', '/console/monitor/online', 'views/console/monitor/online/index.vue', 1, 'users', 2, TRUE, 0),
-    (32, 4, '服务监控', '/console/monitor/server', 'views/console/monitor/server/index.vue', 1, 'server', 3, TRUE, 0),
-    (33, 4, 'Redis监控', '/console/monitor/redis', 'views/console/monitor/redis/index.vue', 1, 'redis', 4, TRUE, 0),
-    (34, 4, '数据缓存', '/console/monitor/cache', 'views/console/monitor/cache/index.vue', 1, 'cache', 5, TRUE, 0),
-    (35, 4, '阻止名单', '/console/monitor/blocklist', 'views/console/monitor/blocklist/index.vue', 1, 'block', 6, TRUE, 0);
+    (31, 4, '在线用户', '/console/monitor/online', 'views/console/monitor/online/index.vue', 1, 'users', 1, TRUE, 0),
+    (32, 4, '服务监控', '/console/monitor/server', 'views/console/monitor/server/index.vue', 1, 'server', 2, TRUE, 0),
+    (33, 4, 'Redis监控', '/console/monitor/redis', 'views/console/monitor/redis/index.vue', 1, 'redis', 3, TRUE, 0),
+    (35, 4, '阻止名单', '/console/monitor/blocklist', 'views/console/monitor/blocklist/index.vue', 1, 'block', 4, TRUE, 0);
+
+-- 系统工具子菜单
+INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
+    (40, 5, '文件管理', '/console/tool/file', 'views/console/tool/file/index.vue', 1, 'file', 1, TRUE, 0),
+    (41, 5, '图库管理', '/console/tool/gallery', 'views/console/tool/gallery/index.vue', 1, 'image', 2, TRUE, 0);
 
 -- 按钮权限
 INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, status) VALUES
@@ -111,6 +115,12 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (241, 31, '强制下线', 'system:online:kickout', 2, 2, TRUE, 0),
     (250, 32, '查看服务监控', 'system:monitor:server', 2, 1, TRUE, 0),
     (260, 33, '查看Redis监控', 'system:monitor:redis', 2, 1, TRUE, 0),
+    (270, 35, '查询阻止名单', 'system:blocklist:list', 2, 1, TRUE, 0),
+    (271, 35, '新增阻止名单', 'system:blocklist:add', 2, 2, TRUE, 0),
+    (272, 35, '编辑阻止名单', 'system:blocklist:edit', 2, 3, TRUE, 0),
+    (273, 35, '删除阻止名单', 'system:blocklist:delete', 2, 4, TRUE, 0),
+    (280, 40, '查询文件', 'system:file:list', 2, 1, TRUE, 0),
+    (281, 41, '查询图库', 'system:gallery:list', 2, 1, TRUE, 0),
 
     (180, 18, '编辑资料', 'system:profile:edit', 2, 1, TRUE, 0),
     (181, 18, '修改密码', 'system:profile:password', 2, 2, TRUE, 0),

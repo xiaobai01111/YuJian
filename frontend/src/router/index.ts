@@ -217,12 +217,6 @@ const router = createRouter({
                     meta: { title: '个人中心', icon: 'user' }
                 },
                 {
-                    path: 'monitor/job',
-                    name: 'MonitorJob',
-                    component: () => import('@/views/console/monitor/job/index.vue'),
-                    meta: { title: '定时任务', icon: 'timer' }
-                },
-                {
                     path: 'monitor/online',
                     name: 'MonitorOnline',
                     component: () => import('@/views/console/monitor/online/index.vue'),
@@ -241,16 +235,22 @@ const router = createRouter({
                     meta: { title: 'Redis监控', icon: 'redis' }
                 },
                 {
-                    path: 'monitor/cache',
-                    name: 'MonitorCache',
-                    component: () => import('@/views/console/monitor/cache/index.vue'),
-                    meta: { title: '数据缓存', icon: 'cache' }
-                },
-                {
                     path: 'monitor/blocklist',
                     name: 'MonitorBlocklist',
                     component: () => import('@/views/console/monitor/blocklist/index.vue'),
                     meta: { title: '阻止名单', icon: 'block' }
+                },
+                {
+                    path: 'tool/file',
+                    name: 'ToolFile',
+                    component: () => import('@/views/console/tool/file/index.vue'),
+                    meta: { title: '文件管理', icon: 'file' }
+                },
+                {
+                    path: 'tool/gallery',
+                    name: 'ToolGallery',
+                    component: () => import('@/views/console/tool/gallery/index.vue'),
+                    meta: { title: '图库管理', icon: 'image' }
                 }
             ]
         },

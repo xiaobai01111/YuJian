@@ -80,8 +80,13 @@ onUnmounted(() => {
 
 function updateTheme(theme: string) {
   currentTheme.value = theme
-  document.documentElement.setAttribute('data-theme', theme)
+  const root = document.documentElement
+  root.classList.add('theme-switching')
+  root.setAttribute('data-theme', theme)
   localStorage.setItem('theme', theme)
+  window.setTimeout(() => {
+    root.classList.remove('theme-switching')
+  }, 50)
 }
 
 function handleClickOutside(event: MouseEvent) {

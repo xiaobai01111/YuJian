@@ -403,6 +403,116 @@ export function getRedisMonitor() {
     return request.get('/api/v1/console/monitor/redis')
 }
 
+// --- Blocklist ---
+export type BlocklistTargetType = 'IP' | 'USER' | 'DEVICE'
+
+export interface BlocklistVO {
+    id: number
+    targetType: BlocklistTargetType
+    targetValue: string
+    reason?: string
+    status: number
+    expireAt?: string
+    expired?: boolean
+    createdBy?: number
+    createdByName?: string
+    createdAt?: string
+    updatedAt?: string
+}
+
+export interface BlocklistQuery {
+    page?: number
+    size?: number
+    targetType?: BlocklistTargetType | ''
+    status?: number | ''
+    keyword?: string
+}
+
+export interface BlocklistDTO {
+    targetType: BlocklistTargetType
+    targetValue: string
+    reason?: string
+    status?: number
+    expireAt?: string
+}
+
+export interface BlocklistBatchImportDTO {
+    targetType: BlocklistTargetType
+    status?: number
+    expireAt?: string
+    reason?: string
+    values: string[]
+}
+
+export interface BlocklistBatchImportResult {
+    addedCount: number
+    skippedCount: number
+    invalidCount: number
+    added?: string[]
+    skipped?: string[]
+    invalid?: string[]
+}
+
+export function getBlocklist(params?: BlocklistQuery) {
+    return request.get<PageResult<BlocklistVO>>('/api/v1/console/monitor/blocklist', { params })
+}
+
+export function createBlocklist(data: BlocklistDTO) {
+    return request.post('/api/v1/console/monitor/blocklist', data)
+}
+
+export function updateBlocklist(id: number, data: BlocklistDTO) {
+    return request.put(`/api/v1/console/monitor/blocklist/${id}`, data)
+}
+
+export function deleteBlocklist(id: number) {
+    return request.delete(`/api/v1/console/monitor/blocklist/${id}`)
+}
+
+export function importBlocklist(data: BlocklistBatchImportDTO) {
+    return request.post<BlocklistBatchImportResult>('/api/v1/console/monitor/blocklist/batch', data)
+}
+
+// --- File & Gallery ---
+export interface FileCategoryVO {
+    key: string
+    label: string
+    count: number
+}
+
+export interface FileManageVO {
+    id: number
+    filename: string
+    path: string
+    url?: string
+    size?: number
+    mimeType?: string
+    createdAt?: string
+}
+
+export interface FileQuery {
+    page?: number
+    size?: number
+    category?: string
+    keyword?: string
+}
+
+export function getFileCategories() {
+    return request.get<FileCategoryVO[]>('/api/v1/console/files/categories')
+}
+
+export function getFileList(params?: FileQuery) {
+    return request.get<PageResult<FileManageVO>>('/api/v1/console/files', { params })
+}
+
+export function getGalleryCategories() {
+    return request.get<FileCategoryVO[]>('/api/v1/console/gallery/categories')
+}
+
+export function getGalleryList(params?: FileQuery) {
+    return request.get<PageResult<FileManageVO>>('/api/v1/console/gallery', { params })
+}
+
 // --- Oper Log ---
 export interface OperLogVO {
     id: number

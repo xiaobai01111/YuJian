@@ -65,12 +65,13 @@ public class PostgresSearchService implements SearchService {
         Map<Long, List<String>> boardsMap = loadBoardsMap(postIds);
 
         // 转换为 VO，排除已删除帖子，按板块过滤
+        Map<Long, User> userMap = loadUserMap(result.getRecords());
         List<PostVO> records = result.getRecords().stream()
                 .filter(p -> p.getStatus() != STATUS_DELETED)
                 .filter(p -> normalizedBoard == null
                         || boardsMap.getOrDefault(p.getId(), List.of()).contains(normalizedBoard)
                         || normalizedBoard.equals(BoardUtil.normalizeBoardKey(p.getBoard())))
-                .map(post -> toPostVO(post, boardsMap.get(post.getId())))
+                .map(post -> toPostVO(post, boardsMap.get(post.getId()), userMap))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
@@ -95,7 +96,7 @@ public class PostgresSearchService implements SearchService {
         log.info("PostgreSQL 全文搜索索引重建请通过 SQL 执行");
     }
 
-    private PostVO toPostVO(Post post, List<String> boards) {
+    private PostVO toPostVO(Post post, List<String> boards, Map<Long, User> userMap) {
         PostVO vo = new PostVO();
         vo.setId(post.getId());
         if (boards != null && !boards.isEmpty()) {
@@ -122,7 +123,10 @@ public class PostgresSearchService implements SearchService {
                 || Boolean.TRUE.equals(post.getIsAnonymous());
 
         if (!isAnonymous && post.getUserId() != null) {
-            User user = userMapper.selectById(post.getUserId());
+            User user = userMap != null ? userMap.get(post.getUserId()) : null;
+            if (user == null) {
+                user = userMapper.selectById(post.getUserId());
+            }
             if (user != null) {
                 UserVO userVO = new UserVO();
                 userVO.setId(user.getId());
@@ -148,6 +152,28 @@ public class PostgresSearchService implements SearchService {
         for (PostBoard record : records) {
             map.computeIfAbsent(record.getPostId(), key -> new ArrayList<>())
                     .add(record.getBoard());
+        }
+        return map;
+    }
+
+    private Map<Long, User> loadUserMap(List<Post> posts) {
+        Map<Long, User> map = new HashMap<>();
+        if (posts == null || posts.isEmpty()) {
+            return map;
+        }
+        List<Long> userIds = posts.stream()
+                .map(Post::getUserId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            return map;
+        }
+        List<User> users = userMapper.selectBatchIds(userIds);
+        for (User user : users) {
+            if (user != null) {
+                map.put(user.getId(), user);
+            }
         }
         return map;
     }

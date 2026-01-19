@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.ResultCode;
+import com.campus.wall.constant.RateLimitConstants;
 import com.campus.wall.dto.post.CommentCreateDTO;
 import com.campus.wall.dto.post.CommentQueryDTO;
 import com.campus.wall.entity.post.Comment;
@@ -21,6 +22,7 @@ import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.content.AnonymousMappingService;
 import com.campus.wall.service.content.SensitiveWordService;
 import com.campus.wall.service.post.CommentService;
+import com.campus.wall.service.security.RateLimitService;
 import com.campus.wall.vo.post.CommentVO;
 import com.campus.wall.vo.post.CommentConsoleVO;
 import com.campus.wall.vo.user.UserVO;
@@ -30,8 +32,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +52,7 @@ public class CommentServiceImpl implements CommentService {
     private final UserMapper userMapper;
     private final SensitiveWordService sensitiveWordService;
     private final AnonymousMappingService anonymousMappingService;
+    private final RateLimitService rateLimitService;
 
     // 评论状态：0正常 1已删除
     private static final int STATUS_NORMAL = 0;
@@ -60,6 +65,12 @@ public class CommentServiceImpl implements CommentService {
     @Transactional
     public Long createComment(CommentCreateDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
+        rateLimitService.checkRateLimit(
+            "rate:comment:user:" + userId,
+            RateLimitConstants.COMMENT_LIMIT_PER_MINUTE,
+            RateLimitConstants.WINDOW_SECONDS,
+            ResultCode.RATE_LIMIT_EXCEEDED
+        );
 
         // 检查帖子是否存在
         Post post = postMapper.selectById(dto.getPostId());
@@ -173,7 +184,8 @@ public class CommentServiceImpl implements CommentService {
         );
 
         // 转换为树形结构
-        return buildCommentTree(comments, post, isAnonymousPost);
+        Map<Long, User> userMap = loadUserMap(comments);
+        return buildCommentTree(comments, post, isAnonymousPost, userMap);
     }
 
     @Override
@@ -214,15 +226,21 @@ public class CommentServiceImpl implements CommentService {
                     .collect(Collectors.groupingBy(Comment::getParentId));
         }
 
+        List<Comment> allComments = new ArrayList<>(result.getRecords());
+        for (List<Comment> items : childrenMap.values()) {
+            allComments.addAll(items);
+        }
+        Map<Long, User> userMap = loadUserMap(allComments);
+
         // 转换为 VO
         Map<Long, List<Comment>> finalChildrenMap = childrenMap;
         List<CommentVO> records = result.getRecords().stream()
                 .map(comment -> {
-                    CommentVO vo = toCommentVO(comment, post, isAnonymousPost);
+                    CommentVO vo = toCommentVO(comment, post, isAnonymousPost, userMap);
                     List<Comment> commentChildren = finalChildrenMap.get(comment.getId());
                     if (commentChildren != null) {
                         vo.setChildren(commentChildren.stream()
-                                .map(c -> toCommentVO(c, post, isAnonymousPost))
+                                .map(c -> toCommentVO(c, post, isAnonymousPost, userMap))
                                 .collect(Collectors.toList()));
                     }
                     return vo;
@@ -249,6 +267,8 @@ public class CommentServiceImpl implements CommentService {
 
         Page<Comment> result = commentMapper.selectPage(commentPage, wrapper);
 
+        Map<Long, User> userMap = loadUserMap(result.getRecords());
+
         List<CommentConsoleVO> records = result.getRecords().stream()
                 .map(comment -> {
                     CommentConsoleVO vo = new CommentConsoleVO();
@@ -258,7 +278,7 @@ public class CommentServiceImpl implements CommentService {
                     vo.setStatus(comment.getStatus());
                     vo.setCreatedAt(comment.getCreatedAt());
 
-                    User user = userMapper.selectById(comment.getUserId());
+                    User user = userMap.get(comment.getUserId());
                     if (user != null) {
                         UserVO author = new UserVO();
                         author.setId(user.getId());
@@ -273,7 +293,7 @@ public class CommentServiceImpl implements CommentService {
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
     }
 
-    private List<CommentVO> buildCommentTree(List<Comment> comments, Post post, boolean isAnonymousPost) {
+    private List<CommentVO> buildCommentTree(List<Comment> comments, Post post, boolean isAnonymousPost, Map<Long, User> userMap) {
         // 分离一级评论和子评论
         Map<Long, List<Comment>> childrenMap = comments.stream()
                 .filter(c -> c.getParentId() != null)
@@ -282,8 +302,8 @@ public class CommentServiceImpl implements CommentService {
         List<CommentVO> rootComments = new ArrayList<>();
         for (Comment comment : comments) {
             if (comment.getParentId() == null) {
-                CommentVO vo = toCommentVO(comment, post, isAnonymousPost);
-                vo.setChildren(buildChildren(comment.getId(), childrenMap, post, isAnonymousPost));
+                CommentVO vo = toCommentVO(comment, post, isAnonymousPost, userMap);
+                vo.setChildren(buildChildren(comment.getId(), childrenMap, post, isAnonymousPost, userMap));
                 rootComments.add(vo);
             }
         }
@@ -291,7 +311,7 @@ public class CommentServiceImpl implements CommentService {
         return rootComments;
     }
 
-    private List<CommentVO> buildChildren(Long parentId, Map<Long, List<Comment>> childrenMap, Post post, boolean isAnonymousPost) {
+    private List<CommentVO> buildChildren(Long parentId, Map<Long, List<Comment>> childrenMap, Post post, boolean isAnonymousPost, Map<Long, User> userMap) {
         List<Comment> children = childrenMap.get(parentId);
         if (children == null) {
             return new ArrayList<>();
@@ -299,14 +319,14 @@ public class CommentServiceImpl implements CommentService {
 
         return children.stream()
                 .map(c -> {
-                    CommentVO vo = toCommentVO(c, post, isAnonymousPost);
-                    vo.setChildren(buildChildren(c.getId(), childrenMap, post, isAnonymousPost));
+                    CommentVO vo = toCommentVO(c, post, isAnonymousPost, userMap);
+                    vo.setChildren(buildChildren(c.getId(), childrenMap, post, isAnonymousPost, userMap));
                     return vo;
                 })
                 .collect(Collectors.toList());
     }
 
-    private CommentVO toCommentVO(Comment comment, Post post, boolean isAnonymousPost) {
+    private CommentVO toCommentVO(Comment comment, Post post, boolean isAnonymousPost, Map<Long, User> userMap) {
         CommentVO vo = new CommentVO();
         vo.setId(comment.getId());
         vo.setPostId(comment.getPostId());
@@ -321,7 +341,10 @@ public class CommentServiceImpl implements CommentService {
             // 匿名帖子不显示作者信息，使用 anonymousId
             vo.setAuthor(null);
         } else {
-            User user = userMapper.selectById(comment.getUserId());
+            User user = userMap != null ? userMap.get(comment.getUserId()) : null;
+            if (user == null) {
+                user = userMapper.selectById(comment.getUserId());
+            }
             if (user != null) {
                 UserVO userVO = new UserVO();
                 userVO.setId(user.getId());
@@ -333,6 +356,28 @@ public class CommentServiceImpl implements CommentService {
         }
 
         return vo;
+    }
+
+    private Map<Long, User> loadUserMap(List<Comment> comments) {
+        Map<Long, User> map = new HashMap<>();
+        if (comments == null || comments.isEmpty()) {
+            return map;
+        }
+        List<Long> userIds = comments.stream()
+                .map(Comment::getUserId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            return map;
+        }
+        List<User> users = userMapper.selectBatchIds(userIds);
+        for (User user : users) {
+            if (user != null) {
+                map.put(user.getId(), user);
+            }
+        }
+        return map;
     }
 
     private boolean isTreeHolePost(Post post) {

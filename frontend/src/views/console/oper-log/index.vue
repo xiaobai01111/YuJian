@@ -1,6 +1,7 @@
 <template>
-  <div class="card bg-base-100 shadow-xl">
-    <div class="card-body">
+  <div class="h-full flex flex-col overflow-hidden">
+    <div class="card bg-base-100 shadow-xl flex-1 min-h-0">
+      <div class="card-body flex flex-col min-h-0">
       <div class="flex justify-between items-center mb-4">
         <h2 class="card-title">操作日志</h2>
         <div class="flex gap-2">
@@ -29,50 +30,52 @@
         <button class="btn btn-sm btn-ghost" @click="handleReset">重置</button>
       </div>
 
-      <div class="overflow-x-auto min-h-[400px]">
-        <table class="table table-zebra">
-          <thead>
-            <tr>
-              <th>日志编号</th>
-              <th>操作人</th>
-              <th>目标类型</th>
-              <th>动作</th>
-              <th>操作IP</th>
-              <th>操作时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="7" class="text-center py-4">加载中...</td>
-            </tr>
-            <tr v-else-if="logList.length === 0">
-              <td colspan="7" class="text-center py-4">暂无数据</td>
-            </tr>
-            <tr v-else v-for="log in logList" :key="log.id">
-              <td>{{ log.id }}</td>
-              <td>{{ log.operatorName || '系统' }}</td>
-              <td>{{ getTargetTypeLabel(log.targetType) }}</td>
-              <td>
-                <span class="badge badge-info badge-sm" :title="log.action || '-'">
-                  {{ getActionLabel(log.action) }}
-                </span>
-              </td>
-              <td><span class="badge badge-ghost">{{ log.ipAddress || '-' }}</span></td>
-              <td class="text-sm text-slate-500">{{ formatDate(log.createdAt) }}</td>
-              <td>
-                <div class="flex gap-2">
-                  <button class="btn btn-ghost btn-xs text-info" @click="viewDetail(log)">详情</button>
-                  <button class="btn btn-ghost btn-xs text-error" @click="handleDelete(log)" v-permission="['system:operlog:delete']">删除</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="flex-1 overflow-auto">
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead>
+              <tr>
+                <th>日志编号</th>
+                <th>操作人</th>
+                <th>目标类型</th>
+                <th>动作</th>
+                <th>操作IP</th>
+                <th>操作时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading">
+                <td colspan="7" class="text-center py-4">加载中...</td>
+              </tr>
+              <tr v-else-if="logList.length === 0">
+                <td colspan="7" class="text-center py-4">暂无数据</td>
+              </tr>
+              <tr v-else v-for="log in logList" :key="log.id">
+                <td>{{ log.id }}</td>
+                <td>{{ log.operatorName || '系统' }}</td>
+                <td>{{ getTargetTypeLabel(log.targetType) }}</td>
+                <td>
+                  <span class="badge badge-info badge-sm" :title="log.action || '-'">
+                    {{ getActionLabel(log.action) }}
+                  </span>
+                </td>
+                <td><span class="badge badge-ghost">{{ log.ipAddress || '-' }}</span></td>
+                <td class="text-sm text-slate-500">{{ formatDate(log.createdAt) }}</td>
+                <td>
+                  <div class="flex gap-2">
+                    <button class="btn btn-ghost btn-xs text-info" @click="viewDetail(log)">详情</button>
+                    <button class="btn btn-ghost btn-xs text-error" @click="handleDelete(log)" v-permission="['system:operlog:delete']">删除</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Pagination -->
-      <div class="flex justify-end mt-4">
+      <div class="flex justify-end pt-4">
         <div class="join">
           <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
           <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
@@ -105,6 +108,7 @@
         </div>
       </div>
     </dialog>
+  </div>
   </div>
 </template>
 

@@ -53,14 +53,24 @@
         <div v-else v-for="post in postList" :key="post.id" class="card bg-base-100 shadow-sm hover:shadow-md transition-all border border-base-200 cursor-pointer" @click="goToDetail(post.id)">
           <div class="card-body p-6">
             <div class="flex justify-between items-start">
-              <h3 class="card-title text-lg font-bold text-base-content mb-2" v-html="highlight(post.title)"></h3>
+              <h3 class="card-title text-lg font-bold text-base-content mb-2">
+                <template v-for="(part, index) in highlightParts(post.title)" :key="index">
+                  <span v-if="part.match" class="bg-warning/30 text-warning-content font-bold px-1 rounded">{{ part.text }}</span>
+                  <span v-else>{{ part.text }}</span>
+                </template>
+              </h3>
               <div class="flex flex-wrap gap-2">
                 <div v-for="board in getPostBoards(post)" :key="board" class="badge badge-ghost badge-sm">
                   {{ getBoardLabel(board) }}
                 </div>
               </div>
             </div>
-            <p class="text-base-content/70 text-sm line-clamp-2 mb-2" v-html="highlight(post.content)"></p>
+            <p class="text-base-content/70 text-sm line-clamp-2 mb-2">
+              <template v-for="(part, index) in highlightParts(post.content)" :key="index">
+                <span v-if="part.match" class="bg-warning/30 text-warning-content font-bold px-1 rounded">{{ part.text }}</span>
+                <span v-else>{{ part.text }}</span>
+              </template>
+            </p>
             
             <div class="flex items-center justify-between text-xs text-base-content/50 mt-2">
               <span>{{ formatDate(post.createdAt) }}</span>
@@ -162,12 +172,34 @@ const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleDateString()
 }
 
-const highlight = (text: string) => {
-  if (!keyword.value) return text
-  // Simple highlight, care for XSS if text contains HTML (assuming plain text content)
-  // Backend should return plain text or sanitized HTML. 
-  // If content is plain text:
-  const regex = new RegExp(`(${keyword.value})`, 'gi')
-  return text.replace(regex, '<span class="bg-warning/30 text-warning-content font-bold px-1 rounded">$1</span>')
+type HighlightPart = { text: string; match: boolean }
+
+const highlightParts = (text?: string): HighlightPart[] => {
+  const raw = text ?? ''
+  const kw = keyword.value.trim()
+  if (!kw) return [{ text: raw, match: false }]
+
+  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(escaped, 'gi')
+  const parts: HighlightPart[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ text: raw.slice(lastIndex, match.index), match: false })
+    }
+    parts.push({ text: match[0], match: true })
+    lastIndex = match.index + match[0].length
+    if (match[0].length === 0) {
+      regex.lastIndex++
+    }
+  }
+
+  if (lastIndex < raw.length) {
+    parts.push({ text: raw.slice(lastIndex), match: false })
+  }
+
+  return parts.length ? parts : [{ text: raw, match: false }]
 }
 </script>

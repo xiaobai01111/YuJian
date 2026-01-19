@@ -31,6 +31,8 @@ import com.campus.wall.vo.file.FileVO;
 import com.campus.wall.vo.post.PostVO;
 import com.campus.wall.vo.user.UserVO;
 import com.campus.wall.constant.SecurityConstants;
+import com.campus.wall.constant.RateLimitConstants;
+import com.campus.wall.service.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -39,9 +41,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -62,6 +67,7 @@ public class PostServiceImpl implements PostService {
     private final FileService fileService;
     private final SensitiveWordService sensitiveWordService;
     private final com.campus.wall.service.user.CreditService creditService;
+    private final RateLimitService rateLimitService;
 
     // 帖子状态：0正常 1已解决 2已删除
     private static final int STATUS_NORMAL = 0;
@@ -72,10 +78,28 @@ public class PostServiceImpl implements PostService {
     private static final String BOARD_TREE_HOLE = BoardUtil.BOARD_TREE_HOLE;
     private static final String BOARD_MARKET = BoardUtil.BOARD_MARKET;
 
+    private static class PostUserContext {
+        private final Map<Long, User> userMap;
+        private final Set<Long> likedPostIds;
+        private final Set<Long> bookmarkedPostIds;
+
+        private PostUserContext(Map<Long, User> userMap, Set<Long> likedPostIds, Set<Long> bookmarkedPostIds) {
+            this.userMap = userMap;
+            this.likedPostIds = likedPostIds;
+            this.bookmarkedPostIds = bookmarkedPostIds;
+        }
+    }
+
     @Override
     @Transactional
     public Long createPost(PostCreateDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
+        rateLimitService.checkRateLimit(
+            "rate:post:user:" + userId,
+            RateLimitConstants.POST_LIMIT_PER_MINUTE,
+            RateLimitConstants.WINDOW_SECONDS,
+            ResultCode.RATE_LIMIT_EXCEEDED
+        );
 
         // 用户验证状态检查
         User currentUser = userMapper.selectById(userId);
@@ -335,7 +359,7 @@ public class PostServiceImpl implements PostService {
         postMapper.incrementViewCount(postId);
 
         List<String> boards = loadBoards(postId);
-        return toPostVO(post, true, boards);
+        return toPostVO(post, true, boards, null);
     }
 
     @Override
@@ -361,9 +385,10 @@ public class PostServiceImpl implements PostService {
                 .map(Post::getId)
                 .collect(Collectors.toList());
         Map<Long, List<String>> boardsMap = loadBoardsMap(postIds);
+        PostUserContext context = buildPostUserContext(result.getRecords());
 
         List<PostVO> records = result.getRecords().stream()
-                .map(post -> toPostVO(post, false, boardsMap.get(post.getId())))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
@@ -617,10 +642,11 @@ public class PostServiceImpl implements PostService {
                 .map(Post::getId)
                 .collect(Collectors.toList());
         Map<Long, List<String>> boardsMap = loadBoardsMap(filteredPostIds);
+        PostUserContext context = buildPostUserContext(posts);
 
         List<PostVO> records = posts.stream()
                 .filter(p -> p.getStatus() != STATUS_DELETED)
-                .map(post -> toPostVO(post, false, boardsMap.get(post.getId())))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, bookmarks.getTotal(), bookmarks.getCurrent(), bookmarks.getSize());
@@ -668,9 +694,10 @@ public class PostServiceImpl implements PostService {
                 .map(Post::getId)
                 .collect(Collectors.toList());
         Map<Long, List<String>> boardsMap = loadBoardsMap(postIds);
+        PostUserContext context = buildPostUserContext(result.getRecords());
 
         List<PostVO> records = result.getRecords().stream()
-                .map(post -> toPostVO(post, false, boardsMap.get(post.getId())))
+                .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context))
                 .collect(Collectors.toList());
 
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
@@ -684,7 +711,7 @@ public class PostServiceImpl implements PostService {
         return post;
     }
 
-    private PostVO toPostVO(Post post, boolean includeFiles, List<String> boards) {
+    private PostVO toPostVO(Post post, boolean includeFiles, List<String> boards, PostUserContext context) {
         PostVO vo = new PostVO();
         BeanUtils.copyProperties(post, vo);
         if (boards != null && !boards.isEmpty()) {
@@ -699,7 +726,13 @@ public class PostServiceImpl implements PostService {
             // 匿名帖子不显示作者信息
             vo.setAuthor(null);
         } else {
-            User user = userMapper.selectById(post.getUserId());
+            User user = null;
+            if (context != null && context.userMap != null && post.getUserId() != null) {
+                user = context.userMap.get(post.getUserId());
+            }
+            if (user == null) {
+                user = userMapper.selectById(post.getUserId());
+            }
             if (user != null) {
                 UserVO userVO = new UserVO();
                 userVO.setId(user.getId());
@@ -712,10 +745,12 @@ public class PostServiceImpl implements PostService {
         }
 
         // 处理当前用户状态
-        if (StpUtil.isLogin()) {
+        if (context != null) {
+            vo.setIsLiked(context.likedPostIds != null && context.likedPostIds.contains(post.getId()));
+            vo.setIsBookmarked(context.bookmarkedPostIds != null && context.bookmarkedPostIds.contains(post.getId()));
+        } else if (StpUtil.isLogin()) {
             Long currentUserId = StpUtil.getLoginIdAsLong();
 
-            // 是否已点赞
             Like like = likeMapper.selectOne(
                     new LambdaQueryWrapper<Like>()
                             .eq(Like::getUserId, currentUserId)
@@ -723,7 +758,6 @@ public class PostServiceImpl implements PostService {
             );
             vo.setIsLiked(like != null);
 
-            // 是否已收藏
             Bookmark bookmark = bookmarkMapper.selectOne(
                     new LambdaQueryWrapper<Bookmark>()
                             .eq(Bookmark::getUserId, currentUserId)
@@ -742,6 +776,59 @@ public class PostServiceImpl implements PostService {
         }
 
         return vo;
+    }
+
+    private PostUserContext buildPostUserContext(List<Post> posts) {
+        if (posts == null || posts.isEmpty()) {
+            return new PostUserContext(Collections.emptyMap(), Collections.emptySet(), Collections.emptySet());
+        }
+
+        Map<Long, User> userMap = new HashMap<>();
+        Set<Long> userIds = posts.stream()
+                .map(Post::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!userIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(userIds);
+            for (User user : users) {
+                if (user != null) {
+                    userMap.put(user.getId(), user);
+                }
+            }
+        }
+
+        Set<Long> likedPostIds = Collections.emptySet();
+        Set<Long> bookmarkedPostIds = Collections.emptySet();
+        if (StpUtil.isLogin()) {
+            Long currentUserId = StpUtil.getLoginIdAsLong();
+            List<Long> postIds = posts.stream()
+                    .map(Post::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            if (!postIds.isEmpty()) {
+                List<Like> likes = likeMapper.selectList(
+                        new LambdaQueryWrapper<Like>()
+                                .eq(Like::getUserId, currentUserId)
+                                .in(Like::getPostId, postIds)
+                );
+                likedPostIds = likes.stream()
+                        .map(Like::getPostId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+                List<Bookmark> bookmarks = bookmarkMapper.selectList(
+                        new LambdaQueryWrapper<Bookmark>()
+                                .eq(Bookmark::getUserId, currentUserId)
+                                .in(Bookmark::getPostId, postIds)
+                );
+                bookmarkedPostIds = bookmarks.stream()
+                        .map(Bookmark::getPostId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+            }
+        }
+
+        return new PostUserContext(userMap, likedPostIds, bookmarkedPostIds);
     }
 
     private void savePostBoards(Long postId, List<String> boards) {

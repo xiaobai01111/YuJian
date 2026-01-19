@@ -80,7 +80,10 @@ const resolvePath = (routePath: string) => {
   server: 'M4 5h16v4H4V5zm0 6h16v4H4v-4zm0 6h16v4H4v-4z',
   redis: 'M4 6h16M6 9h12M6 12h12M6 15h12M4 18h16',
   cache: 'M4 7h16M4 12h16M4 17h16',
-  block: 'M12 2a10 10 0 100 20 10 10 0 000-20zm5 10a5 5 0 01-8.66 3.54L15.54 8.34A4.98 4.98 0 0117 12zm-10 0a5 5 0 018.66-3.54L8.46 15.66A4.98 4.98 0 017 12z'
+  block: 'M12 2a10 10 0 100 20 10 10 0 000-20zm5 10a5 5 0 01-8.66 3.54L15.54 8.34A4.98 4.98 0 0117 12zm-10 0a5 5 0 018.66-3.54L8.46 15.66A4.98 4.98 0 017 12z',
+  tool: 'M14 6l4 4-8 8H6v-4l8-8zM5 19h14',
+  file: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6',
+  image: 'M4 5h16v14H4V5zm3 9l3-3 4 4 3-2 3 3'
   }
 
 const getIcon = (icon?: string) => {

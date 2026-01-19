@@ -8,6 +8,7 @@ import com.campus.wall.common.ResultCode;
 import com.campus.wall.config.MinioConfig;
 import com.campus.wall.entity.file.FileRecord;
 import com.campus.wall.mapper.file.FileRecordMapper;
+import com.campus.wall.service.content.ContentModerationService;
 import com.campus.wall.service.file.FileService;
 import com.campus.wall.vo.file.FileVO;
 import io.minio.BucketExistsArgs;
@@ -41,6 +42,7 @@ public class FileServiceImpl implements FileService {
     private final MinioClient minioClient;
     private final MinioConfig minioConfig;
     private final FileRecordMapper fileRecordMapper;
+    private final ContentModerationService contentModerationService;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
             "image/jpeg", "image/png", "image/webp"
@@ -88,6 +90,9 @@ public class FileServiceImpl implements FileService {
             record.setAuditStatus(0); // 待审核
             record.setStorageClass("STANDARD");
             fileRecordMapper.insert(record);
+
+            String fileUrl = buildFileUrl(record.getPath());
+            contentModerationService.asyncModerateImage(record.getId(), fileUrl);
 
             return toFileVO(record);
 
@@ -247,5 +252,15 @@ public class FileServiceImpl implements FileService {
         FileVO vo = new FileVO();
         BeanUtils.copyProperties(record, vo);
         return vo;
+    }
+
+    private String buildFileUrl(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        String endpoint = minioConfig.getEndpoint();
+        String bucket = minioConfig.getBucketName();
+        String base = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
+        return base + "/" + bucket + "/" + path;
     }
 }

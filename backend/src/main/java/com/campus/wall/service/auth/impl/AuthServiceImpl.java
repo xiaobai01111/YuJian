@@ -12,6 +12,7 @@ import com.campus.wall.entity.user.IdentityVerification;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.constant.CacheConstants;
+import com.campus.wall.constant.RateLimitConstants;
 import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.mapper.system.SysDeptMapper;
@@ -19,6 +20,7 @@ import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.auth.AuthService;
+import com.campus.wall.service.security.RateLimitService;
 import com.campus.wall.service.system.AuthRuleService;
 import com.campus.wall.service.system.LoginLogService;
 import com.campus.wall.vo.auth.LoginVO;
@@ -46,6 +48,7 @@ public class AuthServiceImpl implements AuthService {
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
     private final AuthRuleService authRuleService;
     private final LoginLogService loginLogService;
+    private final RateLimitService rateLimitService;
     private final HttpServletRequest request;
 
     private static final String EMAIL_CODE_PREFIX = "campus:verify:email:";
@@ -54,6 +57,13 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public Long register(RegisterDTO dto) {
+        String clientIp = resolveClientIp();
+        rateLimitService.checkRateLimit(
+            "rate:register:ip:" + clientIp,
+            RateLimitConstants.REGISTER_LIMIT_PER_MINUTE,
+            RateLimitConstants.WINDOW_SECONDS,
+            ResultCode.TOO_MANY_REQUESTS
+        );
         // 验证密码
         if (!dto.getPassword().equals(dto.getConfirmPassword())) {
             throw new BusinessException("两次密码输入不一致");
@@ -87,6 +97,13 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginVO login(LoginDTO dto) {
+        String clientIp = resolveClientIp();
+        rateLimitService.checkRateLimit(
+            "rate:login:ip:" + clientIp,
+            RateLimitConstants.LOGIN_LIMIT_PER_MINUTE,
+            RateLimitConstants.WINDOW_SECONDS,
+            ResultCode.TOO_MANY_REQUESTS
+        );
         // 查询用户
         User user = userMapper.selectOne(
             new LambdaQueryWrapper<User>().eq(User::getUsername, dto.getUsername())
@@ -182,6 +199,12 @@ public class AuthServiceImpl implements AuthService {
         }
 
         Long userId = StpUtil.getLoginIdAsLong();
+        rateLimitService.checkRateLimit(
+            "rate:email:user:" + userId,
+            RateLimitConstants.EMAIL_CODE_LIMIT_PER_MINUTE,
+            RateLimitConstants.WINDOW_SECONDS,
+            ResultCode.TOO_MANY_REQUESTS
+        );
 
         // 生成6位验证码
         String code = RandomUtil.randomNumbers(6);
@@ -245,6 +268,11 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception e) {
             // 记录登录日志失败不影响登录流程
         }
+    }
+
+    private String resolveClientIp() {
+        String ip = request != null ? IpUtil.getClientIp(request) : null;
+        return (ip == null || ip.isBlank()) ? "unknown" : ip;
     }
 
     private void bindTokenSession(User user) {
