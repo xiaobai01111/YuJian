@@ -107,7 +107,7 @@
       <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
           <h2 class="card-title mb-4">最新公告</h2>
-          <div v-if="!canNotice" class="py-8 text-center text-slate-400">无权限查看</div>
+          <div v-if="!canNoticeLatest" class="py-8 text-center text-slate-400">无权限查看</div>
           <div v-else-if="recentNoticesLoading" class="py-8 text-center text-slate-400">加载中...</div>
           <div v-else-if="recentNotices.length === 0" class="py-8 text-center text-slate-400">暂无公告</div>
           <ul v-else class="space-y-2 text-sm">
@@ -130,7 +130,7 @@
 
     <!-- Ops Overview -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div v-if="canNotice" class="card bg-base-100 shadow-xl">
+      <div v-if="canNoticeOverview" class="card bg-base-100 shadow-xl">
         <div class="card-body">
           <div class="flex items-center justify-between mb-4">
             <h2 class="card-title">公告概览</h2>
@@ -297,9 +297,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getDashboardStats, getRecentActivities, getRecentNotices, getRecentReports, getRecentVerifications, getRecentOperLogs, getNoticeDetail, getLoginLogTrend, type DashboardStats, type RecentActivity, type RecentNotice, type RecentReport, type RecentVerification, type RecentOperLog, type NoticeVO, type LoginLogTrendItem } from '@/api/system'
+import { getDashboardStats, getRecentActivities, getRecentNotices, getRecentReports, getRecentVerifications, getRecentOperLogs, getNoticeDetail, getVisibleNoticeDetail, getLoginLogTrend, type DashboardStats, type RecentActivity, type RecentNotice, type RecentReport, type RecentVerification, type RecentOperLog, type NoticeVO, type LoginLogTrendItem } from '@/api/system'
 import { formatRelativeTime } from '@/utils/time'
 import { usePermissionStore } from '@/stores/permission'
+import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(true)
 const activitiesLoading = ref(true)
@@ -330,9 +331,12 @@ const stats = reactive<DashboardStats>({
 })
 
 const permissionStore = usePermissionStore()
+const dialog = useDialog()
 const canUserStats = computed(() => permissionStore.hasPermission('system:dashboard:user'))
 const canPostStats = computed(() => permissionStore.hasPermission('system:dashboard:post'))
-const canNotice = computed(() => permissionStore.hasPermission('system:dashboard:notice'))
+const canNoticeLatest = computed(() => permissionStore.hasPermission('system:dashboard:notice:list'))
+const canNoticeOverview = computed(() => permissionStore.hasPermission('system:dashboard:notice:overview'))
+const canNoticeManage = computed(() => permissionStore.hasPermission('system:notice:list'))
 const canVerify = computed(() => permissionStore.hasPermission('system:dashboard:verify'))
 const canReport = computed(() => permissionStore.hasPermission('system:dashboard:report'))
 const canSensitive = computed(() => permissionStore.hasPermission('system:dashboard:ops'))
@@ -368,7 +372,7 @@ const fetchActivities = async () => {
 }
 
 const fetchRecentNotices = async () => {
-  if (!canNotice.value) {
+  if (!canNoticeLatest.value) {
     recentNotices.value = []
     return
   }
@@ -448,13 +452,16 @@ const fetchLoginTrend = async () => {
 }
 
 const openNoticeDetail = async (noticeId: number) => {
-  if (!canNotice.value) return
+  if (!canNoticeLatest.value) return
   try {
-    const res: any = await getNoticeDetail(noticeId)
+    const res: any = canNoticeManage.value
+      ? await getNoticeDetail(noticeId)
+      : await getVisibleNoticeDetail(noticeId)
     noticeDetail.value = res || null
     showNoticeDetail.value = true
   } catch (error) {
     console.error('Failed to fetch notice detail', error)
+    await dialog.alert('暂无权限查看该公告详情或公告已失效')
   }
 }
 

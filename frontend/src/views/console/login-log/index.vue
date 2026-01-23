@@ -34,7 +34,7 @@
         <button class="btn btn-sm btn-ghost" @click="handleReset">重置</button>
       </div>
 
-      <div class="flex-1 overflow-auto">
+      <div class="flex-1 overflow-auto" ref="scrollContainer">
         <div class="overflow-x-auto">
           <table class="table table-zebra">
             <thead>
@@ -76,16 +76,15 @@
               </tr>
             </tbody>
           </table>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
       </div>
 
-      <!-- Pagination -->
-      <div class="flex justify-end pt-4">
-        <div class="join">
-          <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
-          <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
-          <button class="join-item btn btn-sm" :disabled="page >= totalPages" @click="changePage(page + 1)">»</button>
-        </div>
+      <!-- Load Status -->
+      <div class="flex justify-between items-center pt-4 text-sm text-base-content/60">
+        <div>已加载 {{ logList.length }} / {{ total || '-' }} 条</div>
+        <div v-if="loadingMore">正在加载更多...</div>
+        <div v-else-if="!hasMore && logList.length > 0">没有更多了</div>
       </div>
     </div>
   </div>
@@ -93,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
 import { clearLoginLogs, deleteLoginLog, exportLoginLogs, getLoginLogList, type LoginLogVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
@@ -102,7 +101,11 @@ const logList = ref<LoginLogVO[]>([])
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const queryParams = reactive({
   username: '',
   ipaddr: '',
@@ -113,11 +116,42 @@ const queryParams = reactive({
 const dialog = useDialog()
 
 onMounted(() => {
-  fetchData()
+  fetchData({ reset: true })
+  nextTick(() => setupObserver())
 })
 
-const fetchData = async () => {
-  loading.value = true
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const fetchData = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    page.value = 1
+    logList.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const params: any = {
       page: page.value,
@@ -130,25 +164,33 @@ const fetchData = async () => {
     if (queryParams.loginTimeEnd) params.loginTimeEnd = queryParams.loginTimeEnd
 
     const res = await getLoginLogList(params)
-    logList.value = res?.records || []
+    const records = res?.records || []
     total.value = res?.total || 0
+    logList.value = append ? [...logList.value, ...records] : records
+    if (total.value) {
+      hasMore.value = logList.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (error: any) {
-    logList.value = []
-    total.value = 0
+    if (!append) {
+      logList.value = []
+      total.value = 0
+    }
     await dialog.alert(error?.message || error?.response?.data?.message || '获取登录日志失败')
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (p: number) => {
-  page.value = p
-  fetchData()
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  page.value += 1
+  await fetchData({ append: true })
 }
 
 const handleSearch = () => {
-  page.value = 1
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const handleReset = () => {
@@ -157,15 +199,14 @@ const handleReset = () => {
   queryParams.status = ''
   queryParams.loginTimeStart = ''
   queryParams.loginTimeEnd = ''
-  page.value = 1
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const handleDelete = async (log: LoginLogVO) => {
   if (!await dialog.confirm(`确定要删除该登录日志吗？`)) return
   try {
     await deleteLoginLog(log.id)
-    fetchData()
+    fetchData({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
   }
@@ -175,8 +216,7 @@ const handleClear = async () => {
   if (!await dialog.confirm('确定要清空所有登录日志吗？此操作不可恢复！')) return
   try {
     await clearLoginLogs()
-    page.value = 1
-    fetchData()
+    fetchData({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || error?.response?.data?.message || '清空失败')
   }

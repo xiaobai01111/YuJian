@@ -32,7 +32,7 @@ public class SensitiveWordController {
     private final OperLogService operLogService;
 
     private static final int MIN_WORD_LENGTH = 2;
-    private static final int MAX_BATCH_SIZE = 500;
+    private static final int BATCH_CHUNK_SIZE = 500;
     private static final int MAX_PAGE_SIZE = 100;
     private static final int LEVEL_BLOCK = 2; // 只使用拦截级别
 
@@ -111,22 +111,14 @@ public class SensitiveWordController {
         if (dto.getWords() == null || dto.getWords().isEmpty()) {
             return R.fail("词列表不能为空");
         }
-        if (dto.getWords().size() > MAX_BATCH_SIZE) {
-            return R.fail("单次导入不能超过" + MAX_BATCH_SIZE + "条");
-        }
         
         int level = normalizeLevel(dto.getLevel());
-        Set<String> existingWords = new HashSet<>();
         List<String> added = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
         List<String> invalid = new ArrayList<>();
         
-        // 预加载已存在的词
-        List<SensitiveWord> allWords = sensitiveWordMapper.selectList(null);
-        for (SensitiveWord w : allWords) {
-            existingWords.add(w.getWord().toLowerCase());
-        }
-        
+        Set<String> normalizedWords = new HashSet<>();
+        List<String> pending = new ArrayList<>();
         for (String rawWord : dto.getWords()) {
             String word = normalizeWord(rawWord);
             if (word == null || word.length() < MIN_WORD_LENGTH) {
@@ -135,19 +127,38 @@ public class SensitiveWordController {
                 }
                 continue;
             }
-            
-            if (existingWords.contains(word.toLowerCase())) {
+            if (!normalizedWords.add(word)) {
                 skipped.add(word);
                 continue;
             }
-            
-            SensitiveWord entity = new SensitiveWord();
-            entity.setWord(word);
-            entity.setLevel(level);
-            entity.setCreatedAt(LocalDateTime.now());
-            sensitiveWordMapper.insert(entity);
-            existingWords.add(word.toLowerCase());
-            added.add(word);
+            pending.add(word);
+        }
+
+        for (int i = 0; i < pending.size(); i += BATCH_CHUNK_SIZE) {
+            List<String> chunk = pending.subList(i, Math.min(i + BATCH_CHUNK_SIZE, pending.size()));
+            Set<String> existingWords = new HashSet<>();
+            if (!chunk.isEmpty()) {
+                List<SensitiveWord> existing = sensitiveWordMapper.selectList(
+                        new LambdaQueryWrapper<SensitiveWord>()
+                                .in(SensitiveWord::getWord, chunk)
+                );
+                for (SensitiveWord w : existing) {
+                    existingWords.add(w.getWord().toLowerCase());
+                }
+            }
+            LocalDateTime now = LocalDateTime.now();
+            for (String word : chunk) {
+                if (existingWords.contains(word.toLowerCase())) {
+                    skipped.add(word);
+                    continue;
+                }
+                SensitiveWord entity = new SensitiveWord();
+                entity.setWord(word);
+                entity.setLevel(level);
+                entity.setCreatedAt(now);
+                sensitiveWordMapper.insert(entity);
+                added.add(word);
+            }
         }
         
         // 记录操作日志

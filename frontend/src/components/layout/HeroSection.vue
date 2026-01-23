@@ -24,30 +24,56 @@
         </p>
         
         <div class="flex flex-wrap gap-4 pt-2">
-          <button class="btn rounded-full px-8 h-12 text-base font-bold shadow-lg hover:-translate-y-1 transition-all border-none text-white" :class="primaryBtnClass">
+          <component
+            :is="primaryBtnLink ? 'a' : 'button'"
+            :href="primaryBtnLink || undefined"
+            :type="primaryBtnLink ? undefined : 'button'"
+            class="btn rounded-full px-8 h-12 text-base font-bold shadow-lg hover:-translate-y-1 transition-all border-none text-white"
+            :class="primaryBtnClass"
+          >
             {{ primaryBtnText }}
-          </button>
-          <button v-if="secondaryBtnText" class="btn btn-ghost rounded-full px-6 h-12 text-base font-medium text-base-content hover:bg-base-200/50">
+          </component>
+          <component
+            v-if="secondaryBtnText"
+            :is="secondaryBtnLink ? 'a' : 'button'"
+            :href="secondaryBtnLink || undefined"
+            :type="secondaryBtnLink ? undefined : 'button'"
+            class="btn btn-ghost rounded-full px-6 h-12 text-base font-medium text-base-content hover:bg-base-200/50"
+          >
             {{ secondaryBtnText }}
-          </button>
+          </component>
         </div>
 
         <div v-if="showStats" class="flex items-center gap-4 pt-8">
            <div class="avatar-group -space-x-4 rtl:space-x-reverse">
-            <div class="avatar border-base-100">
-              <div class="w-10 h-10 bg-base-300"></div>
-            </div>
-            <div class="avatar border-base-100">
-              <div class="w-10 h-10 bg-base-300"></div>
-            </div>
-            <div class="avatar border-base-100">
-              <div class="w-10 h-10 bg-base-300"></div>
-            </div>
-             <div class="avatar placeholder border-base-100">
-              <div class="w-10 h-10 bg-neutral text-neutral-content">
-                <span class="text-xs">+99</span>
+            <template v-if="avatarUrls.length > 0">
+              <div v-for="(url, index) in visibleAvatars" :key="`${url}-${index}`" class="avatar border-base-100">
+                <div class="w-10 h-10">
+                  <img :src="url" alt="avatar" />
+                </div>
               </div>
-            </div>
+              <div v-if="extraAvatarCount > 0" class="avatar placeholder border-base-100">
+                <div class="w-10 h-10 bg-neutral text-neutral-content">
+                  <span class="text-xs">+{{ extraAvatarCount }}</span>
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <div class="avatar border-base-100">
+                <div class="w-10 h-10 bg-base-300"></div>
+              </div>
+              <div class="avatar border-base-100">
+                <div class="w-10 h-10 bg-base-300"></div>
+              </div>
+              <div class="avatar border-base-100">
+                <div class="w-10 h-10 bg-base-300"></div>
+              </div>
+              <div class="avatar placeholder border-base-100">
+                <div class="w-10 h-10 bg-neutral text-neutral-content">
+                  <span class="text-xs">+99</span>
+                </div>
+              </div>
+            </template>
           </div>
           <p class="text-sm font-semibold text-base-content/70">
             <span class="font-bold text-base-content">{{ statsNumber }}</span> {{ statsLabel }}
@@ -88,10 +114,13 @@ const props = defineProps({
   description: { type: String, default: 'CampusWall 是一个连接校友、分享生活、互助成长的校园社区。在这里，每一个声音都值得被倾听。' },
   badge: { type: String, default: 'New v2.0 Released' },
   primaryBtnText: { type: String, default: '开始探索 ' },
+  primaryBtnLink: { type: String, default: '' },
   secondaryBtnText: { type: String, default: '热门话题 ' },
+  secondaryBtnLink: { type: String, default: '' },
   showStats: { type: Boolean, default: true },
   statsNumber: { type: String, default: '12,000+' },
   statsLabel: { type: String, default: '同学已加入' },
+  avatarUrls: { type: Array as () => string[], default: () => [] },
   floatCardLabel: { type: String, default: '热门动态' },
   floatCardValue: { type: String, default: '+128 ' }
 })
@@ -102,7 +131,11 @@ const bgGradientClass = computed(() => {
     pink: 'bg-gradient-to-br from-pink-500/5 via-transparent to-rose-500/5',
     emerald: 'bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5',
     orange: 'bg-gradient-to-br from-orange-500/5 via-transparent to-amber-500/5',
-    purple: 'bg-gradient-to-br from-purple-500/5 via-transparent to-violet-500/5'
+    purple: 'bg-gradient-to-br from-purple-500/5 via-transparent to-violet-500/5',
+    sky: 'bg-gradient-to-br from-sky-500/5 via-transparent to-cyan-500/5',
+    rose: 'bg-gradient-to-br from-rose-500/5 via-transparent to-pink-500/5',
+    teal: 'bg-gradient-to-br from-teal-500/5 via-transparent to-emerald-500/5',
+    amber: 'bg-gradient-to-br from-amber-500/5 via-transparent to-orange-500/5'
   }
   return map[props.theme] || map.blue
 })
@@ -113,7 +146,11 @@ const blob1Class = computed(() => {
     pink: 'bg-pink-500',
     emerald: 'bg-emerald-500',
     orange: 'bg-orange-500',
-    purple: 'bg-purple-500'
+    purple: 'bg-purple-500',
+    sky: 'bg-sky-500',
+    rose: 'bg-rose-500',
+    teal: 'bg-teal-500',
+    amber: 'bg-amber-500'
   }
   return map[props.theme] || map.blue
 })
@@ -124,7 +161,11 @@ const blob2Class = computed(() => {
     pink: 'bg-rose-500',
     emerald: 'bg-teal-500',
     orange: 'bg-amber-500',
-    purple: 'bg-violet-500'
+    purple: 'bg-violet-500',
+    sky: 'bg-cyan-500',
+    rose: 'bg-pink-500',
+    teal: 'bg-emerald-500',
+    amber: 'bg-orange-500'
   }
   return map[props.theme] || map.blue
 })
@@ -135,7 +176,11 @@ const badgeColorClass = computed(() => {
     pink: 'bg-pink-500',
     emerald: 'bg-emerald-500',
     orange: 'bg-orange-500',
-    purple: 'bg-purple-500'
+    purple: 'bg-purple-500',
+    sky: 'bg-sky-500',
+    rose: 'bg-rose-500',
+    teal: 'bg-teal-500',
+    amber: 'bg-amber-500'
   }
   return map[props.theme] || map.blue
 })
@@ -146,7 +191,11 @@ const titleGradientClass = computed(() => {
     pink: 'from-pink-600 to-rose-600',
     emerald: 'from-emerald-600 to-teal-600',
     orange: 'from-orange-600 to-amber-600',
-    purple: 'from-purple-600 to-violet-600'
+    purple: 'from-purple-600 to-violet-600',
+    sky: 'from-sky-600 to-cyan-600',
+    rose: 'from-rose-600 to-pink-600',
+    teal: 'from-teal-600 to-emerald-600',
+    amber: 'from-amber-600 to-orange-600'
   }
   return map[props.theme] || map.blue
 })
@@ -157,7 +206,11 @@ const primaryBtnClass = computed(() => {
     pink: 'bg-pink-500 hover:bg-pink-600 shadow-pink-200',
     emerald: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200',
     orange: 'bg-orange-500 hover:bg-orange-600 shadow-orange-200',
-    purple: 'bg-purple-500 hover:bg-purple-600 shadow-purple-200'
+    purple: 'bg-purple-500 hover:bg-purple-600 shadow-purple-200',
+    sky: 'bg-sky-600 hover:bg-sky-700 shadow-sky-200',
+    rose: 'bg-rose-500 hover:bg-rose-600 shadow-rose-200',
+    teal: 'bg-teal-500 hover:bg-teal-600 shadow-teal-200',
+    amber: 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
   }
   return map[props.theme] || map.blue
 })
@@ -168,10 +221,17 @@ const iconColorClass = computed(() => {
     pink: 'text-pink-500',
     emerald: 'text-emerald-500',
     orange: 'text-orange-500',
-    purple: 'text-purple-500'
+    purple: 'text-purple-500',
+    sky: 'text-sky-500',
+    rose: 'text-rose-500',
+    teal: 'text-teal-500',
+    amber: 'text-amber-500'
   }
   return map[props.theme] || map.blue
 })
+
+const visibleAvatars = computed(() => props.avatarUrls.slice(0, 3))
+const extraAvatarCount = computed(() => Math.max(props.avatarUrls.length - visibleAvatars.value.length, 0))
 
 // Icons
 const iconComponent = computed(() => {

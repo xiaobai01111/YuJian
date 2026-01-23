@@ -29,7 +29,8 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (2, 0, '系统管理', '/console', 'Layout', 0, 'setting', 2, TRUE, 0),
     (3, 0, '内容管理', '/console', 'Layout', 0, 'document', 3, TRUE, 0),
     (4, 0, '系统监控', '/console', 'Layout', 0, 'monitor', 4, TRUE, 0),
-    (5, 0, '系统工具', '/console', 'Layout', 0, 'tool', 5, TRUE, 0);
+    (5, 0, '系统工具', '/console', 'Layout', 0, 'tool', 5, TRUE, 0),
+    (6, 0, '校园管理', '/console', 'Layout', 0, 'peoples', 6, TRUE, 0);
 
 -- 系统管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
@@ -65,6 +66,10 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (25, 24, '帖子回收站', '/console/recycle/post', 'views/console/recycle/post.vue', 1, 'recycle', 1, TRUE, 0),
     (26, 24, '评论回收站', '/console/recycle/comment', 'views/console/recycle/comment.vue', 1, 'recycle', 2, TRUE, 0),
     (27, 24, '举报回收站', '/console/recycle/report', 'views/console/recycle/report.vue', 1, 'recycle', 3, TRUE, 0);
+
+-- 校园管理子菜单
+INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
+    (60, 6, 'Hero管理', '/console/campus/hero', 'views/console/campus/hero/index.vue', 1, 'image', 1, TRUE, 0);
 
 -- 按钮权限
 INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, status) VALUES
@@ -115,6 +120,11 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (172, 16, '清空登录日志', 'system:loginlog:clear', 2, 3, TRUE, 0),
     (173, 16, '导出登录日志', 'system:loginlog:export', 2, 4, TRUE, 0),
 
+    (600, 60, '查询Hero', 'campus:hero:list', 2, 1, TRUE, 0),
+    (601, 60, '新增Hero', 'campus:hero:add', 2, 2, TRUE, 0),
+    (602, 60, '编辑Hero', 'campus:hero:edit', 2, 3, TRUE, 0),
+    (603, 60, '删除Hero', 'campus:hero:delete', 2, 4, TRUE, 0),
+
     (240, 31, '查询在线用户', 'system:online:list', 2, 1, TRUE, 0),
     (241, 31, '强制下线', 'system:online:kickout', 2, 2, TRUE, 0),
     (250, 32, '查看服务监控', 'system:monitor:server', 2, 1, TRUE, 0),
@@ -137,12 +147,13 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
 
     (190, 1, '仪表盘-用户', 'system:dashboard:user', 2, 1, TRUE, 0),
     (191, 1, '仪表盘-帖子', 'system:dashboard:post', 2, 2, TRUE, 0),
-    (192, 1, '仪表盘-公告', 'system:dashboard:notice', 2, 3, TRUE, 0),
-    (193, 1, '仪表盘-运维', 'system:dashboard:ops', 2, 4, TRUE, 0),
-    (194, 1, '仪表盘-登录', 'system:dashboard:login', 2, 5, TRUE, 0),
-    (195, 1, '仪表盘-操作日志', 'system:dashboard:operlog', 2, 6, TRUE, 0),
-    (196, 1, '仪表盘-举报', 'system:dashboard:report', 2, 7, TRUE, 0),
-    (197, 1, '仪表盘-审核', 'system:dashboard:verify', 2, 8, TRUE, 0),
+    (192, 1, '仪表盘-公告-最新', 'system:dashboard:notice:list', 2, 3, TRUE, 0),
+    (198, 1, '仪表盘-公告-概览', 'system:dashboard:notice:overview', 2, 4, TRUE, 0),
+    (193, 1, '仪表盘-运维', 'system:dashboard:ops', 2, 5, TRUE, 0),
+    (194, 1, '仪表盘-登录', 'system:dashboard:login', 2, 6, TRUE, 0),
+    (195, 1, '仪表盘-操作日志', 'system:dashboard:operlog', 2, 7, TRUE, 0),
+    (196, 1, '仪表盘-举报', 'system:dashboard:report', 2, 8, TRUE, 0),
+    (197, 1, '仪表盘-审核', 'system:dashboard:verify', 2, 9, TRUE, 0),
 
     (200, 20, '查询帖子', 'content:post:list', 2, 1, TRUE, 0),
     (201, 20, '新增帖子', 'content:post:add', 2, 2, TRUE, 0),
@@ -187,3 +198,44 @@ INSERT INTO sys_role_menus (role_id, menu_id) VALUES
     (2, 220), (2, 221), (2, 222), (2, 223), (2, 230), (2, 231),
     (2, 300), (2, 301), (2, 302), (2, 310), (2, 311), (2, 312), (2, 320), (2, 321), (2, 322),
     (2, 18);
+
+-- 6) Hero 默认配置
+INSERT INTO campus_heroes (
+    id, page_key, page_name, enabled, theme,
+    title_start, title_highlight, description, badge,
+    primary_btn_text, secondary_btn_text,
+    show_stats, stats_number, stats_label,
+    avatar_urls, float_card_label, float_card_value, sort_order
+) VALUES
+    (1, 'HOME', '首页', TRUE, 'blue',
+     '连接每一份', '校园心声',
+     'CampusWall 是一个连接校友、分享生活、互助成长的校园社区。在这里，每一个声音都值得被倾听。',
+     'New v2.0 Released', '开始探索 🚀', '热门话题 🔥',
+     TRUE, '12,000+', '同学已加入', '[]'::jsonb, '热门动态', '+128', 1),
+    (2, 'CONFESSIONS', '表白墙', TRUE, 'pink',
+     '勇敢表达', '爱的声音',
+     '暗恋、表白、祝福。在这里，大声说出你的爱。让心意传递，让缘分开始。',
+     'Confessions Wall', '发布表白', '最新表白',
+     TRUE, '12,000+', '同学已加入', '[]'::jsonb, '今日表白', '99+ 条', 2),
+    (3, 'TREEHOLE', '树洞', TRUE, 'emerald',
+     '倾听内心', '真实树洞',
+     '匿名倾诉，释放压力。在这里，做最真实的自己。我们是你忠实的倾听者。',
+     'Anonymous Treehole', '发布心声', '查看树洞',
+     TRUE, '12,000+', '同学已加入', '[]'::jsonb, '新收录', '58 个秘密', 3),
+    (4, 'HELP', '求助', TRUE, 'blue',
+     '互帮互助', '共同成长',
+     '学业困惑、生活难题、求职经验。在这里，寻找答案，分享经验，温暖彼此。',
+     'Q&A Help', '发起求助', '我来解答',
+     TRUE, '12,000+', '同学已加入', '[]'::jsonb, '已解决', '1,203 个问题', 4),
+    (5, 'MARKET', '市集', TRUE, 'orange',
+     '旧物新生', '跳蚤市场',
+     '教材书籍、数码电子、生活用品。在这里，让闲置物品流转，发现物美价廉的宝贝。',
+     'Flea Market', '发布闲置', '逛逛市场',
+     TRUE, '12,000+', '同学已加入', '[]'::jsonb, '今日上新', '45 件好物', 5),
+    (6, 'LOST_FOUND', '失物', TRUE, 'purple',
+     '寻找失物', '传递温暖',
+     '丢失物品、捡到失物。在这里，发布信息，让物品回归主人，让善意流转。',
+     'Lost & Found', '发布信息', '最近信息',
+     TRUE, '12,000+', '同学已加入', '[]'::jsonb, '寻回率', '85%', 6);
+
+SELECT setval('campus_heroes_id_seq', (SELECT MAX(id) FROM campus_heroes));

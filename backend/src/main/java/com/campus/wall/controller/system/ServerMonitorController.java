@@ -9,10 +9,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.net.InetAddress;
+import java.nio.file.Path;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.time.Duration;
@@ -73,7 +75,13 @@ public class ServerMonitorController {
         var osBean = ManagementFactory.getOperatingSystemMXBean();
         long total = 0;
         long free = 0;
-        if (osBean instanceof com.sun.management.OperatingSystemMXBean bean) {
+        long available = 0;
+        long[] memInfo = readLinuxMemInfo();
+        if (memInfo != null) {
+            total = memInfo[0];
+            available = memInfo[1];
+            free = available;
+        } else if (osBean instanceof com.sun.management.OperatingSystemMXBean bean) {
             total = bean.getTotalMemorySize();
             free = bean.getFreeMemorySize();
         }
@@ -156,6 +164,46 @@ public class ServerMonitorController {
             }
         }
         return disks;
+    }
+
+    private long[] readLinuxMemInfo() {
+        Path path = Path.of("/proc/meminfo");
+        if (!Files.isReadable(path)) {
+            return null;
+        }
+        long total = 0;
+        long available = 0;
+        try (BufferedReader reader = Files.newBufferedReader(path)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("MemTotal:")) {
+                    total = parseMemInfoKb(line);
+                } else if (line.startsWith("MemAvailable:")) {
+                    available = parseMemInfoKb(line);
+                }
+                if (total > 0 && available > 0) {
+                    break;
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        if (total <= 0 || available <= 0) {
+            return null;
+        }
+        return new long[] { total * 1024, available * 1024 };
+    }
+
+    private long parseMemInfoKb(String line) {
+        String[] parts = line.split("\\s+");
+        if (parts.length < 2) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(parts[1]);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     private double percent(double value) {

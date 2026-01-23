@@ -127,7 +127,7 @@
                 <div class="text-xs text-base-content/60">加入于 {{ formatDate(post.author?.createdAt || post.createdAt) }}</div>
               </div>
             </div>
-            <button class="btn btn-outline btn-sm w-full" :disabled="post.isAnonymous">查看主页</button>
+            <button class="btn btn-outline btn-sm w-full" :disabled="post.isAnonymous || !post.author?.id" @click="openUserProfile">查看主页</button>
           </div>
         </div>
       </div>
@@ -146,14 +146,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { getPostDetail, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
+import { useRoute, useRouter } from 'vue-router'
+import { getPostDetail, recordPostView, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 import { getBoardLabel, getBoardPath, getPostBoards } from '@/utils/boards'
 import { resolveFileUrl } from '@/utils/file'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 const dialog = useDialog()
 const post = ref<PostVO | null>(null)
@@ -173,6 +174,14 @@ const fetchDetail = async () => {
   try {
     const res: any = await getPostDetail(id)
     post.value = res
+    try {
+      await recordPostView(id)
+      if (post.value) {
+        post.value.viewCount = (post.value.viewCount || 0) + 1
+      }
+    } catch (error) {
+      console.error(error)
+    }
   } catch (error) {
     console.error('Failed to fetch post detail', error)
   } finally {
@@ -236,5 +245,10 @@ const getImageGridClass = (count: number) => {
 
 const openImage = (url: string) => {
   window.open(url, '_blank')
+}
+
+const openUserProfile = () => {
+  if (!post.value || post.value.isAnonymous || !post.value.author?.id) return
+  router.push(`/user/${post.value.author.id}`)
 }
 </script>

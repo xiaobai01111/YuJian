@@ -68,7 +68,7 @@ public class StatisticsController {
 
         boolean canUser = StpUtil.hasPermission("system:dashboard:user");
         boolean canPost = StpUtil.hasPermission("system:dashboard:post");
-        boolean canNotice = StpUtil.hasPermission("system:dashboard:notice");
+        boolean canNoticeOverview = StpUtil.hasPermission("system:dashboard:notice:overview");
         boolean canSensitive = StpUtil.hasPermission("system:dashboard:ops");
         boolean canReport = StpUtil.hasPermission("system:dashboard:report");
         boolean canVerify = StpUtil.hasPermission("system:dashboard:verify");
@@ -159,7 +159,7 @@ public class StatisticsController {
             stats.put("pendingReports", pendingReports);
         }
 
-        if (canNotice) {
+        if (canNoticeOverview) {
             Long noticeTotal = noticeMapper.selectCount(new LambdaQueryWrapper<>());
             stats.put("noticeTotal", noticeTotal);
 
@@ -267,7 +267,7 @@ public class StatisticsController {
     @GetMapping("/recent-notices")
     public R<List<Map<String, Object>>> getRecentNotices() {
         List<Map<String, Object>> result = new ArrayList<>();
-        if (!StpUtil.hasPermission("system:dashboard:notice")) {
+        if (!StpUtil.hasPermission("system:dashboard:notice:list")) {
             return R.ok(result);
         }
 

@@ -20,7 +20,7 @@
       <div class="card-body p-4">
         <div class="flex flex-wrap gap-4 items-center">
           <div class="form-control">
-            <select v-model="filterStatus" class="select select-bordered select-sm w-32" @change="loadNotices">
+            <select v-model="filterStatus" class="select select-bordered select-sm w-32" @change="handleSearch">
               <option :value="undefined">全部状态</option>
               <option :value="0">草稿</option>
               <option :value="1">已发布</option>
@@ -33,10 +33,10 @@
               type="text" 
               placeholder="搜索标题..." 
               class="input input-bordered input-sm w-48"
-              @keyup.enter="loadNotices"
+              @keyup.enter="handleSearch"
             />
           </div>
-          <button class="btn btn-sm btn-ghost" @click="loadNotices">
+          <button class="btn btn-sm btn-ghost" @click="handleSearch">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -49,7 +49,7 @@
     <!-- Table -->
     <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
       <div class="card-body p-0 flex flex-col min-h-0">
-        <div class="flex-1 overflow-auto">
+        <div class="flex-1 overflow-auto" ref="scrollContainer">
           <div class="overflow-x-auto">
             <table class="table">
             <thead>
@@ -107,24 +107,15 @@
               </tr>
             </tbody>
             </table>
+            <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
           </div>
         </div>
 
-        <!-- Pagination -->
-        <div v-if="total > pageSize" class="flex justify-center p-4 border-t">
-          <div class="join">
-            <button 
-              class="join-item btn btn-sm" 
-              :disabled="currentPage === 1"
-              @click="changePage(currentPage - 1)"
-            >«</button>
-            <button class="join-item btn btn-sm">第 {{ currentPage }} / {{ Math.ceil(total / pageSize) }} 页</button>
-            <button 
-              class="join-item btn btn-sm" 
-              :disabled="currentPage * pageSize >= total"
-              @click="changePage(currentPage + 1)"
-            >»</button>
-          </div>
+        <!-- Load Status -->
+        <div class="flex justify-between items-center p-4 border-t text-sm text-slate-500">
+          <div>已加载 {{ notices.length }} / {{ total || '-' }} 条</div>
+          <div v-if="loadingMore">正在加载更多...</div>
+          <div v-else-if="!hasMore && notices.length > 0">没有更多了</div>
         </div>
       </div>
     </div>
@@ -203,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { 
   queryNotices, createNotice, updateNotice, publishNotice, offlineNotice, deleteNotice,
   type NoticeVO, type NoticeDTO
@@ -216,6 +207,11 @@ const saving = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const filterStatus = ref<number | undefined>(undefined)
 const filterKeyword = ref('')
 const dialog = useDialog()
@@ -235,11 +231,42 @@ const form = ref<NoticeDTO>({
 const scopeIdsInput = ref('')
 
 onMounted(() => {
-  loadNotices()
+  loadNotices({ reset: true })
+  nextTick(() => setupObserver())
 })
 
-const loadNotices = async () => {
-  loading.value = true
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadNotices = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    notices.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res = await queryNotices({
       page: currentPage.value,
@@ -247,18 +274,29 @@ const loadNotices = async () => {
       status: filterStatus.value,
       keyword: filterKeyword.value || undefined
     })
-    notices.value = res.records || []
+    const records = res.records || []
     total.value = res.total || 0
+    notices.value = append ? [...notices.value, ...records] : records
+    if (total.value) {
+      hasMore.value = notices.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (e) {
     console.error('Failed to load notices', e)
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadNotices()
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await loadNotices({ append: true })
+}
+
+const handleSearch = () => {
+  loadNotices({ reset: true })
 }
 
 const openCreateModal = () => {
@@ -319,10 +357,10 @@ const handleSave = async () => {
     if (isEdit.value && editId.value) {
       await updateNotice(editId.value, form.value)
     } else {
-      await createNotice(form.value)
-    }
-    closeModal()
-    loadNotices()
+    await createNotice(form.value)
+  }
+  closeModal()
+  loadNotices({ reset: true })
   } catch (e: any) {
     await dialog.alert(e.response?.data?.msg || '保存失败')
   } finally {
@@ -334,7 +372,7 @@ const handlePublish = async (notice: NoticeVO) => {
   if (!await dialog.confirm(`确定发布公告「${notice.title}」？`)) return
   try {
     await publishNotice(notice.id)
-    loadNotices()
+    loadNotices({ reset: true })
   } catch (e: any) {
     await dialog.alert(e.response?.data?.msg || '发布失败')
   }
@@ -344,7 +382,7 @@ const handleOffline = async (notice: NoticeVO) => {
   if (!await dialog.confirm(`确定下线公告「${notice.title}」？`)) return
   try {
     await offlineNotice(notice.id)
-    loadNotices()
+    loadNotices({ reset: true })
   } catch (e: any) {
     await dialog.alert(e.response?.data?.msg || '下线失败')
   }
@@ -354,7 +392,7 @@ const handleDelete = async (notice: NoticeVO) => {
   if (!await dialog.confirm(`确定删除公告「${notice.title}」？此操作不可恢复！`)) return
   try {
     await deleteNotice(notice.id)
-    loadNotices()
+    loadNotices({ reset: true })
   } catch (e: any) {
     await dialog.alert(e.response?.data?.msg || '删除失败')
   }

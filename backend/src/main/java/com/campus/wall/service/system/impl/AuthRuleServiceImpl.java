@@ -9,10 +9,8 @@ import com.campus.wall.entity.system.SysRole;
 import com.campus.wall.entity.system.SysUserRole;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.system.SysAuthRuleMapper;
-import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
-import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.AuthRuleService;
 import com.campus.wall.vo.system.AuthRuleVO;
 import lombok.RequiredArgsConstructor;
@@ -29,8 +27,6 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     private final SysAuthRuleMapper authRuleMapper;
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
-    private final UserMapper userMapper;
-    private final SysDeptMapper deptMapper;
 
     @Override
     public PageResult<AuthRuleVO> queryRules(int page, int size, String triggerType, String verifyMethod, Boolean enabled) {
@@ -101,15 +97,11 @@ public class AuthRuleServiceImpl implements AuthRuleService {
                 .map(SysRole::getId)
                 .collect(Collectors.toSet());
 
-        Long newDeptId = null;
         Set<Long> toAddRoles = new HashSet<>();
 
         for (SysAuthRule rule : rules) {
             if (!match(rule, user)) {
                 continue;
-            }
-            if (newDeptId == null && rule.getDeptId() != null) {
-                newDeptId = rule.getDeptId();
             }
             if (rule.getRoleIds() != null) {
                 for (Long roleId : rule.getRoleIds()) {
@@ -118,11 +110,6 @@ public class AuthRuleServiceImpl implements AuthRuleService {
                     }
                 }
             }
-        }
-
-        if (newDeptId != null && !Objects.equals(user.getDeptId(), newDeptId)) {
-            user.setDeptId(newDeptId);
-            userMapper.updateById(user);
         }
 
         for (Long roleId : toAddRoles) {
@@ -194,7 +181,6 @@ public class AuthRuleServiceImpl implements AuthRuleService {
         rule.setMatchType(dto.getMatchType());
         rule.setMatchValue(dto.getMatchValue());
         rule.setRoleIds(dto.getRoleIds());
-        rule.setDeptId(dto.getDeptId());
         rule.setPriority(dto.getPriority() != null ? dto.getPriority() : 100);
         rule.setRemark(dto.getRemark());
     }
@@ -209,7 +195,6 @@ public class AuthRuleServiceImpl implements AuthRuleService {
         vo.setMatchType(rule.getMatchType());
         vo.setMatchValue(rule.getMatchValue());
         vo.setRoleIds(rule.getRoleIds());
-        vo.setDeptId(rule.getDeptId());
         vo.setPriority(rule.getPriority());
         vo.setRemark(rule.getRemark());
         vo.setCreatedAt(rule.getCreatedAt());
@@ -220,11 +205,6 @@ public class AuthRuleServiceImpl implements AuthRuleService {
             vo.setRoleNames(roles.stream().map(SysRole::getRoleName).collect(Collectors.toList()));
         } else {
             vo.setRoleNames(Collections.emptyList());
-        }
-
-        if (rule.getDeptId() != null) {
-            var dept = deptMapper.selectById(rule.getDeptId());
-            vo.setDeptName(dept != null ? dept.getDeptName() : null);
         }
 
         return vo;

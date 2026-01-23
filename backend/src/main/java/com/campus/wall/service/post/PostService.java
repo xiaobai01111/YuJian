@@ -4,7 +4,10 @@ import com.campus.wall.common.PageResult;
 import com.campus.wall.dto.post.PostCreateDTO;
 import com.campus.wall.dto.post.PostQueryDTO;
 import com.campus.wall.dto.post.PostUpdateDTO;
+import com.campus.wall.vo.common.BatchActionResultVO;
 import com.campus.wall.vo.post.PostVO;
+
+import java.util.List;
 
 /**
  * 帖子服务接口
@@ -57,6 +60,11 @@ public interface PostService {
     PostVO getPostDetail(Long postId);
 
     /**
+     * 记录阅读
+     */
+    void recordPostView(Long postId);
+
+    /**
      * 分页查询帖子
      */
     PageResult<PostVO> queryPosts(PostQueryDTO query);
@@ -80,6 +88,11 @@ public interface PostService {
      * 收藏帖子
      */
     void bookmarkPost(Long postId);
+
+    /**
+     * 批量收藏帖子
+     */
+    BatchActionResultVO bookmarkPosts(List<Long> postIds);
 
     /**
      * 取消收藏

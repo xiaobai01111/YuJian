@@ -26,8 +26,6 @@ public class AuthRuleDTO {
 
     private List<Long> roleIds;
 
-    private Long deptId;
-
     private Integer priority;
 
     private String remark;

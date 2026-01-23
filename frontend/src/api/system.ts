@@ -729,6 +729,77 @@ export function deleteNotice(id: number) {
     return request.delete(`/api/v1/console/notices/${id}`)
 }
 
+// --- Campus Hero (Hero配置) ---
+export interface CampusHeroVO {
+    id: number
+    pageKey: string
+    pageName?: string
+    enabled: boolean
+    theme?: string
+    titleStart?: string
+    titleHighlight?: string
+    description?: string
+    badge?: string
+    primaryBtnText?: string
+    primaryBtnLink?: string
+    secondaryBtnText?: string
+    secondaryBtnLink?: string
+    showStats?: boolean
+    statsNumber?: string
+    statsLabel?: string
+    avatarUrls?: string[]
+    floatCardLabel?: string
+    floatCardValue?: string
+    sortOrder?: number
+    updatedAt?: string
+}
+
+export interface CampusHeroDTO {
+    pageKey: string
+    pageName?: string
+    enabled?: boolean
+    theme?: string
+    titleStart?: string
+    titleHighlight?: string
+    description?: string
+    badge?: string
+    primaryBtnText?: string
+    primaryBtnLink?: string
+    secondaryBtnText?: string
+    secondaryBtnLink?: string
+    showStats?: boolean
+    statsNumber?: string
+    statsLabel?: string
+    avatarUrls?: string[]
+    floatCardLabel?: string
+    floatCardValue?: string
+    sortOrder?: number
+}
+
+export function getCampusHeroList(params: { page?: number; size?: number; keyword?: string; enabled?: boolean }) {
+    return request.get<PageResult<CampusHeroVO>>('/api/v1/console/campus/heroes', { params })
+}
+
+export function getCampusHeroDetail(id: number) {
+    return request.get<CampusHeroVO>(`/api/v1/console/campus/heroes/${id}`)
+}
+
+export function createCampusHero(data: CampusHeroDTO) {
+    return request.post<CampusHeroVO>('/api/v1/console/campus/heroes', data)
+}
+
+export function updateCampusHero(id: number, data: CampusHeroDTO) {
+    return request.put<CampusHeroVO>(`/api/v1/console/campus/heroes/${id}`, data)
+}
+
+export function deleteCampusHero(id: number) {
+    return request.delete(`/api/v1/console/campus/heroes/${id}`)
+}
+
+export function getCampusHeroByPage(pageKey: string) {
+    return request.get<CampusHeroVO>(`/api/v1/campus/heroes/${encodeURIComponent(pageKey)}`)
+}
+
 // --- Sensitive Words (敏感词) ---
 export interface SensitiveWordVO {
     id: number
@@ -773,8 +844,6 @@ export interface AuthRuleVO {
     matchValue?: string
     roleIds?: number[]
     roleNames?: string[]
-    deptId?: number
-    deptName?: string
     priority?: number
     remark?: string
     createdAt?: string
@@ -789,7 +858,6 @@ export interface AuthRuleDTO {
     matchType?: string
     matchValue?: string
     roleIds?: number[]
-    deptId?: number
     priority?: number
     remark?: string
 }

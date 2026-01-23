@@ -26,6 +26,7 @@ import com.campus.wall.service.content.SensitiveWordService;
 import com.campus.wall.service.file.FileService;
 import com.campus.wall.service.post.PostService;
 import com.campus.wall.service.security.DataScopeService;
+import com.campus.wall.vo.common.BatchActionResultVO;
 import com.campus.wall.vo.file.FileVO;
 import com.campus.wall.vo.post.PostVO;
 import com.campus.wall.vo.user.UserVO;
@@ -382,11 +383,18 @@ public class PostServiceImpl implements PostService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
 
-        // 增加浏览数
-        postMapper.incrementViewCount(postId);
-
         List<String> boards = loadBoards(postId);
         return toPostVO(post, true, boards, null, false);
+    }
+
+    @Override
+    @Transactional
+    public void recordPostView(Long postId) {
+        Post post = getPostOrThrow(postId);
+        if (post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        postMapper.incrementViewCount(postId);
     }
 
     @Override
@@ -566,6 +574,70 @@ public class PostServiceImpl implements PostService {
         bookmark.setUserId(userId);
         bookmark.setPostId(postId);
         bookmarkMapper.insert(bookmark);
+    }
+
+    @Override
+    @Transactional
+    public BatchActionResultVO bookmarkPosts(List<Long> postIds) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        BatchActionResultVO result = new BatchActionResultVO();
+
+        if (postIds == null || postIds.isEmpty()) {
+            result.setRequested(0);
+            result.setSuccess(0);
+            result.setSkipped(0);
+            return result;
+        }
+
+        List<Long> uniqueIds = postIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        result.setRequested(uniqueIds.size());
+
+        if (uniqueIds.isEmpty()) {
+            result.setSuccess(0);
+            result.setSkipped(0);
+            return result;
+        }
+
+        List<Post> posts = postMapper.selectBatchIds(uniqueIds);
+        Set<Long> validIds = posts.stream()
+                .filter(post -> post.getStatus() == null || post.getStatus() != STATUS_DELETED)
+                .map(Post::getId)
+                .collect(Collectors.toSet());
+
+        if (validIds.isEmpty()) {
+            result.setSuccess(0);
+            result.setSkipped(result.getRequested());
+            return result;
+        }
+
+        List<Bookmark> existing = bookmarkMapper.selectList(
+                new LambdaQueryWrapper<Bookmark>()
+                        .eq(Bookmark::getUserId, userId)
+                        .in(Bookmark::getPostId, validIds)
+        );
+        Set<Long> existingIds = existing.stream()
+                .map(Bookmark::getPostId)
+                .collect(Collectors.toSet());
+
+        int successCount = 0;
+        for (Long postId : validIds) {
+            if (existingIds.contains(postId)) {
+                continue;
+            }
+            Bookmark bookmark = new Bookmark();
+            bookmark.setUserId(userId);
+            bookmark.setPostId(postId);
+            bookmarkMapper.insert(bookmark);
+            successCount++;
+        }
+
+        result.setSuccess(successCount);
+        result.setSkipped(result.getRequested() - successCount);
+        return result;
     }
 
     @Override

@@ -29,9 +29,14 @@
               </div>
             </div>
             <div class="flex-1">
-              <div class="font-bold text-slate-800">
+              <button
+                class="font-bold text-slate-800"
+                :class="post.isAnonymous || !post.author?.id ? 'cursor-not-allowed opacity-70' : 'hover:text-primary'"
+                :disabled="post.isAnonymous || !post.author?.id"
+                @click="openUserProfile"
+              >
                 {{ post.isAnonymous ? '匿名用户' : (post.author?.nickname || post.author?.username || '用户') }}
-              </div>
+              </button>
               <div class="text-xs text-slate-400">
                 {{ formatDateTime(post.createdAt) }} · {{ post.viewCount || 0 }} 阅读
               </div>
@@ -115,7 +120,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { getPostDetail, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
+import { useRouter } from 'vue-router'
+import { getPostDetail, recordPostView, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
 import { getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
@@ -131,6 +137,7 @@ const emit = defineEmits<{
 }>()
 
 const userStore = useUserStore()
+const router = useRouter()
 const dialog = useDialog()
 const post = ref<PostVO | null>(null)
 const loading = ref(false)
@@ -162,6 +169,14 @@ const loadPost = async (id: number) => {
   try {
     const res: any = await getPostDetail(id)
     post.value = res
+    try {
+      await recordPostView(id)
+      if (post.value) {
+        post.value.viewCount = (post.value.viewCount || 0) + 1
+      }
+    } catch (e) {
+      console.error(e)
+    }
   } catch (e: any) {
     error.value = e?.message || '加载失败'
   } finally {
@@ -213,6 +228,12 @@ const handleBookmark = async () => {
   } catch (e) {
     console.error(e)
   }
+}
+
+const openUserProfile = () => {
+  if (!post.value || post.value.isAnonymous || !post.value.author?.id) return
+  router.push(`/user/${post.value.author.id}`)
+  close()
 }
 
 const formatDateTime = (dateStr?: string) => {

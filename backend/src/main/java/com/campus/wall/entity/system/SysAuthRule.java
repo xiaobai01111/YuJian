@@ -39,8 +39,6 @@ public class SysAuthRule implements Serializable {
     @TableField(typeHandler = JsonbLongListTypeHandler.class, jdbcType = org.apache.ibatis.type.JdbcType.OTHER)
     private List<Long> roleIds;
 
-    private Long deptId;
-
     private Integer priority;
 
     private String remark;

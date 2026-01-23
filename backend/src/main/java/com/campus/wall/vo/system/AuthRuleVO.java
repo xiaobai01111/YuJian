@@ -28,10 +28,6 @@ public class AuthRuleVO {
 
     private List<String> roleNames;
 
-    private Long deptId;
-
-    private String deptName;
-
     private Integer priority;
 
     private String remark;

@@ -75,7 +75,7 @@
     <!-- Table -->
     <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0">
       <div class="card-body p-0 flex flex-col min-h-0">
-        <div class="flex-1 overflow-auto">
+        <div class="flex-1 overflow-auto" ref="scrollContainer">
           <div class="overflow-x-auto">
             <table class="table">
             <thead>
@@ -126,27 +126,15 @@
               </tr>
             </tbody>
             </table>
+            <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
           </div>
         </div>
 
-        <!-- Pagination -->
-        <div class="flex items-center justify-between p-4 border-t border-base-200">
-          <div class="text-sm text-slate-500">
-            共 {{ total }} 条记录
-          </div>
-          <div class="join">
-            <button 
-              class="join-item btn btn-sm" 
-              :disabled="currentPage <= 1"
-              @click="changePage(currentPage - 1)"
-            >«</button>
-            <button class="join-item btn btn-sm">第 {{ currentPage }} 页</button>
-            <button 
-              class="join-item btn btn-sm" 
-              :disabled="currentPage * pageSize >= total"
-              @click="changePage(currentPage + 1)"
-            >»</button>
-          </div>
+        <!-- Load Status -->
+        <div class="flex items-center justify-between p-4 border-t border-base-200 text-sm text-slate-500">
+          <div>已加载 {{ words.length }} / {{ total || '-' }} 条</div>
+          <div v-if="loadingMore">正在加载更多...</div>
+          <div v-else-if="!hasMore && words.length > 0">没有更多了</div>
         </div>
       </div>
     </div>
@@ -184,7 +172,7 @@
         <div class="form-control mb-4">
           <label class="label">
             <span class="label-text">敏感词列表</span>
-            <span class="label-text-alt text-slate-400">每行一个，最多500条</span>
+            <span class="label-text-alt text-slate-400">每行一个，后台分片处理</span>
           </label>
           <textarea 
             v-model="batchForm.text" 
@@ -253,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { 
   querySensitiveWords, 
   createSensitiveWord, 
@@ -294,6 +282,11 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const searchKeyword = ref('')
 const selectedIds = ref<number[]>([])
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 // Modals
 const showAddModal = ref(false)
@@ -318,10 +311,42 @@ const isAllSelected = computed(() => {
 // Methods
 onMounted(() => {
   loadData()
+  nextTick(() => setupObserver())
 })
 
-async function loadData() {
-  loading.value = true
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+async function fetchData({ append = false, reset = false } = {}) {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    words.value = []
+    selectedIds.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res = await querySensitiveWords({
       page: currentPage.value,
@@ -329,27 +354,41 @@ async function loadData() {
       keyword: searchKeyword.value || undefined
     })
     const data = res.data || res
-    words.value = data.records || []
+    const records = data.records || []
     total.value = data.total || 0
+    if (append) {
+      words.value = [...words.value, ...records]
+    } else {
+      words.value = records
+    }
+    if (total.value) {
+      hasMore.value = words.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (e: any) {
     console.error('Failed to load sensitive words', e)
-    words.value = []
-    total.value = 0
+    if (!append) {
+      words.value = []
+      total.value = 0
+    }
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
+async function loadData() {
+  await fetchData({ reset: true })
+}
+
 function handleSearch() {
-  currentPage.value = 1
-  selectedIds.value = []
   loadData()
 }
 
-function changePage(page: number) {
-  currentPage.value = page
-  selectedIds.value = []
-  loadData()
+async function loadMore() {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await fetchData({ append: true })
 }
 
 function toggleSelectAll() {

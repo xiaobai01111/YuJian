@@ -2,8 +2,10 @@ package com.campus.wall.service.system;
 
 import com.campus.wall.common.PageResult;
 import com.campus.wall.dto.system.ReportBatchHandleDTO;
+import com.campus.wall.dto.system.ReportBatchCreateDTO;
 import com.campus.wall.dto.system.ReportCreateDTO;
 import com.campus.wall.dto.system.ReportHandleDTO;
+import com.campus.wall.vo.common.BatchActionResultVO;
 import com.campus.wall.vo.system.ReportVO;
 
 /**
@@ -15,6 +17,11 @@ public interface ReportService {
      * 创建举报
      */
     Long createReport(ReportCreateDTO dto);
+
+    /**
+     * 批量创建举报
+     */
+    BatchActionResultVO createReports(ReportBatchCreateDTO dto);
 
     /**
      * 处理举报

@@ -67,7 +67,6 @@
                   <th class="w-28">方式</th>
                   <th>匹配</th>
                   <th class="w-40">角色</th>
-                  <th class="w-28">部门</th>
                   <th class="w-20">状态</th>
                   <th class="w-16">优先级</th>
                   <th class="w-32">操作</th>
@@ -75,12 +74,12 @@
               </thead>
               <tbody>
                 <tr v-if="loading">
-                  <td colspan="10" class="text-center py-8">
+                  <td colspan="9" class="text-center py-8">
                     <span class="loading loading-spinner loading-md"></span>
                   </td>
                 </tr>
                 <tr v-else-if="rules.length === 0">
-                  <td colspan="10" class="text-center py-8 text-slate-500">暂无数据</td>
+                  <td colspan="9" class="text-center py-8 text-slate-500">暂无数据</td>
                 </tr>
                 <tr v-for="rule in rules" :key="rule.id" class="hover">
                   <td>{{ rule.id }}</td>
@@ -98,7 +97,6 @@
                       <span v-if="!rule.roleNames || rule.roleNames.length === 0" class="text-slate-400 text-xs">-</span>
                     </div>
                   </td>
-                  <td>{{ rule.deptName || '-' }}</td>
                   <td>
                     <span :class="rule.enabled ? 'badge badge-success badge-sm' : 'badge badge-ghost badge-sm'">
                       {{ rule.enabled ? '启用' : '停用' }}
@@ -177,30 +175,30 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="form-control">
-              <label class="label"><span class="label-text font-medium">分配部门</span></label>
-              <select
-                ref="deptSelectRef"
-                v-model="form.deptId"
-                class="select select-bordered max-h-60 overflow-auto"
-                @scroll="handleDeptScroll"
-              >
-                <option :value="null">不分配</option>
-                <option v-for="dept in deptOptionsVisible" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
-              </select>
-            </div>
-            <div class="form-control">
-              <label class="label"><span class="label-text font-medium">优先级</span></label>
-              <input v-model.number="form.priority" type="number" class="input input-bordered" />
-            </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">优先级</span></label>
+            <input v-model.number="form.priority" type="number" class="input input-bordered" />
           </div>
 
           <div class="form-control">
             <label class="label"><span class="label-text font-medium">分配角色</span></label>
             <div class="border border-base-200 rounded-lg p-3 max-h-40 overflow-auto bg-base-50">
+              <label class="flex items-center gap-2 py-1">
+                <input
+                  type="radio"
+                  class="radio radio-sm"
+                  :value="null"
+                  v-model="selectedRoleId"
+                />
+                <span>不分配</span>
+              </label>
               <label v-for="role in roleOptions" :key="role.id" class="flex items-center gap-2 py-1">
-                <input type="checkbox" class="checkbox checkbox-sm" :value="role.id" v-model="form.roleIds" />
+                <input
+                  type="radio"
+                  class="radio radio-sm"
+                  :value="role.id"
+                  v-model="selectedRoleId"
+                />
                 <span>{{ role.roleName }}</span>
               </label>
               <div v-if="roleOptions.length === 0" class="text-xs text-slate-400">暂无角色</div>
@@ -247,7 +245,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 import {
@@ -256,11 +254,9 @@ import {
   updateAuthRule,
   deleteAuthRule,
   getRoleList,
-  getDeptTree,
   type AuthRuleVO,
   type AuthRuleDTO,
-  type RoleVO,
-  type DeptVO
+  type RoleVO
 } from '@/api/system'
 
 const userStore = useUserStore()
@@ -282,12 +278,6 @@ const filterMethod = ref<string>('')
 const filterEnabled = ref<any>('')
 
 const roleOptions = ref<RoleVO[]>([])
-const deptOptions = ref<{ id: number; name: string }[]>([])
-const deptSelectRef = ref<HTMLSelectElement | null>(null)
-const deptViewportRef = ref<HTMLDivElement | null>(null)
-const deptOptionsVisible = ref<{ id: number; name: string }[]>([])
-const deptPage = ref(1)
-const deptPageSize = 200
 
 const formModal = ref<HTMLDialogElement | null>(null)
 const deleteModal = ref<HTMLDialogElement | null>(null)
@@ -303,9 +293,17 @@ const form = reactive<AuthRuleDTO>({
   matchType: 'ANY',
   matchValue: '',
   roleIds: [],
-  deptId: null,
   priority: 100,
   remark: ''
+})
+
+const selectedRoleId = computed<number | null>({
+  get() {
+    return form.roleIds && form.roleIds.length > 0 ? form.roleIds[0] : null
+  },
+  set(value) {
+    form.roleIds = value ? [value] : []
+  }
 })
 
 onMounted(() => {
@@ -340,47 +338,6 @@ const loadOptions = async () => {
     const roles: any = await getRoleList()
     roleOptions.value = roles || []
   } catch {}
-  try {
-    const depts: any = await getDeptTree()
-    deptOptions.value = flattenDepts(depts || [])
-    resetDeptOptions()
-  } catch {}
-}
-
-const flattenDepts = (nodes: DeptVO[], prefix = ''): { id: number; name: string }[] => {
-  const result: { id: number; name: string }[] = []
-  for (const node of nodes) {
-    result.push({ id: node.id, name: `${prefix}${node.deptName}` })
-    if (node.children && node.children.length > 0) {
-      result.push(...flattenDepts(node.children, `${prefix}— `))
-    }
-  }
-  return result
-}
-
-const resetDeptOptions = () => {
-  deptPage.value = 1
-  deptOptionsVisible.value = deptOptions.value.slice(0, deptPageSize)
-  nextTick(() => {
-    if (deptSelectRef.value) {
-      deptSelectRef.value.scrollTop = 0
-    }
-  })
-}
-
-const loadMoreDeptOptions = () => {
-  if (deptOptionsVisible.value.length >= deptOptions.value.length) return
-  deptPage.value += 1
-  deptOptionsVisible.value = deptOptions.value.slice(0, deptPage.value * deptPageSize)
-}
-
-const handleDeptScroll = (event: Event) => {
-  const target = event.target as HTMLElement
-  if (!target) return
-  const nearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 16
-  if (nearBottom) {
-    loadMoreDeptOptions()
-  }
 }
 
 const openCreateModal = () => {
@@ -393,11 +350,9 @@ const openCreateModal = () => {
   form.matchType = 'ANY'
   form.matchValue = ''
   form.roleIds = []
-  form.deptId = null
   form.priority = 100
   form.remark = ''
   formModal.value?.showModal()
-  resetDeptOptions()
 }
 
 const openEditModal = (rule: AuthRuleVO) => {
@@ -409,12 +364,10 @@ const openEditModal = (rule: AuthRuleVO) => {
   form.verifyMethod = rule.verifyMethod || ''
   form.matchType = rule.matchType || 'ANY'
   form.matchValue = rule.matchValue || ''
-  form.roleIds = rule.roleIds ? [...rule.roleIds] : []
-  form.deptId = rule.deptId ?? null
+  form.roleIds = rule.roleIds && rule.roleIds.length > 0 ? [rule.roleIds[0]] : []
   form.priority = rule.priority ?? 100
   form.remark = rule.remark || ''
   formModal.value?.showModal()
-  resetDeptOptions()
 }
 
 const closeModal = () => {
@@ -436,7 +389,6 @@ const handleSave = async () => {
       matchType: form.matchType,
       matchValue: form.matchType === 'ANY' ? undefined : form.matchValue?.trim() || undefined,
       roleIds: form.roleIds && form.roleIds.length > 0 ? form.roleIds : [],
-      deptId: form.deptId ?? undefined,
       priority: form.priority ?? 100,
       remark: form.remark?.trim() || undefined
     }

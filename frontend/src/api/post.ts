@@ -72,6 +72,10 @@ export function getPostDetail(id: number) {
     return request.get(`/api/v1/posts/${id}`)
 }
 
+export function recordPostView(id: number) {
+    return request.post(`/api/v1/posts/${id}/view`)
+}
+
 export function createPost(data: PostCreateDTO) {
     return request.post('/api/v1/posts', data)
 }
@@ -100,8 +104,16 @@ export function bookmarkPost(id: number) {
     return request.post(`/api/v1/posts/${id}/bookmark`)
 }
 
+export function batchBookmarkPosts(postIds: number[]) {
+    return request.post('/api/v1/posts/bookmarks/batch', { postIds })
+}
+
 export function unbookmarkPost(id: number) {
     return request.delete(`/api/v1/posts/${id}/bookmark`)
+}
+
+export function batchReportPosts(postIds: number[], reason: string) {
+    return request.post('/api/v1/posts/reports/batch', { postIds, reason })
 }
 
 export function resolvePost(id: number) {

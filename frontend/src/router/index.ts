@@ -8,13 +8,15 @@ const router = createRouter({
         {
             path: '/',
             name: 'Home',
-            component: () => import('@/views/home/index.vue')
+            component: () => import('@/views/home/index.vue'),
+            meta: { heroKey: 'HOME' }
         },
         {
             path: '/confessions',
             name: 'Confessions',
             component: () => import('@/views/confessions/index.vue'),
             meta: {
+                heroKey: 'CONFESSIONS',
                 hero: {
                     titleStart: '勇敢表达',
                     titleHighlight: '爱的声音',
@@ -33,6 +35,7 @@ const router = createRouter({
             name: 'TreeHole',
             component: () => import('@/views/treehole/index.vue'),
             meta: {
+                heroKey: 'TREEHOLE',
                 hero: {
                     titleStart: '倾听内心',
                     titleHighlight: '真实树洞',
@@ -51,6 +54,7 @@ const router = createRouter({
             name: 'Help',
             component: () => import('@/views/help/index.vue'),
             meta: {
+                heroKey: 'HELP',
                 hero: {
                     titleStart: '互帮互助',
                     titleHighlight: '共同成长',
@@ -69,6 +73,7 @@ const router = createRouter({
             name: 'Market',
             component: () => import('@/views/market/index.vue'),
             meta: {
+                heroKey: 'MARKET',
                 hero: {
                     titleStart: '旧物新生',
                     titleHighlight: '跳蚤市场',
@@ -87,6 +92,7 @@ const router = createRouter({
             name: 'LostFound',
             component: () => import('@/views/lost-found/index.vue'),
             meta: {
+                heroKey: 'LOST_FOUND',
                 hero: {
                     titleStart: '寻找失物',
                     titleHighlight: '传递温暖',
@@ -281,6 +287,12 @@ const router = createRouter({
                     name: 'ToolGallery',
                     component: () => import('@/views/console/tool/gallery/index.vue'),
                     meta: { title: '图库管理', icon: 'image' }
+                },
+                {
+                    path: 'campus/hero',
+                    name: 'CampusHeroManagement',
+                    component: () => import('@/views/console/campus/hero/index.vue'),
+                    meta: { title: 'Hero管理', icon: 'image' }
                 }
             ]
         },

@@ -4,12 +4,15 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
+import com.campus.wall.dto.post.PostBatchBookmarkDTO;
 import com.campus.wall.dto.post.PostCreateDTO;
 import com.campus.wall.dto.post.PostQueryDTO;
 import com.campus.wall.dto.post.PostUpdateDTO;
+import com.campus.wall.dto.system.ReportBatchCreateDTO;
 import com.campus.wall.dto.system.ReportCreateDTO;
 import com.campus.wall.service.post.PostService;
 import com.campus.wall.service.system.ReportService;
+import com.campus.wall.vo.common.BatchActionResultVO;
 import com.campus.wall.vo.post.PostVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -48,6 +51,13 @@ public class PostController {
     @GetMapping("/{id}")
     public R<PostVO> detail(@PathVariable Long id) {
         return R.ok(postService.getPostDetail(id));
+    }
+
+    @Operation(summary = "记录阅读")
+    @PostMapping("/{id}/view")
+    public R<Void> recordView(@PathVariable Long id) {
+        postService.recordPostView(id);
+        return R.ok();
     }
 
     @Operation(summary = "创建帖子")
@@ -105,6 +115,13 @@ public class PostController {
         return R.ok();
     }
 
+    @Operation(summary = "批量收藏帖子")
+    @SaCheckLogin
+    @PostMapping("/bookmarks/batch")
+    public R<BatchActionResultVO> batchBookmark(@Valid @RequestBody PostBatchBookmarkDTO dto) {
+        return R.ok(postService.bookmarkPosts(dto.getPostIds()));
+    }
+
     @Operation(summary = "取消收藏")
     @SaCheckLogin
     @DeleteMapping("/{id}/bookmark")
@@ -138,5 +155,12 @@ public class PostController {
     public R<Long> report(@PathVariable Long id, @Valid @RequestBody ReportCreateDTO dto) {
         dto.setPostId(id);
         return R.ok(reportService.createReport(dto));
+    }
+
+    @Operation(summary = "批量举报帖子")
+    @SaCheckLogin
+    @PostMapping("/reports/batch")
+    public R<BatchActionResultVO> batchReport(@Valid @RequestBody ReportBatchCreateDTO dto) {
+        return R.ok(reportService.createReports(dto));
     }
 }

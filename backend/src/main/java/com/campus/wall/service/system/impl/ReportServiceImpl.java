@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.ResultCode;
+import com.campus.wall.dto.system.ReportBatchCreateDTO;
 import com.campus.wall.dto.system.ReportBatchHandleDTO;
 import com.campus.wall.dto.system.ReportCreateDTO;
 import com.campus.wall.dto.system.ReportHandleDTO;
@@ -18,9 +19,10 @@ import com.campus.wall.mapper.post.PostMapper;
 import com.campus.wall.mapper.system.ReportMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.security.DataScopeService;
-import com.campus.wall.service.system.ReportService;
 import com.campus.wall.service.system.OperLogService;
+import com.campus.wall.service.system.ReportService;
 import com.campus.wall.service.user.CreditService;
+import com.campus.wall.vo.common.BatchActionResultVO;
 import com.campus.wall.vo.post.PostVO;
 import com.campus.wall.vo.system.ReportVO;
 import com.campus.wall.vo.user.UserVO;
@@ -33,6 +35,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +57,7 @@ public class ReportServiceImpl implements ReportService {
     // 举报状态：0待处理 1已处理
     private static final int STATUS_PENDING = 0;
     private static final int STATUS_HANDLED = 1;
+    private static final int POST_STATUS_DELETED = 2;
 
     @Override
     @Transactional
@@ -89,6 +93,74 @@ public class ReportServiceImpl implements ReportService {
 
         log.info("用户 {} 举报帖子 {}: {}", userId, dto.getPostId(), dto.getReason());
         return report.getId();
+    }
+
+    @Override
+    @Transactional
+    public BatchActionResultVO createReports(ReportBatchCreateDTO dto) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        BatchActionResultVO result = new BatchActionResultVO();
+
+        if (dto == null || dto.getPostIds() == null || dto.getPostIds().isEmpty()) {
+            result.setRequested(0);
+            result.setSuccess(0);
+            result.setSkipped(0);
+            return result;
+        }
+
+        List<Long> uniqueIds = dto.getPostIds().stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        result.setRequested(uniqueIds.size());
+
+        if (uniqueIds.isEmpty()) {
+            result.setSuccess(0);
+            result.setSkipped(0);
+            return result;
+        }
+
+        List<Post> posts = postMapper.selectBatchIds(uniqueIds);
+        List<Long> validIds = posts.stream()
+                .filter(post -> post.getStatus() == null || post.getStatus() != POST_STATUS_DELETED)
+                .map(Post::getId)
+                .collect(Collectors.toList());
+
+        if (validIds.isEmpty()) {
+            result.setSuccess(0);
+            result.setSkipped(result.getRequested());
+            return result;
+        }
+
+        List<Report> existing = reportMapper.selectList(
+                new LambdaQueryWrapper<Report>()
+                        .eq(Report::getReporterId, userId)
+                        .in(Report::getPostId, validIds)
+                        .eq(Report::getStatus, STATUS_PENDING)
+        );
+        Set<Long> existingIds = existing.stream()
+                .map(Report::getPostId)
+                .collect(Collectors.toSet());
+
+        int successCount = 0;
+        for (Long postId : validIds) {
+            if (existingIds.contains(postId)) {
+                continue;
+            }
+            Report report = new Report();
+            report.setReporterId(userId);
+            report.setPostId(postId);
+            report.setReason(dto.getReason());
+            report.setStatus(STATUS_PENDING);
+            report.setDeleted(0);
+            reportMapper.insert(report);
+            successCount++;
+        }
+
+        result.setSuccess(successCount);
+        result.setSkipped(result.getRequested() - successCount);
+        return result;
     }
 
     @Override

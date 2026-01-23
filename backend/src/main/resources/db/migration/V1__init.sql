@@ -62,6 +62,37 @@ COMMENT ON COLUMN sys_menus.type IS '类型：0-目录，1-菜单，2-按钮';
 COMMENT ON COLUMN sys_menus.perms IS '权限标识';
 COMMENT ON COLUMN sys_menus.status IS '状态：0-正常，1-停用';
 
+CREATE TABLE campus_heroes (
+    id BIGSERIAL PRIMARY KEY,
+    page_key VARCHAR(50) NOT NULL UNIQUE,
+    page_name VARCHAR(100),
+    enabled BOOLEAN DEFAULT TRUE,
+    theme VARCHAR(20),
+    title_start VARCHAR(50),
+    title_highlight VARCHAR(50),
+    description TEXT,
+    badge VARCHAR(100),
+    primary_btn_text VARCHAR(50),
+    primary_btn_link VARCHAR(255),
+    secondary_btn_text VARCHAR(50),
+    secondary_btn_link VARCHAR(255),
+    show_stats BOOLEAN DEFAULT TRUE,
+    stats_number VARCHAR(50),
+    stats_label VARCHAR(100),
+    avatar_urls JSONB,
+    float_card_label VARCHAR(50),
+    float_card_value VARCHAR(50),
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE campus_heroes IS '校园主页Hero配置';
+COMMENT ON COLUMN campus_heroes.page_key IS '页面标识';
+COMMENT ON COLUMN campus_heroes.page_name IS '页面名称';
+COMMENT ON COLUMN campus_heroes.enabled IS '是否启用';
+COMMENT ON COLUMN campus_heroes.avatar_urls IS '头像列表';
+
 CREATE TABLE sys_role_menus (
     role_id BIGINT NOT NULL REFERENCES sys_roles(id) ON DELETE CASCADE,
     menu_id BIGINT NOT NULL REFERENCES sys_menus(id) ON DELETE CASCADE,

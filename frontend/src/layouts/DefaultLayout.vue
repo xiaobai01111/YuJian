@@ -41,17 +41,69 @@
 import Navbar from '@/components/layout/Navbar.vue'
 import HeroSection from '@/components/layout/HeroSection.vue'
 import Footer from '@/components/layout/Footer.vue'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { getCampusHeroByPage, type CampusHeroVO } from '@/api/system'
 
 const route = useRoute()
 const isHomePage = computed(() => route.path === '/')
+const heroConfig = ref<CampusHeroVO | null>(null)
 
-const showHero = computed(() => {
-  return isHomePage.value || !!route.meta.hero
+const heroKey = computed(() => {
+  if (route.meta?.heroKey) {
+    return String(route.meta.heroKey)
+  }
+  if (isHomePage.value) {
+    return 'HOME'
+  }
+  if (route.meta?.hero) {
+    return String(route.name || '')
+  }
+  return ''
 })
 
+const showHero = computed(() => {
+  if (heroConfig.value && heroConfig.value.enabled === false) {
+    return false
+  }
+  return isHomePage.value || !!route.meta.heroKey || !!route.meta.hero
+})
+
+const fetchHeroConfig = async () => {
+  if (!heroKey.value) {
+    heroConfig.value = null
+    return
+  }
+  try {
+    const res: any = await getCampusHeroByPage(heroKey.value)
+    heroConfig.value = res || null
+  } catch (error) {
+    console.error('Failed to fetch hero config', error)
+    heroConfig.value = null
+  }
+}
+
 const heroProps = computed(() => {
+  if (heroConfig.value?.enabled) {
+    const config = heroConfig.value
+    const props: Record<string, any> = {}
+    if (config.theme) props.theme = config.theme
+    if (config.titleStart) props.titleStart = config.titleStart
+    if (config.titleHighlight) props.titleHighlight = config.titleHighlight
+    if (config.description) props.description = config.description
+    if (config.badge) props.badge = config.badge
+    if (config.primaryBtnText) props.primaryBtnText = config.primaryBtnText
+    if (config.primaryBtnLink) props.primaryBtnLink = config.primaryBtnLink
+    if (config.secondaryBtnText) props.secondaryBtnText = config.secondaryBtnText
+    if (config.secondaryBtnLink) props.secondaryBtnLink = config.secondaryBtnLink
+    if (config.showStats !== undefined) props.showStats = config.showStats
+    if (config.statsNumber) props.statsNumber = config.statsNumber
+    if (config.statsLabel) props.statsLabel = config.statsLabel
+    if (config.avatarUrls && config.avatarUrls.length > 0) props.avatarUrls = config.avatarUrls
+    if (config.floatCardLabel) props.floatCardLabel = config.floatCardLabel
+    if (config.floatCardValue) props.floatCardValue = config.floatCardValue
+    return props
+  }
   if (isHomePage.value) {
     return {
       theme: 'blue',
@@ -65,6 +117,14 @@ const heroProps = computed(() => {
   }
   return route.meta.hero || {}
 })
+
+watch(
+  () => heroKey.value,
+  () => {
+    fetchHeroConfig()
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
