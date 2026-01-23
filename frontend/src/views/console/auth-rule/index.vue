@@ -180,9 +180,14 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="form-control">
               <label class="label"><span class="label-text font-medium">分配部门</span></label>
-              <select v-model="form.deptId" class="select select-bordered">
+              <select
+                ref="deptSelectRef"
+                v-model="form.deptId"
+                class="select select-bordered max-h-60 overflow-auto"
+                @scroll="handleDeptScroll"
+              >
                 <option :value="null">不分配</option>
-                <option v-for="dept in deptOptions" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
+                <option v-for="dept in deptOptionsVisible" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
               </select>
             </div>
             <div class="form-control">
@@ -242,7 +247,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 import {
@@ -278,6 +283,11 @@ const filterEnabled = ref<any>('')
 
 const roleOptions = ref<RoleVO[]>([])
 const deptOptions = ref<{ id: number; name: string }[]>([])
+const deptSelectRef = ref<HTMLSelectElement | null>(null)
+const deptViewportRef = ref<HTMLDivElement | null>(null)
+const deptOptionsVisible = ref<{ id: number; name: string }[]>([])
+const deptPage = ref(1)
+const deptPageSize = 200
 
 const formModal = ref<HTMLDialogElement | null>(null)
 const deleteModal = ref<HTMLDialogElement | null>(null)
@@ -333,6 +343,7 @@ const loadOptions = async () => {
   try {
     const depts: any = await getDeptTree()
     deptOptions.value = flattenDepts(depts || [])
+    resetDeptOptions()
   } catch {}
 }
 
@@ -345,6 +356,31 @@ const flattenDepts = (nodes: DeptVO[], prefix = ''): { id: number; name: string 
     }
   }
   return result
+}
+
+const resetDeptOptions = () => {
+  deptPage.value = 1
+  deptOptionsVisible.value = deptOptions.value.slice(0, deptPageSize)
+  nextTick(() => {
+    if (deptSelectRef.value) {
+      deptSelectRef.value.scrollTop = 0
+    }
+  })
+}
+
+const loadMoreDeptOptions = () => {
+  if (deptOptionsVisible.value.length >= deptOptions.value.length) return
+  deptPage.value += 1
+  deptOptionsVisible.value = deptOptions.value.slice(0, deptPage.value * deptPageSize)
+}
+
+const handleDeptScroll = (event: Event) => {
+  const target = event.target as HTMLElement
+  if (!target) return
+  const nearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 16
+  if (nearBottom) {
+    loadMoreDeptOptions()
+  }
 }
 
 const openCreateModal = () => {
@@ -361,6 +397,7 @@ const openCreateModal = () => {
   form.priority = 100
   form.remark = ''
   formModal.value?.showModal()
+  resetDeptOptions()
 }
 
 const openEditModal = (rule: AuthRuleVO) => {
@@ -377,6 +414,7 @@ const openEditModal = (rule: AuthRuleVO) => {
   form.priority = rule.priority ?? 100
   form.remark = rule.remark || ''
   formModal.value?.showModal()
+  resetDeptOptions()
 }
 
 const closeModal = () => {

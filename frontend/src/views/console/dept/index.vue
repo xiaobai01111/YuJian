@@ -1,7 +1,7 @@
 <template>
-  <div class="h-full flex flex-col">
-    <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 flex flex-col">
-      <div class="card-body p-4 flex-1 flex flex-col overflow-hidden">
+  <div class="h-full flex flex-col min-h-0">
+    <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col">
+      <div class="card-body p-4 flex-1 min-h-0 flex flex-col overflow-hidden">
         <!-- Toolbar -->
         <div class="flex flex-wrap justify-between items-center mb-4 gap-4 flex-none">
           <div class="flex flex-wrap gap-2">
@@ -28,10 +28,24 @@
           </div>
         </div>
 
+        <div class="flex flex-wrap items-center gap-2 mb-4 flex-none">
+          <div class="form-control">
+            <input
+              v-model="searchKeyword"
+              type="text"
+              placeholder="搜索部门名称/负责人/电话/邮箱"
+              class="input input-bordered input-sm w-72"
+              @keyup.enter="handleSearch"
+            />
+          </div>
+          <button class="btn btn-sm btn-ghost" @click="handleSearch">搜索</button>
+          <button class="btn btn-sm btn-ghost" @click="resetSearch">重置</button>
+        </div>
+
         <!-- Table -->
-        <div class="card bg-base-100 shadow-sm border border-base-200">
-          <div class="card-body p-0">
-            <div class="overflow-x-auto">
+        <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0">
+          <div class="card-body p-0 flex flex-col min-h-0">
+            <div class="overflow-auto flex-1 min-h-0">
               <table class="table dept-table">
             <thead class="bg-base-200/30 text-base-content/70">
               <tr>
@@ -54,7 +68,7 @@
               </tr>
               <template v-else>
                 <DeptTreeRow
-                  v-for="dept in deptTree"
+                  v-for="dept in visibleTree"
                   :key="dept.id"
                   :dept="dept"
                   :level="0"
@@ -385,10 +399,12 @@ const getDataScopeClass = (scope?: number) => {
 const loading = ref(false)
 const submitting = ref(false)
 const deptTree = ref<DeptVO[]>([])
+const visibleTree = ref<DeptVO[]>([])
 const expandedIds = ref<Set<number>>(new Set())
-const isExpanded = ref(true)
+const isExpanded = ref(false)
 const SYSTEM_DEPT_ID = 1
 const dialog = useDialog()
+const searchKeyword = ref('')
 
 const form = reactive<DeptDTO>({
   parentId: SYSTEM_DEPT_ID,
@@ -427,17 +443,7 @@ const fetchDeptTree = async () => {
   try {
     const res: any = await getDeptTree()
     deptTree.value = res || []
-    // Expand all by default
-    const allIds = new Set<number>()
-    const collectIds = (depts: DeptVO[]) => {
-      for (const dept of depts) {
-        allIds.add(dept.id)
-        if (dept.children) collectIds(dept.children)
-      }
-    }
-    collectIds(deptTree.value)
-    expandedIds.value = allIds
-    isExpanded.value = true
+    applySearch()
   } catch (error) {
     console.error(error)
   } finally {
@@ -466,10 +472,55 @@ const toggleExpandAll = () => {
         if (dept.children) collectIds(dept.children)
       }
     }
-    collectIds(deptTree.value)
+    collectIds(visibleTree.value)
     expandedIds.value = allIds
     isExpanded.value = true
   }
+}
+
+const handleSearch = () => {
+  applySearch()
+}
+
+const resetSearch = () => {
+  searchKeyword.value = ''
+  applySearch()
+}
+
+const applySearch = () => {
+  const keyword = searchKeyword.value.trim()
+  if (!keyword) {
+    visibleTree.value = deptTree.value
+    expandedIds.value = new Set()
+    isExpanded.value = false
+    return
+  }
+  const { tree, expanded } = filterDeptTree(deptTree.value, keyword)
+  visibleTree.value = tree
+  expandedIds.value = expanded
+  isExpanded.value = expanded.size > 0
+}
+
+const filterDeptTree = (nodes: DeptVO[], keyword: string) => {
+  const expanded = new Set<number>()
+  const match = (dept: DeptVO) => {
+    const target = `${dept.deptName || ''} ${dept.leader || ''} ${dept.phone || ''} ${dept.email || ''}`.toLowerCase()
+    return target.includes(keyword.toLowerCase())
+  }
+  const walk = (list: DeptVO[]): DeptVO[] => {
+    const result: DeptVO[] = []
+    for (const dept of list) {
+      const children = dept.children ? walk(dept.children) : []
+      if (match(dept) || children.length > 0) {
+        if (children.length > 0) {
+          expanded.add(dept.id)
+        }
+        result.push({ ...dept, children })
+      }
+    }
+    return result
+  }
+  return { tree: walk(nodes), expanded }
 }
 
 const openFormModal = (dept?: DeptVO | null, parentId?: number) => {
