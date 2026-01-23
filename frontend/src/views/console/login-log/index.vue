@@ -95,6 +95,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { clearLoginLogs, deleteLoginLog, exportLoginLogs, getLoginLogList, type LoginLogVO } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
 const logList = ref<LoginLogVO[]>([])
@@ -109,6 +110,7 @@ const queryParams = reactive({
   loginTimeStart: '',
   loginTimeEnd: ''
 })
+const dialog = useDialog()
 
 onMounted(() => {
   fetchData()
@@ -133,7 +135,7 @@ const fetchData = async () => {
   } catch (error: any) {
     logList.value = []
     total.value = 0
-    alert(error?.message || error?.response?.data?.message || '获取登录日志失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '获取登录日志失败')
   } finally {
     loading.value = false
   }
@@ -160,23 +162,23 @@ const handleReset = () => {
 }
 
 const handleDelete = async (log: LoginLogVO) => {
-  if (!confirm(`确定要删除该登录日志吗？`)) return
+  if (!await dialog.confirm(`确定要删除该登录日志吗？`)) return
   try {
     await deleteLoginLog(log.id)
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '删除失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
   }
 }
 
 const handleClear = async () => {
-  if (!confirm('确定要清空所有登录日志吗？此操作不可恢复！')) return
+  if (!await dialog.confirm('确定要清空所有登录日志吗？此操作不可恢复！')) return
   try {
     await clearLoginLogs()
     page.value = 1
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '清空失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '清空失败')
   }
 }
 
@@ -191,7 +193,7 @@ const handleExport = async () => {
     link.click()
     window.URL.revokeObjectURL(url)
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '导出失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '导出失败')
   }
 }
 

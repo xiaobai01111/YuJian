@@ -1,7 +1,7 @@
 <template>
-  <div class="h-full flex flex-col">
-    <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 flex flex-col">
-      <div class="card-body p-4 flex-1 flex flex-col overflow-hidden">
+  <div class="h-full flex flex-col min-h-0">
+    <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col">
+      <div class="card-body p-4 flex-1 min-h-0 flex flex-col overflow-hidden">
         <!-- Toolbar -->
         <div class="flex flex-wrap justify-between items-center mb-4 gap-4 flex-none">
           <div class="flex flex-wrap gap-2">
@@ -38,7 +38,7 @@
           </div>
 
           <div class="flex gap-2">
-            <button class="btn btn-circle btn-ghost btn-sm" @click="fetchRoles">
+            <button class="btn btn-circle btn-ghost btn-sm" @click="refreshRoles">
                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
@@ -46,8 +46,22 @@
           </div>
         </div>
 
+        <div class="flex flex-wrap items-center gap-2 mb-4 flex-none">
+          <div class="form-control">
+            <input
+              v-model="queryParams.keyword"
+              type="text"
+              placeholder="搜索角色名称/标识/备注"
+              class="input input-bordered input-sm w-64"
+              @keyup.enter="handleSearch"
+            />
+          </div>
+          <button class="btn btn-sm btn-ghost" @click="handleSearch">搜索</button>
+          <button class="btn btn-sm btn-ghost" @click="resetSearch">重置</button>
+        </div>
+
         <!-- Table -->
-        <div class="overflow-auto flex-1 min-h-0">
+        <div ref="scrollContainer" class="overflow-auto flex-1 min-h-0">
           <div class="rounded-xl border border-base-200 overflow-hidden">
             <table class="table table-md table-pin-rows role-table">
             <thead class="bg-base-200/30 text-base-content/70">
@@ -126,19 +140,15 @@
             </tbody>
             </table>
           </div>
+          <div ref="loadMoreTrigger" class="py-3 text-center text-xs text-base-content/50">
+            <span v-if="loadingMore">加载中...</span>
+            <span v-else-if="!hasMore && roleList.length > 0">已加载完毕</span>
+          </div>
         </div>
         
-        <!-- Pagination -->
-        <div class="flex justify-between items-center mt-6 border-t border-base-200 pt-4 flex-none">
-          <div class="text-sm text-base-content/60">
-            共 {{ roleList.length }} 条
-          </div>
-           <!-- Mock Pagination for now since API might not return pagination wrapper yet -->
-          <div class="join">
-            <button class="join-item btn btn-sm btn-ghost" disabled>«</button>
-            <button class="join-item btn btn-sm btn-primary">1</button>
-            <button class="join-item btn btn-sm btn-ghost" disabled>»</button>
-          </div>
+        <div class="flex justify-between items-center mt-4 border-t border-base-200 pt-3 flex-none text-sm text-base-content/60">
+          <div>已加载 {{ roleList.length }} / {{ total || '-' }} 条</div>
+          <div v-if="loadingMore">正在加载更多...</div>
         </div>
       </div>
     </div>
@@ -301,10 +311,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers, getDeptTreeForRole, assignRoleDepts, getRoleDeptIds } from '@/api/system'
 import type { RoleVO, RoleDTO, MenuVO, UserVO, DeptVO } from '@/api/system'
 import { defineComponent, h, type PropType } from 'vue'
+import { useDialog } from '@/composables/useDialog'
 
 // --- Components ---
 // 菜单树组件 - 支持目录/菜单/按钮三级结构
@@ -434,6 +445,12 @@ const DeptTreeItem: ReturnType<typeof defineComponent> = defineComponent({
 const loading = ref(false)
 const submitting = ref(false)
 const roleList = ref<RoleVO[]>([])
+const total = ref(0)
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const menuTree = ref<MenuVO[]>([])
 const loadingMenus = ref(false)
 const loadingDepts = ref(false)
@@ -463,6 +480,12 @@ const deleteRoleUsersMap = ref<Record<number, UserVO[]>>({})
 const deleteRoleLoading = ref(false)
 const deleteWithUsers = ref(false)
 const deleteReason = ref('')
+const dialog = useDialog()
+const queryParams = reactive({
+  page: 1,
+  size: 20,
+  keyword: ''
+})
 
 const isAllSelected = computed(() => {
   return roleList.value.length > 0 && selectedIds.value.length === roleList.value.length
@@ -472,22 +495,85 @@ const canAssignDept = computed(() => selectedIds.value.length === 1 && !!selecte
 
 
 onMounted(() => {
-  fetchRoles()
+  fetchRoles({ reset: true })
+  nextTick(() => setupObserver())
 })
 
-const fetchRoles = async () => {
-  loading.value = true
-  selectedIds.value = []
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const fetchRoles = async ({ append = false, reset = false } = {}) => {
+  if (append && (loading.value || loadingMore.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    queryParams.page = 1
+    roleList.value = []
+    selectedIds.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const res: any = await getRoleList()
-    roleList.value = res || []
-    await loadRoleDeptCounts(roleList.value)
+    const res: any = await getRoleList(queryParams)
+    const records = Array.isArray(res) ? res : (res?.records || [])
+    total.value = Array.isArray(res) ? records.length : (res?.total || 0)
+    if (append) {
+      roleList.value = [...roleList.value, ...records]
+    } else {
+      roleList.value = records
+    }
+    if (records.length > 0) {
+      await loadRoleDeptCounts(records, append)
+    }
+    if (total.value) {
+      hasMore.value = roleList.value.length < total.value
+    } else {
+      hasMore.value = records.length >= queryParams.size
+    }
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '获取角色列表失败')
+    await dialog.alert(error?.response?.data?.message || '获取角色列表失败')
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  queryParams.page += 1
+  await fetchRoles({ append: true })
+}
+
+const handleSearch = () => {
+  fetchRoles({ reset: true })
+}
+
+const resetSearch = () => {
+  queryParams.keyword = ''
+  fetchRoles({ reset: true })
+}
+
+const refreshRoles = () => {
+  fetchRoles({ reset: true })
 }
 
 const openFormModal = (role?: RoleVO) => {
@@ -522,20 +608,16 @@ const submitForm = async () => {
       remark: form.remark?.trim() || undefined
     }
     if (isEdit.value) {
-      const updated = await updateRole(currentId.value, payload)
-      const idx = roleList.value.findIndex(r => r.id === currentId.value)
-      if (idx !== -1) {
-        roleList.value[idx] = updated
-      }
+      await updateRole(currentId.value, payload)
     } else {
-      const created = await createRole(payload)
-      roleList.value = [created, ...roleList.value]
+      await createRole(payload)
     }
     const modal = document.getElementById('role_form_modal') as HTMLDialogElement
     modal.close()
+    refreshRoles()
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '保存失败')
+    await dialog.alert(error?.response?.data?.message || '保存失败')
   } finally {
     submitting.value = false
   }
@@ -554,7 +636,7 @@ const handleDelete = async (role: RoleVO) => {
     deleteRoleUsersMap.value = { [role.id]: res || [] }
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '获取角色用户失败')
+    await dialog.alert(error?.response?.data?.message || '获取角色用户失败')
   } finally {
     deleteRoleLoading.value = false
   }
@@ -582,7 +664,7 @@ const handleBatchDelete = async () => {
     deleteRoleUsersMap.value = map
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '获取角色用户失败')
+    await dialog.alert(error?.response?.data?.message || '获取角色用户失败')
   } finally {
     deleteRoleLoading.value = false
   }
@@ -608,11 +690,12 @@ const confirmDeleteRole = async () => {
     const modal = document.getElementById('role_delete_modal') as HTMLDialogElement
     modal.close()
     if (failed.length > 0) {
-      alert(`部分角色删除失败：${failed.join(', ')}`)
+      await dialog.alert(`部分角色删除失败：${failed.join(', ')}`)
     }
+    refreshRoles()
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '删除失败')
+    await dialog.alert(error?.response?.data?.message || '删除失败')
   } finally {
     submitting.value = false
   }
@@ -644,7 +727,7 @@ const openMenuModal = async (role: RoleVO) => {
     selectedMenuIds.value = normalizeMenuSelection(menuTree.value, res || [])
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '获取角色菜单失败')
+    await dialog.alert(error?.response?.data?.message || '获取角色菜单失败')
   }
 }
 
@@ -675,7 +758,7 @@ const submitRoleDept = async () => {
     modal.close()
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '保存授权部门失败')
+    await dialog.alert(error?.response?.data?.message || '保存授权部门失败')
   } finally {
     submitting.value = false
   }
@@ -853,7 +936,7 @@ const submitMenuPerms = async () => {
     modal.close()
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '分配菜单失败')
+    await dialog.alert(error?.response?.data?.message || '分配菜单失败')
   } finally {
     submitting.value = false
   }
@@ -894,8 +977,8 @@ const handleStatusChange = async (role: RoleVO) => {
   const newStatus = role.status === 0 ? 1 : 0
   const actionName = newStatus === 1 ? '停用' : '启用'
   
-  if (!confirm(`确定要${actionName}角色 ${role.roleName} 吗？`)) {
-    fetchRoles()
+  if (!await dialog.confirm(`确定要${actionName}角色 ${role.roleName} 吗？`)) {
+    refreshRoles()
     return
   }
   
@@ -913,8 +996,8 @@ const handleStatusChange = async (role: RoleVO) => {
     }
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.message || '更新角色状态失败')
-    fetchRoles()
+    await dialog.alert(error?.response?.data?.message || '更新角色状态失败')
+    refreshRoles()
   }
 }
 
@@ -927,8 +1010,8 @@ const getRoleDeptCount = (roleId: number) => {
   return roleDeptCounts.value[roleId] || 0
 }
 
-const loadRoleDeptCounts = async (roles: RoleVO[]) => {
-  const map: Record<number, number> = {}
+const loadRoleDeptCounts = async (roles: RoleVO[], append = false) => {
+  const map: Record<number, number> = append ? { ...roleDeptCounts.value } : {}
   await Promise.all(
     roles.map(async role => {
       if (isAdminRole(role)) {

@@ -46,9 +46,9 @@
         </div>
       </div>
 
-      <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
-        <div class="card-body p-0 flex flex-col min-h-0">
-          <div class="flex-1 overflow-auto">
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-0 flex flex-col">
+          <div class="overflow-auto max-h-[calc(100vh-360px)]">
             <div class="overflow-x-auto">
               <table class="table">
                 <thead>
@@ -161,8 +161,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { batchHandleConsoleReports, deleteConsoleReport, getConsoleReports, handleConsoleReport, type ReportVO } from '@/api/report'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 
 const reports = ref<ReportVO[]>([])
 const loading = ref(false)
@@ -229,9 +231,10 @@ const getStatusClass = (status: number) => {
   return 'badge badge-ghost badge-sm'
 }
 
-const promptRemark = () => {
-  const remark = prompt('请输入处理说明（必要时必填）')
-  return remark ? remark.trim() : ''
+const promptRemark = async () => {
+  const remark = await dialog.prompt('请输入处理说明（必要时必填）', { multiline: true })
+  if (remark == null) return ''
+  return remark.trim()
 }
 
 const needReason = (report: ReportVO) => {
@@ -239,60 +242,61 @@ const needReason = (report: ReportVO) => {
   return !currentUserId || report.reporter?.id !== currentUserId
 }
 
-const promptReason = (required: boolean) => {
+const promptReason = async (required: boolean) => {
   const tip = required ? '请输入操作原因（必填）' : '请输入操作原因（可选）'
-  const reason = prompt(tip)
-  if (required && (!reason || !reason.trim())) {
-    alert('请输入操作原因')
-    return null
-  }
-  return reason ? reason.trim() : ''
+  const reason = await dialog.prompt(tip, { required, multiline: true })
+  if (reason == null) return required ? null : ''
+  return reason.trim()
 }
 
 const handleSubmit = async (report: ReportVO) => {
-  const result = prompt('请输入处理结果', report.result || '')
+  const result = await dialog.prompt('请输入处理结果', {
+    defaultValue: report.result || '',
+    required: true,
+    multiline: true
+  })
   if (!result || !result.trim()) return
-  const remark = promptRemark()
+  const remark = await promptRemark()
   try {
     await handleConsoleReport(report.id, { result: result.trim(), remark: remark || undefined })
     await loadReports()
   } catch (error: any) {
-    alert(error?.message || '处理失败')
+    await dialog.alert(error?.message || '处理失败')
   }
 }
 
 const handleDecision = async (report: ReportVO, decision: string) => {
-  if (!confirm(`确认${decision}该举报？`)) return
-  const remark = promptRemark()
+  if (!await dialog.confirm(`确认${decision}该举报？`)) return
+  const remark = await promptRemark()
   try {
     await handleConsoleReport(report.id, { result: decision, remark: remark || undefined })
     await loadReports()
   } catch (error: any) {
-    alert(error?.message || '处理失败')
+    await dialog.alert(error?.message || '处理失败')
   }
 }
 
 const handleBatchDecision = async (decision: string) => {
   if (selectedIds.value.length === 0) return
-  if (!confirm(`确认批量${decision}选中的 ${selectedIds.value.length} 条举报？`)) return
-  const remark = promptRemark()
+  if (!await dialog.confirm(`确认批量${decision}选中的 ${selectedIds.value.length} 条举报？`)) return
+  const remark = await promptRemark()
   try {
     await batchHandleConsoleReports(selectedIds.value, decision, remark || undefined)
     await loadReports()
   } catch (error: any) {
-    alert(error?.message || '批量处理失败')
+    await dialog.alert(error?.message || '批量处理失败')
   }
 }
 
 const handleDelete = async (report: ReportVO) => {
-  if (!confirm(`确认删除举报 #${report.id}？`)) return
-  const reason = promptReason(needReason(report))
+  if (!await dialog.confirm(`确认删除举报 #${report.id}？`)) return
+  const reason = await promptReason(needReason(report))
   if (reason === null) return
   try {
     await deleteConsoleReport(report.id, reason || undefined)
     await loadReports()
   } catch (error: any) {
-    alert(error?.message || '删除失败')
+    await dialog.alert(error?.message || '删除失败')
   }
 }
 

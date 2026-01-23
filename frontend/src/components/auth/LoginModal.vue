@@ -152,8 +152,10 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 
 const isLogin = ref(true)
 const loading = ref(false)
@@ -213,7 +215,7 @@ const handleRegister = async () => {
     loginForm.password = '' // Don't pre-fill password for security/UX preference
     errorMsg.value = '' // Clear error
     // Maybe show success message toast?
-    alert('注册成功，请登录')
+    await dialog.alert('注册成功，请登录')
   } catch (error: any) {
     errorMsg.value = error.message || '注册失败'
   } finally {

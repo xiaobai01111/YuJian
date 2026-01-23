@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: campus-wall
+    name: Nova-Campus
 
   # Database Configuration
   datasource:

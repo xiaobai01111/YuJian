@@ -125,13 +125,40 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ResultCode.USER_BANNED);
         }
 
+        List<String> roleKeys = roleMapper.selectRoleKeysByUserId(user.getId());
+        if (roleKeys == null || roleKeys.isEmpty()) {
+            String msg = "账号未绑定角色，请联系管理员";
+            recordLoginLog(user.getId(), user.getUsername(), 1, msg);
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, msg);
+        }
+
+        if (user.getDeptId() == null) {
+            String msg = "账号未绑定部门，请联系管理员";
+            recordLoginLog(user.getId(), user.getUsername(), 1, msg);
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, msg);
+        }
+
         // 部门停用禁止登录
-        if (user.getDeptId() != null) {
-            var dept = deptMapper.selectById(user.getDeptId());
-            if (dept != null && dept.getStatus() != null && dept.getStatus() == 1) {
-                recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.DEPT_DISABLED.getMessage());
-                throw new BusinessException(ResultCode.DEPT_DISABLED);
-            }
+        var dept = deptMapper.selectById(user.getDeptId());
+        if (dept == null) {
+            String msg = "账号部门不存在，请联系管理员";
+            recordLoginLog(user.getId(), user.getUsername(), 1, msg);
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, msg);
+        }
+        if (dept.getStatus() != null && dept.getStatus() == 1) {
+            recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.DEPT_DISABLED.getMessage());
+            throw new BusinessException(ResultCode.DEPT_DISABLED);
+        }
+        if (dept.getDataScope() == null) {
+            String msg = "账号部门未配置数据权限，请联系管理员";
+            recordLoginLog(user.getId(), user.getUsername(), 1, msg);
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, msg);
+        }
+        if (dept.getDataScope() < SecurityConstants.DATA_SCOPE_ALL
+            || dept.getDataScope() > SecurityConstants.DATA_SCOPE_SELF) {
+            String msg = "账号部门数据权限无效，请联系管理员";
+            recordLoginLog(user.getId(), user.getUsername(), 1, msg);
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, msg);
         }
 
         // 执行登录

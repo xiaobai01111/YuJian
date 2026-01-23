@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { importUsers, downloadUserTemplate } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const emit = defineEmits<{
   (e: 'success'): void
@@ -78,6 +79,7 @@ const fileInput = ref<HTMLInputElement>()
 const loading = ref(false)
 const isDragging = ref(false)
 const selectedFile = ref<File | null>(null)
+const dialog = useDialog()
 const updateExisting = ref(false)
 
 const open = () => {
@@ -110,7 +112,7 @@ const handleDrop = (e: DragEvent) => {
     if (file && file.name.match(/\.xlsx?$/)) {
       selectedFile.value = file
     } else {
-      alert('请上传 Excel 文件')
+      void dialog.alert('请上传 Excel 文件')
     }
   }
 }
@@ -132,7 +134,7 @@ const downloadTemplate = async () => {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error(error)
-    alert('下载模板失败')
+    await dialog.alert('下载模板失败')
   }
 }
 
@@ -142,12 +144,12 @@ const handleImport = async () => {
   loading.value = true
   try {
     const res: any = await importUsers(selectedFile.value, updateExisting.value)
-    alert(res || '导入成功')
+    await dialog.alert(res || '导入成功')
     emit('success')
     close()
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.msg || '导入失败')
+    await dialog.alert(error?.response?.data?.msg || '导入失败')
   } finally {
     loading.value = false
   }

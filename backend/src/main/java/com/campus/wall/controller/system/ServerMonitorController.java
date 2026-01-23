@@ -54,7 +54,7 @@ public class ServerMonitorController {
         double systemUsage = 0.0;
         double userUsage = 0.0;
         if (osBean instanceof com.sun.management.OperatingSystemMXBean bean) {
-            systemUsage = percent(bean.getSystemCpuLoad());
+            systemUsage = percent(bean.getCpuLoad());
             userUsage = percent(bean.getProcessCpuLoad());
         }
         double totalUsage = Math.max(systemUsage, userUsage);
@@ -74,8 +74,8 @@ public class ServerMonitorController {
         long total = 0;
         long free = 0;
         if (osBean instanceof com.sun.management.OperatingSystemMXBean bean) {
-            total = bean.getTotalPhysicalMemorySize();
-            free = bean.getFreePhysicalMemorySize();
+            total = bean.getTotalMemorySize();
+            free = bean.getFreeMemorySize();
         }
         long used = Math.max(total - free, 0);
         memory.setTotal(FileUtil.formatFileSize(total));

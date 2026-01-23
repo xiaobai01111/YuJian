@@ -108,6 +108,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { createPost, createConsolePost, type PostCreateDTO } from '@/api/post'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 import { BOARD_OPTIONS, normalizeBoardKeys } from '@/utils/boards'
 
 const props = defineProps<{
@@ -122,6 +123,7 @@ const emit = defineEmits<{
 }>()
 
 const userStore = useUserStore()
+const dialog = useDialog()
 const submitting = ref(false)
 const files = ref<File[]>([])
 
@@ -179,7 +181,7 @@ const handleFileChange = (e: Event) => {
   if (target.files) {
     const newFiles = Array.from(target.files)
     if (files.value.length + newFiles.length > 9) {
-      alert('最多上传9张图片')
+      void dialog.alert('最多上传9张图片')
       return
     }
     files.value.push(...newFiles)
@@ -196,11 +198,11 @@ const getObjectURL = (file: File) => {
 
 const handleSubmit = async () => {
   if (!userStore.token) {
-    alert('请先登录')
+    await dialog.alert('请先登录')
     return
   }
   if (!form.boards || form.boards.length === 0) {
-    alert('请选择至少一个板块')
+    await dialog.alert('请选择至少一个板块')
     return
   }
   if (hasTreeHole.value) {
@@ -215,7 +217,7 @@ const handleSubmit = async () => {
     close()
   } catch (error: any) {
     console.error(error)
-    alert(error.message || '发布失败')
+    await dialog.alert(error.message || '发布失败')
   } finally {
     submitting.value = false
   }

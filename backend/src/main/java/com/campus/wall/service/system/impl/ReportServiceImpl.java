@@ -304,6 +304,10 @@ public class ReportServiceImpl implements ReportService {
         if (scope.isAllowAll()) {
             return;
         }
+        if (scope.isAllowSelf() && scope.getScopedDeptIds().isEmpty()) {
+            wrapper.eq(Report::getReporterId, userId);
+            return;
+        }
         String postInSql = dataScopeService.buildPostInSql(scope, userId);
         String selfPostSql = "SELECT id FROM posts WHERE user_id = " + userId;
         if (postInSql == null || postInSql.isEmpty()) {

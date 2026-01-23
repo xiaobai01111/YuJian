@@ -262,8 +262,10 @@ import {
   deleteSensitiveWords
 } from '@/api/system'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 const canAdd = computed(() => userStore.hasPermission('system:sensitive-word:add'))
 const canDelete = computed(() => userStore.hasPermission('system:sensitive-word:delete'))
 
@@ -369,7 +371,7 @@ function toggleSelect(id: number) {
 
 async function handleAdd() {
   if (!addForm.value.word.trim()) {
-    alert('请输入敏感词')
+    await dialog.alert('请输入敏感词')
     return
   }
   addLoading.value = true
@@ -382,7 +384,7 @@ async function handleAdd() {
     addForm.value = { word: '' }
     loadData()
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '添加失败')
+    await dialog.alert(e.message || e.response?.data?.message || '添加失败')
   } finally {
     addLoading.value = false
   }
@@ -391,7 +393,7 @@ async function handleAdd() {
 async function handleBatchImport() {
   const lines = batchForm.value.text.split('\n').map(l => l.trim()).filter(l => l)
   if (lines.length === 0) {
-    alert('请输入敏感词')
+    await dialog.alert('请输入敏感词')
     return
   }
   batchLoading.value = true
@@ -403,7 +405,7 @@ async function handleBatchImport() {
     batchResult.value = res.data || res
     loadData()
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '导入失败')
+    await dialog.alert(e.message || e.response?.data?.message || '导入失败')
   } finally {
     batchLoading.value = false
   }
@@ -429,7 +431,7 @@ async function confirmDelete() {
     deleteTarget.value = null
     loadData()
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '删除失败')
+    await dialog.alert(e.message || e.response?.data?.message || '删除失败')
   } finally {
     deleteLoading.value = false
   }
@@ -448,7 +450,7 @@ async function confirmBatchDelete() {
     selectedIds.value = []
     loadData()
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '删除失败')
+    await dialog.alert(e.message || e.response?.data?.message || '删除失败')
   } finally {
     deleteLoading.value = false
   }

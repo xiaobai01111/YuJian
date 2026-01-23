@@ -45,6 +45,7 @@
 import { ref, computed } from 'vue'
 import type { UserVO, RoleVO } from '@/api/system'
 import { updateUserRole, batchUpdateUserRole } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const props = defineProps<{
   roleList: RoleVO[]
@@ -52,6 +53,7 @@ const props = defineProps<{
 
 // 只显示启用状态的角色 (status=0)
 const enabledRoles = computed(() => props.roleList.filter(r => r.status === 0))
+const dialog = useDialog()
 
 const emit = defineEmits<{
   (e: 'success'): void
@@ -106,7 +108,7 @@ const handleSubmit = async () => {
     close()
   } catch (error) {
     console.error(error)
-    alert('分配角色失败')
+    await dialog.alert('分配角色失败')
   } finally {
     loading.value = false
   }

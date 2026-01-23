@@ -112,8 +112,10 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { getUserInfo, getMyProfile, updateProfile, updatePassword, type UserProfileVO } from '@/api/auth'
+import { useDialog } from '@/composables/useDialog'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 
 interface UserProfile extends UserProfileVO {
   roles?: string[]
@@ -193,7 +195,7 @@ const fetchUserInfo = async () => {
 
 const updateBasicInfo = async () => {
   if (!basicForm.nickname.trim()) {
-    alert('请输入昵称')
+    await dialog.alert('请输入昵称')
     return
   }
   savingBasic.value = true
@@ -205,9 +207,9 @@ const updateBasicInfo = async () => {
       sex: Number(basicForm.sex)
     })
     await fetchUserInfo()
-    alert('保存成功')
+    await dialog.alert('保存成功')
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '保存失败')
+    await dialog.alert(e.message || e.response?.data?.message || '保存失败')
   } finally {
     savingBasic.value = false
   }
@@ -215,15 +217,15 @@ const updateBasicInfo = async () => {
 
 const updatePasswordAction = async () => {
   if (!pwdForm.oldPassword || !pwdForm.newPassword || !pwdForm.confirmPassword) {
-    alert('请填写完整的密码信息')
+    await dialog.alert('请填写完整的密码信息')
     return
   }
   if (pwdForm.newPassword !== pwdForm.confirmPassword) {
-    alert('两次输入的密码不一致')
+    await dialog.alert('两次输入的密码不一致')
     return
   }
   if (pwdForm.newPassword.length < 6) {
-    alert('密码长度不能少于6位')
+    await dialog.alert('密码长度不能少于6位')
     return
   }
   savingPwd.value = true
@@ -233,12 +235,12 @@ const updatePasswordAction = async () => {
       newPassword: pwdForm.newPassword,
       confirmPassword: pwdForm.confirmPassword
     })
-    alert('密码修改成功')
+    await dialog.alert('密码修改成功')
     pwdForm.oldPassword = ''
     pwdForm.newPassword = ''
     pwdForm.confirmPassword = ''
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '密码修改失败')
+    await dialog.alert(e.message || e.response?.data?.message || '密码修改失败')
   } finally {
     savingPwd.value = false
   }

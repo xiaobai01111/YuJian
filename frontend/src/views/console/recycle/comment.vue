@@ -114,8 +114,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getRecycleComments, purgeRecycleComment, restoreRecycleComment, type CommentConsoleVO } from '@/api/recycle'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 
 const comments = ref<CommentConsoleVO[]>([])
 const loading = ref(false)
@@ -166,37 +168,34 @@ const needReason = (comment: CommentConsoleVO) => {
   return !currentUserId || comment.author?.id !== currentUserId
 }
 
-const promptReason = (required: boolean) => {
+const promptReason = async (required: boolean) => {
   const tip = required ? '请输入操作原因（必填）' : '请输入操作原因（可选）'
-  const reason = prompt(tip)
-  if (required && (!reason || !reason.trim())) {
-    alert('请输入操作原因')
-    return null
-  }
-  return reason ? reason.trim() : ''
+  const reason = await dialog.prompt(tip, { required, multiline: true })
+  if (reason == null) return required ? null : ''
+  return reason.trim()
 }
 
 const handleRestore = async (comment: CommentConsoleVO) => {
-  if (!confirm(`确认恢复评论 #${comment.id}？`)) return
-  const reason = promptReason(needReason(comment))
+  if (!await dialog.confirm(`确认恢复评论 #${comment.id}？`)) return
+  const reason = await promptReason(needReason(comment))
   if (reason === null) return
   try {
     await restoreRecycleComment(comment.id, reason || undefined)
     await loadComments()
   } catch (error: any) {
-    alert(error?.message || '恢复失败')
+    await dialog.alert(error?.message || '恢复失败')
   }
 }
 
 const handlePurge = async (comment: CommentConsoleVO) => {
-  if (!confirm(`确认彻底删除评论 #${comment.id}？此操作不可恢复。`)) return
-  const reason = promptReason(needReason(comment))
+  if (!await dialog.confirm(`确认彻底删除评论 #${comment.id}？此操作不可恢复。`)) return
+  const reason = await promptReason(needReason(comment))
   if (reason === null) return
   try {
     await purgeRecycleComment(comment.id, reason || undefined)
     await loadComments()
   } catch (error: any) {
-    alert(error?.message || '删除失败')
+    await dialog.alert(error?.message || '删除失败')
   }
 }
 

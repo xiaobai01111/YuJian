@@ -78,6 +78,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getOnlineUserList, kickoutOnlineUser, type OnlineUserVO } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
 const userList = ref<OnlineUserVO[]>([])
@@ -89,6 +90,7 @@ const queryParams = reactive({
   keyword: '',
   ipaddr: ''
 })
+const dialog = useDialog()
 
 onMounted(() => {
   fetchData()
@@ -110,7 +112,7 @@ const fetchData = async () => {
   } catch (error: any) {
     userList.value = []
     total.value = 0
-    alert(error?.message || error?.response?.data?.message || '获取在线用户失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '获取在线用户失败')
   } finally {
     loading.value = false
   }
@@ -134,12 +136,12 @@ const handleReset = () => {
 }
 
 const handleKickout = async (user: OnlineUserVO) => {
-  if (!confirm(`确定要强制下线用户 ${user.username || user.userId} 吗？`)) return
+  if (!await dialog.confirm(`确定要强制下线用户 ${user.username || user.userId} 吗？`)) return
   try {
     await kickoutOnlineUser(user.token)
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '强制下线失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '强制下线失败')
   }
 }
 

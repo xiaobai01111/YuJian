@@ -56,9 +56,9 @@
         </div>
       </div>
 
-      <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
-        <div class="card-body p-0 flex flex-col min-h-0">
-          <div class="flex-1 overflow-auto">
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-0 flex flex-col">
+          <div class="overflow-auto max-h-[calc(100vh-360px)]">
             <div class="overflow-x-auto">
               <table class="table">
                 <thead>
@@ -162,9 +162,11 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { batchDeleteConsoleComments, deleteConsoleComment, getConsoleComments, updateConsoleComment, type CommentConsoleVO } from '@/api/comment'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const router = useRouter()
 const userStore = useUserStore()
+const dialog = useDialog()
 
 const comments = ref<CommentConsoleVO[]>([])
 const loading = ref(false)
@@ -249,54 +251,53 @@ const needReason = (comment: CommentConsoleVO) => {
   return !currentUserId || comment.author?.id !== currentUserId
 }
 
-const promptReason = (required: boolean) => {
+const promptReason = async (required: boolean) => {
   const tip = required ? '请输入操作原因（必填）' : '请输入操作原因（可选）'
-  const reason = prompt(tip)
-  if (required && (!reason || !reason.trim())) {
-    alert('请输入操作原因')
-    return null
-  }
-  return reason ? reason.trim() : ''
+  const reason = await dialog.prompt(tip, { required, multiline: true })
+  if (reason == null) return required ? null : ''
+  return reason.trim()
 }
 
 const handleEdit = async (comment: CommentConsoleVO) => {
-  const content = prompt('请输入新的评论内容', comment.content || '')
+  const content = await dialog.prompt('请输入新的评论内容', {
+    defaultValue: comment.content || ''
+  })
   if (!content || !content.trim()) return
-  const reason = promptReason(needReason(comment))
+  const reason = await promptReason(needReason(comment))
   if (reason === null) return
   try {
     await updateConsoleComment(comment.id, { content: content.trim() }, reason || undefined)
     await loadComments()
   } catch (error: any) {
-    alert(error?.message || '修改失败')
+    await dialog.alert(error?.message || '修改失败')
   }
 }
 
 const handleDelete = async (comment: CommentConsoleVO) => {
-  if (!confirm(`确认删除评论 #${comment.id}？`)) return
-  const reason = promptReason(needReason(comment))
+  if (!await dialog.confirm(`确认删除评论 #${comment.id}？`)) return
+  const reason = await promptReason(needReason(comment))
   if (reason === null) return
   try {
     await deleteConsoleComment(comment.id, reason || undefined)
     await loadComments()
   } catch (error: any) {
-    alert(error?.message || '删除失败')
+    await dialog.alert(error?.message || '删除失败')
   }
 }
 
 const handleBatchDelete = async () => {
   if (selectedIds.value.length === 0) return
-  if (!confirm(`确认删除选中的 ${selectedIds.value.length} 条评论？`)) return
+  if (!await dialog.confirm(`确认删除选中的 ${selectedIds.value.length} 条评论？`)) return
   const currentUserId = userStore.userInfo?.id
   const selectedComments = comments.value.filter(comment => selectedIds.value.includes(comment.id))
   const need = selectedComments.some(comment => !currentUserId || comment.author?.id !== currentUserId)
-  const reason = promptReason(need)
+  const reason = await promptReason(need)
   if (reason === null) return
   try {
     await batchDeleteConsoleComments(selectedIds.value, reason || undefined)
     await loadComments()
   } catch (error: any) {
-    alert(error?.message || '批量删除失败')
+    await dialog.alert(error?.message || '批量删除失败')
   }
 }
 

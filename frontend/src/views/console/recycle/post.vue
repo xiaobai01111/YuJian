@@ -124,8 +124,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { getRecyclePosts, purgeRecyclePost, restoreRecyclePost, type PostVO } from '@/api/recycle'
 import { BOARD_OPTIONS, getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 
 const posts = ref<PostVO[]>([])
 const loading = ref(false)
@@ -178,37 +180,34 @@ const needReason = (post: PostVO) => {
   return !currentUserId || post.author?.id !== currentUserId
 }
 
-const promptReason = (required: boolean) => {
+const promptReason = async (required: boolean) => {
   const tip = required ? '请输入操作原因（必填）' : '请输入操作原因（可选）'
-  const reason = prompt(tip)
-  if (required && (!reason || !reason.trim())) {
-    alert('请输入操作原因')
-    return null
-  }
-  return reason ? reason.trim() : ''
+  const reason = await dialog.prompt(tip, { required, multiline: true })
+  if (reason == null) return required ? null : ''
+  return reason.trim()
 }
 
 const handleRestore = async (post: PostVO) => {
-  if (!confirm(`确认恢复帖子「${post.title}」？`)) return
-  const reason = promptReason(needReason(post))
+  if (!await dialog.confirm(`确认恢复帖子「${post.title}」？`)) return
+  const reason = await promptReason(needReason(post))
   if (reason === null) return
   try {
     await restoreRecyclePost(post.id, reason || undefined)
     await loadPosts()
   } catch (error: any) {
-    alert(error?.message || '恢复失败')
+    await dialog.alert(error?.message || '恢复失败')
   }
 }
 
 const handlePurge = async (post: PostVO) => {
-  if (!confirm(`确认彻底删除帖子「${post.title}」？此操作不可恢复。`)) return
-  const reason = promptReason(needReason(post))
+  if (!await dialog.confirm(`确认彻底删除帖子「${post.title}」？此操作不可恢复。`)) return
+  const reason = await promptReason(needReason(post))
   if (reason === null) return
   try {
     await purgeRecyclePost(post.id, reason || undefined)
     await loadPosts()
   } catch (error: any) {
-    alert(error?.message || '删除失败')
+    await dialog.alert(error?.message || '删除失败')
   }
 }
 

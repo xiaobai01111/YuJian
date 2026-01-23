@@ -456,6 +456,10 @@ public class CommentServiceImpl implements CommentService {
         if (scope.isAllowAll()) {
             return;
         }
+        if (scope.isAllowSelf() && scope.getScopedDeptIds().isEmpty()) {
+            wrapper.eq(Comment::getUserId, userId);
+            return;
+        }
         String postInSql = dataScopeService.buildPostInSql(scope, userId);
         String selfPostSql = "SELECT id FROM posts WHERE user_id = " + userId;
         if (postInSql == null || postInSql.isEmpty()) {

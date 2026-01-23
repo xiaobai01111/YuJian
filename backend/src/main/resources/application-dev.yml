@@ -36,6 +36,8 @@ logging:
 
 sa-token:
   token-style: random-128
+  token-prefix: Bearer
+  is-write-cookie: false
 
 app:
   security:

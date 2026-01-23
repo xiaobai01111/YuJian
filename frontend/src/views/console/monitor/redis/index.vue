@@ -122,10 +122,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getRedisMonitor, type RedisMonitorVO } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
 const data = ref<RedisMonitorVO | null>(null)
 let refreshTimer: number | null = null
+const dialog = useDialog()
 
 onMounted(() => {
   fetchData()
@@ -147,7 +149,7 @@ const fetchData = async () => {
     data.value = res || null
   } catch (error: any) {
     data.value = null
-    alert(error?.message || error?.response?.data?.message || '获取Redis监控失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '获取Redis监控失败')
   } finally {
     loading.value = false
   }

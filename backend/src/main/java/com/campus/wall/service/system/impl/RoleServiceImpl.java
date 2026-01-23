@@ -61,10 +61,22 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
-    public PageResult<RoleVO> queryRoles(int page, int size) {
+    public PageResult<RoleVO> queryRoles(int page, int size, String keyword) {
+        LambdaQueryWrapper<SysRole> wrapper = new LambdaQueryWrapper<SysRole>()
+                .orderByAsc(SysRole::getSortOrder);
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String likeKeyword = "%" + keyword.trim() + "%";
+            wrapper.and(q -> q
+                    .like(SysRole::getRoleName, likeKeyword)
+                    .or()
+                    .like(SysRole::getRoleKey, likeKeyword)
+                    .or()
+                    .like(SysRole::getRemark, likeKeyword)
+            );
+        }
         Page<SysRole> pageResult = sysRoleMapper.selectPage(
                 new Page<>(page, size),
-                new LambdaQueryWrapper<SysRole>().orderByAsc(SysRole::getSortOrder)
+                wrapper
         );
         List<RoleVO> records = pageResult.getRecords().stream()
                 .map(role -> toRoleVO(role, false))

@@ -225,6 +225,7 @@
 import { ref, reactive, onMounted, computed, defineComponent, h, type PropType } from 'vue'
 import { getDeptTree, createDept, updateDept, deleteDeptWithStrategy, updateDeptStatus, getDeptUsers, type DeptVO, type DeptDTO, type DeptUserStrategy } from '@/api/system'
 import type { UserVO } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 interface DeptNode extends DeptVO {
   level?: number
@@ -387,6 +388,7 @@ const deptTree = ref<DeptVO[]>([])
 const expandedIds = ref<Set<number>>(new Set())
 const isExpanded = ref(true)
 const SYSTEM_DEPT_ID = 1
+const dialog = useDialog()
 
 const form = reactive<DeptDTO>({
   parentId: SYSTEM_DEPT_ID,
@@ -499,7 +501,7 @@ const openFormModal = (dept?: DeptVO | null, parentId?: number) => {
 
 const submitForm = async () => {
   if (!form.deptName) {
-    alert('请输入部门名称')
+    await dialog.alert('请输入部门名称')
     return
   }
   submitting.value = true
@@ -529,7 +531,7 @@ const deleteReason = ref('')
 
 const handleDelete = async (dept: DeptVO) => {
   if (dept.children && dept.children.length > 0) {
-    alert('存在子部门，无法删除，请先删除或转移子部门')
+    await dialog.alert('存在子部门，无法删除，请先删除或转移子部门')
     return
   }
   deleteTarget.value = dept
@@ -558,7 +560,7 @@ const closeDeleteModal = () => {
 const confirmDelete = async () => {
   if (!deleteTarget.value) return
   if (deleteStrategy.value === 'DELETE' && !deleteReason.value.trim()) {
-    alert('删除用户必须提供原因')
+    await dialog.alert('删除用户必须提供原因')
     return
   }
   deleteLoading.value = true
@@ -570,7 +572,7 @@ const confirmDelete = async () => {
     closeDeleteModal()
     fetchDeptTree()
   } catch (error: any) {
-    alert(error?.response?.data?.message || '删除失败')
+    await dialog.alert(error?.response?.data?.message || '删除失败')
   } finally {
     deleteLoading.value = false
   }
@@ -580,7 +582,7 @@ const handleStatusChange = async (dept: DeptVO) => {
   const newStatus = dept.status === 0 ? 1 : 0
   const actionName = newStatus === 1 ? '停用' : '启用'
   
-  if (!confirm(`确定要${actionName}部门 ${dept.deptName} 吗？${newStatus === 1 ? '\n停用后该部门下的用户将被踢出登录。' : ''}`)) {
+  if (!await dialog.confirm(`确定要${actionName}部门 ${dept.deptName} 吗？${newStatus === 1 ? '\n停用后该部门下的用户将被踢出登录。' : ''}`)) {
     fetchDeptTree()
     return
   }
@@ -589,7 +591,7 @@ const handleStatusChange = async (dept: DeptVO) => {
     await updateDeptStatus(dept.id, newStatus)
     fetchDeptTree()
   } catch (error: any) {
-    alert(error?.response?.data?.message || '操作失败')
+    await dialog.alert(error?.response?.data?.message || '操作失败')
     fetchDeptTree()
   }
 }

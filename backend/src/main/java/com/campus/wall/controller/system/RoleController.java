@@ -30,10 +30,15 @@ public class RoleController {
     private final RoleService roleService;
     private final DeptService deptService;
 
-    @Operation(summary = "角色列表", description = "获取所有角色")
+    @Operation(summary = "角色列表", description = "获取所有角色或分页查询")
     @SaCheckPermission("system:role:list")
     @GetMapping("/list")
-    public R<List<RoleVO>> list() {
+    public R<?> list(@RequestParam(value = "page", required = false) Integer page,
+                     @RequestParam(value = "size", required = false) Integer size,
+                     @RequestParam(value = "keyword", required = false) String keyword) {
+        if (page != null && size != null) {
+            return R.ok(roleService.queryRoles(page, size, keyword));
+        }
         return R.ok(roleService.getAllRoles());
     }
 

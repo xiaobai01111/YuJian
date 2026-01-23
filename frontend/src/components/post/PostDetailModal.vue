@@ -118,6 +118,7 @@ import { ref, computed, watch } from 'vue'
 import { getPostDetail, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
 import { getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const props = defineProps<{
   modelValue: boolean
@@ -130,6 +131,7 @@ const emit = defineEmits<{
 }>()
 
 const userStore = useUserStore()
+const dialog = useDialog()
 const post = ref<PostVO | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -174,7 +176,7 @@ const close = () => {
 const handleLike = async () => {
   if (!post.value) return
   if (!userStore.token) {
-    alert('请先登录')
+    await dialog.alert('请先登录')
     return
   }
   try {
@@ -196,7 +198,7 @@ const handleLike = async () => {
 const handleBookmark = async () => {
   if (!post.value) return
   if (!userStore.token) {
-    alert('请先登录')
+    await dialog.alert('请先登录')
     return
   }
   try {

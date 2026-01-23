@@ -23,7 +23,7 @@ public interface RoleService {
     /**
      * 分页查询角色
      */
-    PageResult<RoleVO> queryRoles(int page, int size);
+    PageResult<RoleVO> queryRoles(int page, int size, String keyword);
 
     /**
      * 创建角色

@@ -115,6 +115,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, reactive } from 'vue'
 import { clearOperLogs, deleteOperLog, exportOperLogs, getOperLogList, type OperLogVO } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
 const logList = ref<OperLogVO[]>([])
@@ -123,6 +124,7 @@ const pageSize = ref(10)
 const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const currentLog = ref<OperLogVO | null>(null)
+const dialog = useDialog()
 const queryParams = reactive({
   operatorName: '',
   targetType: '',
@@ -154,7 +156,7 @@ const fetchData = async () => {
   } catch (error: any) {
     logList.value = []
     total.value = 0
-    alert(error?.message || error?.response?.data?.message || '获取操作日志失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '获取操作日志失败')
   } finally {
     loading.value = false
   }
@@ -187,23 +189,23 @@ const viewDetail = (log: OperLogVO) => {
 }
 
 const handleDelete = async (log: OperLogVO) => {
-  if (!confirm(`确定要删除该操作日志吗？`)) return
+  if (!await dialog.confirm(`确定要删除该操作日志吗？`)) return
   try {
     await deleteOperLog(log.id)
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '删除失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
   }
 }
 
 const handleClear = async () => {
-  if (!confirm('确定要清空所有操作日志吗？此操作不可恢复！')) return
+  if (!await dialog.confirm('确定要清空所有操作日志吗？此操作不可恢复！')) return
   try {
     await clearOperLogs()
     page.value = 1
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '清空失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '清空失败')
   }
 }
 
@@ -218,7 +220,7 @@ const handleExport = async () => {
     link.click()
     window.URL.revokeObjectURL(url)
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '导出失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '导出失败')
   }
 }
 

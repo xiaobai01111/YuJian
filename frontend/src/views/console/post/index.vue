@@ -55,9 +55,9 @@
       </div>
 
       <!-- Table -->
-      <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
-        <div class="card-body p-0 flex flex-col min-h-0">
-          <div class="flex-1 overflow-auto">
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-0 flex flex-col">
+          <div class="overflow-auto max-h-[calc(100vh-360px)]">
             <div class="overflow-x-auto">
               <table class="table">
               <thead>
@@ -156,9 +156,11 @@ import { getConsolePostList, resolveConsolePost, deleteConsolePost, type PostVO 
 import { BOARD_OPTIONS, getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
+import { useDialog } from '@/composables/useDialog'
 
 const router = useRouter()
 const userStore = useUserStore()
+const dialog = useDialog()
 
 const posts = ref<PostVO[]>([])
 const loading = ref(false)
@@ -236,26 +238,26 @@ const handlePublishSuccess = () => {
 }
 
 const handleResolve = async (post: PostVO) => {
-  if (!confirm(`确认将帖子「${post.title}」标记为已解决？`)) return
-  const reason = prompt('请输入操作原因（必填）')
+  if (!await dialog.confirm(`确认将帖子「${post.title}」标记为已解决？`)) return
+  const reason = await dialog.prompt('请输入操作原因（必填）', { required: true, multiline: true })
   if (!reason || !reason.trim()) return
   try {
     await resolveConsolePost(post.id, reason.trim())
     await loadPosts()
   } catch (error: any) {
-    alert(error?.message || '操作失败')
+    await dialog.alert(error?.message || '操作失败')
   }
 }
 
 const handleDelete = async (post: PostVO) => {
-  if (!confirm(`确认删除帖子「${post.title}」？`)) return
-  const reason = prompt('请输入操作原因（必填）')
+  if (!await dialog.confirm(`确认删除帖子「${post.title}」？`)) return
+  const reason = await dialog.prompt('请输入操作原因（必填）', { required: true, multiline: true })
   if (!reason || !reason.trim()) return
   try {
     await deleteConsolePost(post.id, reason.trim())
     await loadPosts()
   } catch (error: any) {
-    alert(error?.message || '删除失败')
+    await dialog.alert(error?.message || '删除失败')
   }
 }
 

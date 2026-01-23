@@ -1,7 +1,7 @@
 <template>
-  <div class="h-full flex flex-col">
-    <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 flex flex-col">
-      <div class="card-body p-4 flex-1 flex flex-col overflow-hidden">
+  <div class="h-full flex flex-col min-h-0">
+    <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col">
+      <div class="card-body p-4 flex-1 min-h-0 flex flex-col overflow-hidden">
         <!-- Search Panel -->
         <div class="collapse collapse-arrow bg-base-200/50 rounded-lg mb-4 flex-none" :class="{ 'collapse-open': showSearch }">
           <input type="checkbox" v-model="showSearch" />
@@ -95,7 +95,7 @@
           </div>
           
           <div class="flex gap-2">
-            <button class="btn btn-circle btn-ghost btn-sm" @click="fetchData">
+            <button class="btn btn-circle btn-ghost btn-sm" @click="refreshList">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
@@ -104,7 +104,7 @@
         </div>
 
         <!-- Table -->
-        <div class="overflow-auto flex-1 min-h-0">
+        <div ref="scrollContainer" class="overflow-auto flex-1 min-h-0">
           <table class="table table-md table-pin-rows">
             <thead class="bg-base-200/30 text-base-content/70">
               <tr>
@@ -194,41 +194,24 @@
               </tr>
             </tbody>
           </table>
+          <div ref="loadMoreTrigger" class="py-3 text-center text-xs text-base-content/50">
+            <span v-if="loadingMore">加载中...</span>
+            <span v-else-if="!hasMore && userList.length > 0">已加载完毕</span>
+          </div>
         </div>
         
-        <!-- Pagination -->
-        <div class="flex justify-between items-center mt-6 border-t border-base-200 pt-4 flex-none">
-          <div class="text-sm text-base-content/60">
-            共 {{ total }} 条
-          </div>
-          <div class="join">
-            <button class="join-item btn btn-sm btn-ghost" :disabled="queryParams.page <= 1" @click="changePage(queryParams.page - 1)">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button v-for="p in pageNumbers" :key="p" 
-              class="join-item btn btn-sm" 
-              :class="p === queryParams.page ? 'btn-primary' : 'btn-ghost'"
-              @click="changePage(p as number)"
-            >
-              {{ p }}
-            </button>
-            <button class="join-item btn btn-sm btn-ghost" :disabled="userList.length < queryParams.size" @click="changePage(queryParams.page + 1)">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+        <div class="flex justify-between items-center mt-4 border-t border-base-200 pt-3 flex-none text-sm text-base-content/60">
+          <div>已加载 {{ userList.length }} / {{ total || '-' }} 条</div>
+          <div v-if="loadingMore">正在加载更多...</div>
         </div>
       </div>
     </div>
 
     <!-- Modals -->
-    <UserFormModal ref="userFormModalRef" :role-list="allRoles" @success="fetchData" />
-    <RoleAssignModal ref="roleAssignModalRef" :role-list="allRoles" @success="fetchData" />
+    <UserFormModal ref="userFormModalRef" :role-list="allRoles" @success="refreshList" />
+    <RoleAssignModal ref="roleAssignModalRef" :role-list="allRoles" @success="refreshList" />
     <DeleteConfirmModal ref="deleteConfirmModalRef" @confirm="confirmDelete" />
-    <ImportModal ref="importModalRef" @success="fetchData" />
+    <ImportModal ref="importModalRef" @success="refreshList" />
 
 
     <!-- Ban Reason Modal -->
@@ -259,16 +242,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, onUnmounted, nextTick } from 'vue'
 import { getUserList, banUser, getRoleList, deleteUsers, exportUsers } from '@/api/system'
 import type { UserVO, RoleVO } from '@/api/system'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 import UserFormModal from './components/UserFormModal.vue'
 import RoleAssignModal from './components/RoleAssignModal.vue'
 import DeleteConfirmModal from './components/DeleteConfirmModal.vue'
 import ImportModal from './components/ImportModal.vue'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 const currentUserId = computed(() => userStore.userInfo?.id)
 
 const loading = ref(false)
@@ -280,10 +265,15 @@ const showSearch = ref(false)
 const userList = ref<UserVO[]>([])
 const allRoles = ref<RoleVO[]>([])
 const total = ref(0)
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const queryParams = reactive({
   page: 1,
-  size: 10,
+  size: 20,
   username: '',
   nickname: '',
   phone: '',
@@ -304,32 +294,74 @@ const isAllSelected = computed(() => {
 
 const hasSelection = computed(() => selectedIds.value.length > 0)
 
-const pageNumbers = computed(() => {
-  const pages = []
-  const current = queryParams.page
-  if (current > 1) pages.push(current - 1)
-  pages.push(current)
-  if (userList.value.length >= queryParams.size) pages.push(current + 1)
-  return pages
-})
-
 onMounted(() => {
-  fetchData()
+  fetchData({ reset: true })
   fetchRoles()
+  nextTick(() => setupObserver())
 })
 
-const fetchData = async () => {
-  loading.value = true
-  selectedIds.value = []
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const fetchData = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    queryParams.page = 1
+    userList.value = []
+    selectedIds.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res: any = await getUserList(queryParams)
-    userList.value = res.records || []
+    const records = res.records || []
     total.value = res.total || 0
+    if (append) {
+      userList.value = [...userList.value, ...records]
+    } else {
+      userList.value = records
+    }
+    if (total.value) {
+      hasMore.value = userList.value.length < total.value
+    } else {
+      hasMore.value = records.length >= queryParams.size
+    }
   } catch (error) {
     console.error(error)
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
+}
+
+const refreshList = () => {
+  fetchData({ reset: true })
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  queryParams.page += 1
+  await fetchData({ append: true })
 }
 
 const fetchRoles = async () => {
@@ -342,8 +374,7 @@ const fetchRoles = async () => {
 }
 
 const handleSearch = () => {
-  queryParams.page = 1
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const resetSearch = () => {
@@ -352,13 +383,7 @@ const resetSearch = () => {
   queryParams.phone = ''
   queryParams.loginDateStart = ''
   queryParams.loginDateEnd = ''
-  queryParams.page = 1
-  fetchData()
-}
-
-const changePage = (page: number) => {
-  queryParams.page = page
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const toggleSelection = (id: number) => {
@@ -380,12 +405,12 @@ const toggleSelectAll = () => {
 const handleStatusChange = async (user: UserVO) => {
   // 禁止操作自己
   if (user.id === currentUserId.value) {
-    alert('不能操作自己的账号')
+    await dialog.alert('不能操作自己的账号')
     return
   }
   // 禁止操作 admin
   if (user.username === 'admin') {
-    alert('不能操作管理员账号')
+    await dialog.alert('不能操作管理员账号')
     return
   }
 
@@ -398,7 +423,7 @@ const handleStatusChange = async (user: UserVO) => {
     showBanModal.value = true
   } else {
     // 解封直接确认
-    if (!confirm(`确定要解封用户 ${user.username} 吗？`)) {
+    if (!await dialog.confirm(`确定要解封用户 ${user.username} 吗？`)) {
       return
     }
     try {
@@ -406,7 +431,7 @@ const handleStatusChange = async (user: UserVO) => {
       user.status = 0
     } catch (error) {
       console.error(error)
-      fetchData()
+      refreshList()
     }
   }
 }
@@ -465,10 +490,10 @@ const handleDelete = () => {
 const confirmDelete = async (ids: number[], reason: string) => {
   try {
     await deleteUsers(ids, reason)
-    fetchData()
+    fetchData({ reset: true })
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.msg || '删除失败')
+    await dialog.alert(error?.response?.data?.msg || '删除失败')
   }
 }
 
@@ -492,7 +517,7 @@ const handleExport = async () => {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error(error)
-    alert('导出失败')
+    await dialog.alert('导出失败')
   }
 }
 
@@ -507,7 +532,7 @@ const openRoleModal = (user: UserVO) => {
 const handleBan = (user: UserVO) => {
   // 禁止操作自己
   if (user.id === currentUserId.value) {
-    alert('不能操作自己的账号')
+    void dialog.alert('不能操作自己的账号')
     return
   }
   handleStatusChange(user)

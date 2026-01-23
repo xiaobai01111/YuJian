@@ -126,6 +126,7 @@
 import { ref, reactive } from 'vue'
 import type { UserVO, RoleVO } from '@/api/system'
 import { createUser, editUser } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 interface UserForm {
   id?: number
@@ -169,6 +170,7 @@ const initialForm: UserForm = {
 }
 
 const form = reactive<UserForm>({ ...initialForm })
+const dialog = useDialog()
 
 const open = (user?: UserVO) => {
   isEdit.value = !!user
@@ -199,11 +201,11 @@ const close = () => {
 
 const handleSubmit = async () => {
   if (!form.username || !form.nickname) {
-    alert('请填写必填字段')
+    await dialog.alert('请填写必填字段')
     return
   }
   if (!isEdit.value && (!form.password || form.password !== form.confirmPassword)) {
-    alert('请正确填写密码')
+    await dialog.alert('请正确填写密码')
     return
   }
   
@@ -236,7 +238,7 @@ const handleSubmit = async () => {
     close()
   } catch (error: any) {
     console.error(error)
-    alert(error?.response?.data?.msg || '操作失败')
+    await dialog.alert(error?.response?.data?.msg || '操作失败')
   } finally {
     loading.value = false
   }

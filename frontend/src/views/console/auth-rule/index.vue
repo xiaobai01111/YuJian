@@ -244,6 +244,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 import {
   queryAuthRules,
   createAuthRule,
@@ -258,6 +259,7 @@ import {
 } from '@/api/system'
 
 const userStore = useUserStore()
+const dialog = useDialog()
 
 const canAdd = computed(() => userStore.hasPermission('system:auth-rule:add'))
 const canEdit = computed(() => userStore.hasPermission('system:auth-rule:edit'))
@@ -383,7 +385,7 @@ const closeModal = () => {
 
 const handleSave = async () => {
   if (!form.name.trim()) {
-    alert('请输入规则名称')
+    await dialog.alert('请输入规则名称')
     return
   }
   saving.value = true
@@ -408,7 +410,7 @@ const handleSave = async () => {
     formModal.value?.close()
     await loadRules()
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '保存失败')
+    await dialog.alert(e.message || e.response?.data?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -432,7 +434,7 @@ const confirmDelete = async () => {
     closeDelete()
     await loadRules()
   } catch (e: any) {
-    alert(e.message || e.response?.data?.message || '删除失败')
+    await dialog.alert(e.message || e.response?.data?.message || '删除失败')
   } finally {
     saving.value = false
   }

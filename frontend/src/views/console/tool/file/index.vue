@@ -154,6 +154,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { usePermissionStore } from '@/stores/permission'
 import { batchDeleteConsoleFiles, deleteConsoleFile, getFileCategories, getFileList, updateConsoleFileVisibility, uploadConsoleFile, type FileCategoryVO, type FileManageVO } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const categories = ref<FileCategoryVO[]>([])
 const activeCategory = ref('all')
@@ -171,6 +172,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const uploadVisibility = ref<'PUBLIC' | 'PRIVATE'>('PUBLIC')
 
 const permissionStore = usePermissionStore()
+const dialog = useDialog()
 const canUpload = computed(() => permissionStore.hasPermission(['system:file:upload']))
 const canDelete = computed(() => permissionStore.hasPermission(['system:file:delete']))
 const canEditVisibility = computed(() => permissionStore.hasPermission(['system:file:permission']))
@@ -275,7 +277,7 @@ const toggleSelectAll = () => {
 
 const handleDelete = async (id: number) => {
   if (!canDelete.value) return
-  if (!confirm('确认删除该文件吗？')) return
+  if (!await dialog.confirm('确认删除该文件吗？')) return
   deleting.value = true
   try {
     await deleteConsoleFile(id)
@@ -287,7 +289,7 @@ const handleDelete = async (id: number) => {
 
 const handleBatchDelete = async () => {
   if (!canDelete.value || selectedIds.value.length === 0) return
-  if (!confirm(`确认删除选中的 ${selectedIds.value.length} 个文件吗？`)) return
+  if (!await dialog.confirm(`确认删除选中的 ${selectedIds.value.length} 个文件吗？`)) return
   deleting.value = true
   try {
     await batchDeleteConsoleFiles(selectedIds.value)

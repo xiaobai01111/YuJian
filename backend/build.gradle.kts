@@ -81,6 +81,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("net.jqwik:jqwik:$jqwikVersion")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    
 }
 
 tasks.withType<Test> {
@@ -89,4 +90,8 @@ tasks.withType<Test> {
 
 tasks.bootJar {
     archiveFileName.set("campus-wall.jar")
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.add("-Xlint:deprecation")
 }

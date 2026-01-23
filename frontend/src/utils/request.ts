@@ -11,8 +11,7 @@ service.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const userStore = useUserStore()
         if (userStore.token) {
-            // Sa-Token expects token directly without Bearer prefix
-            config.headers['Authorization'] = userStore.token
+            config.headers['Authorization'] = `Bearer ${userStore.token}`
         }
         return config
     },
@@ -42,6 +41,10 @@ service.interceptors.response.use(
             const userStore = useUserStore()
             userStore.logout()
             location.reload()
+        }
+        if (error.response && error.response.data) {
+            const data = error.response.data
+            error.message = data.message || data.msg || error.message
         }
         return Promise.reject(error)
     }

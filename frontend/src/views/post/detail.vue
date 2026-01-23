@@ -149,11 +149,13 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPostDetail, likePost, unlikePost, bookmarkPost, unbookmarkPost, type PostVO } from '@/api/post'
 import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 import { getBoardLabel, getBoardPath, getPostBoards } from '@/utils/boards'
 import { resolveFileUrl } from '@/utils/file'
 
 const route = useRoute()
 const userStore = useUserStore()
+const dialog = useDialog()
 const post = ref<PostVO | null>(null)
 const loading = ref(false)
 
@@ -181,8 +183,7 @@ const fetchDetail = async () => {
 const handleLike = async () => {
   if (!post.value) return
   if (!userStore.token) {
-    // Should prompt login
-    alert('请先登录')
+    await dialog.alert('请先登录')
     return
   }
   
@@ -204,7 +205,7 @@ const handleLike = async () => {
 const handleBookmark = async () => {
   if (!post.value) return
   if (!userStore.token) {
-    alert('请先登录')
+    await dialog.alert('请先登录')
     return
   }
   

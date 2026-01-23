@@ -35,7 +35,7 @@
       </div>
       
       <!-- Page Content -->
-      <main class="flex-1 p-6 flex flex-col overflow-hidden">
+      <main class="flex-1 p-6 flex flex-col overflow-hidden min-h-0">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
              <component :is="Component" class="h-full" />

@@ -208,6 +208,7 @@ import {
   queryNotices, createNotice, updateNotice, publishNotice, offlineNotice, deleteNotice,
   type NoticeVO, type NoticeDTO
 } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const notices = ref<NoticeVO[]>([])
 const loading = ref(false)
@@ -217,6 +218,7 @@ const pageSize = ref(10)
 const total = ref(0)
 const filterStatus = ref<number | undefined>(undefined)
 const filterKeyword = ref('')
+const dialog = useDialog()
 
 const formModal = ref<HTMLDialogElement | null>(null)
 const isEdit = ref(false)
@@ -297,11 +299,11 @@ const closeModal = () => {
 
 const handleSave = async () => {
   if (!form.value.title?.trim()) {
-    alert('请输入标题')
+    await dialog.alert('请输入标题')
     return
   }
   if (!form.value.content?.trim()) {
-    alert('请输入内容')
+    await dialog.alert('请输入内容')
     return
   }
 
@@ -322,39 +324,39 @@ const handleSave = async () => {
     closeModal()
     loadNotices()
   } catch (e: any) {
-    alert(e.response?.data?.msg || '保存失败')
+    await dialog.alert(e.response?.data?.msg || '保存失败')
   } finally {
     saving.value = false
   }
 }
 
 const handlePublish = async (notice: NoticeVO) => {
-  if (!confirm(`确定发布公告「${notice.title}」？`)) return
+  if (!await dialog.confirm(`确定发布公告「${notice.title}」？`)) return
   try {
     await publishNotice(notice.id)
     loadNotices()
   } catch (e: any) {
-    alert(e.response?.data?.msg || '发布失败')
+    await dialog.alert(e.response?.data?.msg || '发布失败')
   }
 }
 
 const handleOffline = async (notice: NoticeVO) => {
-  if (!confirm(`确定下线公告「${notice.title}」？`)) return
+  if (!await dialog.confirm(`确定下线公告「${notice.title}」？`)) return
   try {
     await offlineNotice(notice.id)
     loadNotices()
   } catch (e: any) {
-    alert(e.response?.data?.msg || '下线失败')
+    await dialog.alert(e.response?.data?.msg || '下线失败')
   }
 }
 
 const handleDelete = async (notice: NoticeVO) => {
-  if (!confirm(`确定删除公告「${notice.title}」？此操作不可恢复！`)) return
+  if (!await dialog.confirm(`确定删除公告「${notice.title}」？此操作不可恢复！`)) return
   try {
     await deleteNotice(notice.id)
     loadNotices()
   } catch (e: any) {
-    alert(e.response?.data?.msg || '删除失败')
+    await dialog.alert(e.response?.data?.msg || '删除失败')
   }
 }
 

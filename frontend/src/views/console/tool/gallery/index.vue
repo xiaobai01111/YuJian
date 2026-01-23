@@ -138,6 +138,7 @@ import { computed, onMounted, ref } from 'vue'
 import { usePermissionStore } from '@/stores/permission'
 import { batchDeleteConsoleGallery, deleteConsoleGallery, getGalleryCategories, getGalleryList, updateConsoleGalleryVisibility, uploadConsoleGallery, type FileCategoryVO, type FileManageVO } from '@/api/system'
 import { resolveFileUrl } from '@/utils/file'
+import { useDialog } from '@/composables/useDialog'
 
 const categories = ref<FileCategoryVO[]>([])
 const activeCategory = ref('all')
@@ -155,6 +156,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const uploadVisibility = ref<'PUBLIC' | 'PRIVATE'>('PUBLIC')
 
 const permissionStore = usePermissionStore()
+const dialog = useDialog()
 const canUpload = computed(() => permissionStore.hasPermission(['system:gallery:upload']))
 const canDelete = computed(() => permissionStore.hasPermission(['system:gallery:delete']))
 const canEditVisibility = computed(() => permissionStore.hasPermission(['system:gallery:permission']))
@@ -259,7 +261,7 @@ const toggleSelectAll = () => {
 
 const handleDelete = async (id: number) => {
   if (!canDelete.value) return
-  if (!confirm('确认删除该图片吗？')) return
+  if (!await dialog.confirm('确认删除该图片吗？')) return
   deleting.value = true
   try {
     await deleteConsoleGallery(id)
@@ -271,7 +273,7 @@ const handleDelete = async (id: number) => {
 
 const handleBatchDelete = async () => {
   if (!canDelete.value || selectedIds.value.length === 0) return
-  if (!confirm(`确认删除选中的 ${selectedIds.value.length} 张图片吗？`)) return
+  if (!await dialog.confirm(`确认删除选中的 ${selectedIds.value.length} 张图片吗？`)) return
   deleting.value = true
   try {
     await batchDeleteConsoleGallery(selectedIds.value)

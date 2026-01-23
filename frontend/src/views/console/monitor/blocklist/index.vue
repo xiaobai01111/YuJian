@@ -237,6 +237,7 @@ import {
   type BlocklistDTO,
   type BlocklistVO
 } from '@/api/system'
+import { useDialog } from '@/composables/useDialog'
 
 const targetTypeOptions = [
   { value: 'IP', label: 'IP地址' },
@@ -277,6 +278,7 @@ const batchForm = reactive({
   reason: '',
   text: ''
 })
+const dialog = useDialog()
 
 const isEdit = computed(() => form.id !== null)
 
@@ -301,7 +303,7 @@ const fetchData = async () => {
   } catch (error: any) {
     blocklist.value = []
     total.value = 0
-    alert(error?.message || error?.response?.data?.message || '获取阻止名单失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '获取阻止名单失败')
   } finally {
     loading.value = false
   }
@@ -365,7 +367,7 @@ const closeBatchModal = () => {
 
 const handleSave = async () => {
   if (!form.targetValue.trim()) {
-    alert('目标值不能为空')
+    await dialog.alert('目标值不能为空')
     return
   }
   const payload: BlocklistDTO = {
@@ -385,7 +387,7 @@ const handleSave = async () => {
     closeModal()
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '保存失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -398,7 +400,7 @@ const handleBatchImport = async () => {
     .filter(line => line.length > 0)
 
   if (values.length === 0) {
-    alert('请输入目标值列表')
+    await dialog.alert('请输入目标值列表')
     return
   }
   batchLoading.value = true
@@ -413,19 +415,19 @@ const handleBatchImport = async () => {
     batchResult.value = res
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '批量导入失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '批量导入失败')
   } finally {
     batchLoading.value = false
   }
 }
 
 const handleDelete = async (item: BlocklistVO) => {
-  if (!confirm(`确定要删除 ${item.targetValue} 吗？`)) return
+  if (!await dialog.confirm(`确定要删除 ${item.targetValue} 吗？`)) return
   try {
     await deleteBlocklist(item.id)
     fetchData()
   } catch (error: any) {
-    alert(error?.message || error?.response?.data?.message || '删除失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
   }
 }
 
