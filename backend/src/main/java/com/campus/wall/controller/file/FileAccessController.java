@@ -7,6 +7,7 @@ import com.campus.wall.enums.file.FileVisibility;
 import com.campus.wall.mapper.file.FileRecordMapper;
 import com.campus.wall.service.file.FileAccessService;
 import com.campus.wall.service.storage.StorageProvider;
+import com.campus.wall.util.HttpHeaderUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -64,8 +65,7 @@ public class FileAccessController {
             response.setHeader("Cache-Control", "no-store");
         }
 
-        String disposition = download ? "attachment" : "inline";
-        response.setHeader("Content-Disposition", disposition + "; filename=\"" + filename + "\"");
+        response.setHeader("Content-Disposition", HttpHeaderUtil.buildContentDisposition(filename, download));
 
         try (InputStream inputStream = provider.open(record.getPath())) {
             inputStream.transferTo(response.getOutputStream());

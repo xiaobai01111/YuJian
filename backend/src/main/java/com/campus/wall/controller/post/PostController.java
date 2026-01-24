@@ -48,12 +48,14 @@ public class PostController {
     }
 
     @Operation(summary = "获取帖子详情")
+    @SaCheckLogin
     @GetMapping("/{id}")
     public R<PostVO> detail(@PathVariable Long id) {
         return R.ok(postService.getPostDetail(id));
     }
 
     @Operation(summary = "记录阅读")
+    @SaCheckLogin
     @PostMapping("/{id}/view")
     public R<Void> recordView(@PathVariable Long id) {
         postService.recordPostView(id);
@@ -141,6 +143,7 @@ public class PostController {
     }
 
     @Operation(summary = "搜索帖子")
+    @SaCheckLogin
     @GetMapping("/search")
     public R<PageResult<PostVO>> search(
             @Parameter(description = "关键词") @RequestParam String keyword,

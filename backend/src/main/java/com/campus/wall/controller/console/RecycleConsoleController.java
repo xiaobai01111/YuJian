@@ -1,6 +1,5 @@
 package com.campus.wall.controller.console;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
@@ -35,7 +34,6 @@ public class RecycleConsoleController {
     private final ReportService reportService;
     private final DataScopeService dataScopeService;
 
-    @SaCheckPermission("content:recycle:post:list")
     @GetMapping("/posts")
     public R<PageResult<PostVO>> listDeletedPosts(@Validated PostQueryDTO query) {
         assertRecycleScope();
@@ -43,7 +41,6 @@ public class RecycleConsoleController {
         return R.ok(postService.queryPostsForConsole(query));
     }
 
-    @SaCheckPermission("content:recycle:post:restore")
     @PutMapping("/posts/{id}/restore")
     public R<Void> restorePost(@PathVariable Long id,
                                @RequestParam(value = "reason", required = false) String reason) {
@@ -52,7 +49,6 @@ public class RecycleConsoleController {
         return R.ok();
     }
 
-    @SaCheckPermission("content:recycle:post:purge")
     @DeleteMapping("/posts/{id}")
     public R<Void> purgePost(@PathVariable Long id,
                              @RequestParam(value = "reason", required = false) String reason) {
@@ -61,7 +57,6 @@ public class RecycleConsoleController {
         return R.ok();
     }
 
-    @SaCheckPermission("content:recycle:comment:list")
     @GetMapping("/comments")
     public R<PageResult<CommentConsoleVO>> listDeletedComments(@Validated CommentQueryDTO query) {
         assertRecycleScope();
@@ -69,7 +64,6 @@ public class RecycleConsoleController {
         return R.ok(commentService.queryCommentsForConsole(query));
     }
 
-    @SaCheckPermission("content:recycle:comment:restore")
     @PutMapping("/comments/{id}/restore")
     public R<Void> restoreComment(@PathVariable Long id,
                                   @RequestParam(value = "reason", required = false) String reason) {
@@ -78,7 +72,6 @@ public class RecycleConsoleController {
         return R.ok();
     }
 
-    @SaCheckPermission("content:recycle:comment:purge")
     @DeleteMapping("/comments/{id}")
     public R<Void> purgeComment(@PathVariable Long id,
                                 @RequestParam(value = "reason", required = false) String reason) {
@@ -87,7 +80,6 @@ public class RecycleConsoleController {
         return R.ok();
     }
 
-    @SaCheckPermission("content:recycle:report:list")
     @GetMapping("/reports")
     public R<PageResult<ReportVO>> listDeletedReports(@RequestParam(required = false) Integer status,
                                                       @RequestParam(defaultValue = "1") int page,
@@ -96,7 +88,6 @@ public class RecycleConsoleController {
         return R.ok(reportService.queryDeletedReports(status, page, size));
     }
 
-    @SaCheckPermission("content:recycle:report:restore")
     @PutMapping("/reports/{id}/restore")
     public R<Void> restoreReport(@PathVariable Long id,
                                  @RequestParam(value = "reason", required = false) String reason) {
@@ -105,7 +96,6 @@ public class RecycleConsoleController {
         return R.ok();
     }
 
-    @SaCheckPermission("content:recycle:report:purge")
     @DeleteMapping("/reports/{id}")
     public R<Void> purgeReport(@PathVariable Long id,
                                @RequestParam(value = "reason", required = false) String reason) {

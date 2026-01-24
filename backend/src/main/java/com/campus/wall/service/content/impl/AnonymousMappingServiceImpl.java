@@ -8,7 +8,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
@@ -19,6 +21,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -42,13 +45,27 @@ public class AnonymousMappingServiceImpl implements AnonymousMappingService {
     @Value("${kms.master-key:campus-wall-default-key-32b}")
     private String masterKey;
 
-    // 内存缓存（帖子ID -> 加密用户ID -> 标签），从数据库加载
-    private final Map<Long, Map<String, String>> anonymousTagCache = new ConcurrentHashMap<>();
+    @Value("${app.anonymous-cache.ttl-ms:3600000}")
+    private long cacheTtlMillis;
+
+    // 内存缓存（帖子ID -> 加密用户ID -> 标签）
+    private final Map<Long, CacheEntry> anonymousTagCache = new ConcurrentHashMap<>();
+    private final Map<Long, Object> postLocks = new ConcurrentHashMap<>();
     private static final String[] ANONYMOUS_TAGS = {
             "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
             "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
             "U", "V", "W", "X", "Y", "Z"
     };
+
+    private static class CacheEntry {
+        private final Map<String, String> tags;
+        private volatile long lastAccess;
+
+        private CacheEntry(Map<String, String> tags, long lastAccess) {
+            this.tags = tags;
+            this.lastAccess = lastAccess;
+        }
+    }
 
     @Override
     public String encryptUserId(Long userId, String context) {
@@ -104,50 +121,92 @@ public class AnonymousMappingServiceImpl implements AnonymousMappingService {
     public String generateAnonymousTag(Long userId, Long postId) {
         // 加密用户ID作为数据库存储和缓存key
         String encryptedUserId = encryptUserId(userId, "post:" + postId);
-        
-        // 先从缓存获取
-        Map<String, String> postCache = anonymousTagCache.get(postId);
-        if (postCache != null && postCache.containsKey(encryptedUserId)) {
-            return postCache.get(encryptedUserId);
-        }
-        
-        // 从数据库加载该帖子的所有匿名映射
-        if (postCache == null) {
-            postCache = new ConcurrentHashMap<>();
-            List<AnonymousMapping> mappings = anonymousMappingMapper.selectList(
-                    new LambdaQueryWrapper<AnonymousMapping>()
-                            .eq(AnonymousMapping::getPostId, postId)
-                            .orderByAsc(AnonymousMapping::getId)
-            );
-            for (int i = 0; i < mappings.size(); i++) {
-                String tag = i < ANONYMOUS_TAGS.length ? 
-                        "匿名用户" + ANONYMOUS_TAGS[i] : "匿名用户" + (i + 1);
-                postCache.put(mappings.get(i).getUserIdEncrypted(), tag);
+
+        Object lock = postLocks.computeIfAbsent(postId, key -> new Object());
+        synchronized (lock) {
+            CacheEntry entry = anonymousTagCache.get(postId);
+            long now = System.currentTimeMillis();
+            if (entry != null && now - entry.lastAccess > cacheTtlMillis) {
+                anonymousTagCache.remove(postId);
+                entry = null;
             }
-            anonymousTagCache.put(postId, postCache);
+            if (entry == null) {
+                Map<String, String> postCache = new ConcurrentHashMap<>();
+                List<AnonymousMapping> mappings = anonymousMappingMapper.selectList(
+                        new LambdaQueryWrapper<AnonymousMapping>()
+                                .eq(AnonymousMapping::getPostId, postId)
+                                .orderByAsc(AnonymousMapping::getId)
+                );
+                for (int i = 0; i < mappings.size(); i++) {
+                    String tag = i < ANONYMOUS_TAGS.length ?
+                            "匿名用户" + ANONYMOUS_TAGS[i] : "匿名用户" + (i + 1);
+                    postCache.put(mappings.get(i).getUserIdEncrypted(), tag);
+                }
+                entry = new CacheEntry(postCache, now);
+                anonymousTagCache.put(postId, entry);
+            }
+            entry.lastAccess = now;
+
+            String existing = entry.tags.get(encryptedUserId);
+            if (existing != null) {
+                return existing;
+            }
+
+            int index = entry.tags.size();
+            String tag = index < ANONYMOUS_TAGS.length ?
+                    "匿名用户" + ANONYMOUS_TAGS[index] : "匿名用户" + (index + 1);
+
+            AnonymousMapping mapping = new AnonymousMapping();
+            mapping.setPostId(postId);
+            mapping.setUserIdEncrypted(encryptedUserId);
+            try {
+                anonymousMappingMapper.insert(mapping);
+            } catch (DataIntegrityViolationException ex) {
+                Map<String, String> latest = loadPostMappings(postId);
+                entry.tags.clear();
+                entry.tags.putAll(latest);
+                String existingTag = entry.tags.get(encryptedUserId);
+                if (existingTag != null) {
+                    return existingTag;
+                }
+                throw ex;
+            }
+
+            entry.tags.put(encryptedUserId, tag);
+
+            log.info("生成匿名标签: postId={}, tag={}", postId, tag);
+            return tag;
         }
-        
-        // 检查用户是否已有标签
-        if (postCache.containsKey(encryptedUserId)) {
-            return postCache.get(encryptedUserId);
+    }
+
+    @Scheduled(fixedDelayString = "${app.anonymous-cache.cleanup-interval-ms:600000}")
+    public void cleanupAnonymousCache() {
+        long now = System.currentTimeMillis();
+        List<Long> expired = new ArrayList<>();
+        for (Map.Entry<Long, CacheEntry> entry : anonymousTagCache.entrySet()) {
+            if (now - entry.getValue().lastAccess > cacheTtlMillis) {
+                expired.add(entry.getKey());
+            }
         }
-        
-        // 生成新标签并持久化
-        int index = postCache.size();
-        String tag = index < ANONYMOUS_TAGS.length ? 
-                "匿名用户" + ANONYMOUS_TAGS[index] : "匿名用户" + (index + 1);
-        
-        // 持久化到数据库
-        AnonymousMapping mapping = new AnonymousMapping();
-        mapping.setPostId(postId);
-        mapping.setUserIdEncrypted(encryptedUserId);
-        anonymousMappingMapper.insert(mapping);
-        
-        // 更新缓存
-        postCache.put(encryptedUserId, tag);
-        
-        log.info("生成匿名标签: postId={}, tag={}", postId, tag);
-        return tag;
+        for (Long postId : expired) {
+            anonymousTagCache.remove(postId);
+            postLocks.remove(postId);
+        }
+    }
+
+    private Map<String, String> loadPostMappings(Long postId) {
+        Map<String, String> postCache = new ConcurrentHashMap<>();
+        List<AnonymousMapping> mappings = anonymousMappingMapper.selectList(
+                new LambdaQueryWrapper<AnonymousMapping>()
+                        .eq(AnonymousMapping::getPostId, postId)
+                        .orderByAsc(AnonymousMapping::getId)
+        );
+        for (int i = 0; i < mappings.size(); i++) {
+            String tag = i < ANONYMOUS_TAGS.length ?
+                    "匿名用户" + ANONYMOUS_TAGS[i] : "匿名用户" + (i + 1);
+            postCache.put(mappings.get(i).getUserIdEncrypted(), tag);
+        }
+        return postCache;
     }
 
     @Override

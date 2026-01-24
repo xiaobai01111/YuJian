@@ -1,6 +1,5 @@
 package com.campus.wall.controller.campus;
 
-import cn.dev33.satoken.annotation.SaIgnore;
 import com.campus.wall.common.R;
 import com.campus.wall.service.system.CampusHeroService;
 import com.campus.wall.vo.campus.CampusHeroVO;
@@ -17,7 +16,6 @@ public class CampusHeroController {
 
     private final CampusHeroService campusHeroService;
 
-    @SaIgnore
     @GetMapping("/{pageKey}")
     public R<CampusHeroVO> getByPageKey(@PathVariable String pageKey) {
         return R.ok(campusHeroService.getByPageKey(pageKey));

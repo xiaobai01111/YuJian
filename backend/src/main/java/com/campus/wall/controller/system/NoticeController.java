@@ -1,8 +1,6 @@
 package com.campus.wall.controller.system;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.dev33.satoken.annotation.SaIgnore;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.system.NoticeDTO;
@@ -24,7 +22,6 @@ public class NoticeController {
     /**
      * 获取公开公告列表（首页公告栏）
      */
-    @SaIgnore
     @GetMapping("/api/v1/notices/public")
     public R<List<NoticeVO>> getPublicNotices(
             @RequestParam(defaultValue = "10") int limit) {
@@ -34,7 +31,6 @@ public class NoticeController {
     /**
      * 获取公开公告详情
      */
-    @SaIgnore
     @GetMapping("/api/v1/notices/public/{id}")
     public R<NoticeVO> getPublicNoticeDetail(@PathVariable Long id) {
         return R.ok(noticeService.getPublicNoticeDetail(id));
@@ -67,7 +63,6 @@ public class NoticeController {
     /**
      * 后台：查询公告列表
      */
-    @SaCheckPermission("system:notice:list")
     @GetMapping("/api/v1/console/notices")
     public R<PageResult<NoticeVO>> queryNotices(
             @RequestParam(defaultValue = "1") int page,
@@ -80,7 +75,6 @@ public class NoticeController {
     /**
      * 后台：获取公告详情
      */
-    @SaCheckPermission("system:notice:list")
     @GetMapping("/api/v1/console/notices/{id}")
     public R<NoticeVO> getNoticeDetail(@PathVariable Long id) {
         return R.ok(noticeService.getNoticeDetail(id));
@@ -89,7 +83,6 @@ public class NoticeController {
     /**
      * 后台：创建公告（草稿）
      */
-    @SaCheckPermission("system:notice:add")
     @PostMapping("/api/v1/console/notices")
     public R<NoticeVO> create(@RequestBody NoticeDTO dto) {
         return R.ok(noticeService.create(dto));
@@ -98,7 +91,6 @@ public class NoticeController {
     /**
      * 后台：更新公告
      */
-    @SaCheckPermission("system:notice:edit")
     @PutMapping("/api/v1/console/notices/{id}")
     public R<NoticeVO> update(@PathVariable Long id, @RequestBody NoticeDTO dto) {
         return R.ok(noticeService.update(id, dto));
@@ -107,7 +99,6 @@ public class NoticeController {
     /**
      * 后台：发布公告
      */
-    @SaCheckPermission("system:notice:publish")
     @PutMapping("/api/v1/console/notices/{id}/publish")
     public R<Void> publish(@PathVariable Long id) {
         noticeService.publish(id);
@@ -117,7 +108,6 @@ public class NoticeController {
     /**
      * 后台：下线公告
      */
-    @SaCheckPermission("system:notice:offline")
     @PutMapping("/api/v1/console/notices/{id}/offline")
     public R<Void> offline(@PathVariable Long id) {
         noticeService.offline(id);
@@ -127,7 +117,6 @@ public class NoticeController {
     /**
      * 后台：删除公告
      */
-    @SaCheckPermission("system:notice:delete")
     @DeleteMapping("/api/v1/console/notices/{id}")
     public R<Void> delete(@PathVariable Long id) {
         noticeService.delete(id);

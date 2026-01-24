@@ -1,6 +1,5 @@
 package com.campus.wall.controller.console;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.system.ReportBatchHandleDTO;
@@ -26,7 +25,6 @@ public class ReportConsoleController {
 
     private final ReportService reportService;
 
-    @SaCheckPermission("content:report:list")
     @GetMapping
     public R<PageResult<ReportVO>> list(@RequestParam(required = false) Integer status,
                                         @RequestParam(defaultValue = "1") int page,
@@ -34,27 +32,23 @@ public class ReportConsoleController {
         return R.ok(reportService.queryReports(status, page, size));
     }
 
-    @SaCheckPermission("content:report:list")
     @GetMapping("/{id}")
     public R<ReportVO> detail(@PathVariable Long id) {
         return R.ok(reportService.getReportDetail(id));
     }
 
-    @SaCheckPermission("content:report:handle")
     @PutMapping("/{id}/handle")
     public R<Void> handle(@PathVariable Long id, @RequestBody @Valid ReportHandleDTO dto) {
         reportService.handleReport(id, dto);
         return R.ok();
     }
 
-    @SaCheckPermission("content:report:batch-handle")
     @PostMapping("/batch-handle")
     public R<Void> batchHandle(@RequestBody @Valid ReportBatchHandleDTO dto) {
         reportService.handleReports(dto);
         return R.ok();
     }
 
-    @SaCheckPermission("content:report:delete")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id,
                           @RequestParam(value = "reason", required = false) String reason) {

@@ -12,18 +12,15 @@ import com.campus.wall.entity.system.SysNotice;
 import com.campus.wall.entity.system.Report;
 import com.campus.wall.entity.system.SysOperLog;
 import com.campus.wall.entity.user.IdentityVerification;
-import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.mapper.system.SysNoticeMapper;
 import com.campus.wall.mapper.system.ReportMapper;
 import com.campus.wall.mapper.system.SensitiveWordMapper;
-import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysLoginLogMapper;
 import com.campus.wall.mapper.system.SysOperLogMapper;
-import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.mapper.post.PostMapper;
 import com.campus.wall.mapper.user.UserMapper;
-import com.campus.wall.util.SecurityUtil;
+import com.campus.wall.service.security.DataScopeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -58,8 +55,7 @@ public class StatisticsController {
     private final IdentityVerificationMapper identityVerificationMapper;
     private final SysOperLogMapper operLogMapper;
     private final SysLoginLogMapper loginLogMapper;
-    private final SysRoleDeptMapper roleDeptMapper;
-    private final SysDeptMapper deptMapper;
+    private final DataScopeService dataScopeService;
 
     @Operation(summary = "获取仪表盘统计数据")
     @GetMapping("/dashboard")
@@ -79,20 +75,21 @@ public class StatisticsController {
         LocalDateTime yesterdayEnd = todayStart;
 
         Long userId = StpUtil.getLoginIdAsLong();
-        DataScope scope = buildDataScope(userId);
-        String scopedUserInSql = buildUserInSql(scope);
-        String scopedPostInSql = buildPostInSql(scope, userId, scopedUserInSql);
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(userId);
+        boolean allowAll = scope.isAllowAll();
+        List<Long> allowedUserIds = allowAll ? List.of() : dataScopeService.resolveAllowedUserIds(scope, userId);
+        List<Long> allowedPostIds = allowAll ? List.of() : resolveScopedPostIds(allowedUserIds);
 
         if (canUser) {
             Long totalUsers = userMapper.selectCount(
-                applyUserScope(new LambdaQueryWrapper<User>().eq(User::getDeleted, 0), scope, userId, scopedUserInSql)
+                applyUserScope(new LambdaQueryWrapper<User>().eq(User::getDeleted, 0), allowAll, allowedUserIds)
             );
             stats.put("totalUsers", totalUsers);
 
             Long todayNewUsers = userMapper.selectCount(
                 applyUserScope(new LambdaQueryWrapper<User>()
                     .eq(User::getDeleted, 0)
-                    .ge(User::getCreatedAt, todayStart), scope, userId, scopedUserInSql)
+                    .ge(User::getCreatedAt, todayStart), allowAll, allowedUserIds)
             );
             stats.put("todayNewUsers", todayNewUsers);
 
@@ -100,7 +97,7 @@ public class StatisticsController {
                 applyUserScope(new LambdaQueryWrapper<User>()
                     .eq(User::getDeleted, 0)
                     .ge(User::getCreatedAt, yesterdayStart)
-                    .lt(User::getCreatedAt, yesterdayEnd), scope, userId, scopedUserInSql)
+                    .lt(User::getCreatedAt, yesterdayEnd), allowAll, allowedUserIds)
             );
 
             double userGrowth = 0;
@@ -114,14 +111,14 @@ public class StatisticsController {
 
         if (canPost) {
             Long totalPosts = postMapper.selectCount(
-                applyPostScope(new LambdaQueryWrapper<Post>().eq(Post::getStatus, 0), scope, userId, scopedPostInSql)
+                applyPostScope(new LambdaQueryWrapper<Post>().eq(Post::getStatus, 0), allowAll, allowedUserIds)
             );
             stats.put("totalPosts", totalPosts);
 
             Long todayPosts = postMapper.selectCount(
                 applyPostScope(new LambdaQueryWrapper<Post>()
                     .eq(Post::getStatus, 0)
-                    .ge(Post::getCreatedAt, todayStart), scope, userId, scopedPostInSql)
+                    .ge(Post::getCreatedAt, todayStart), allowAll, allowedUserIds)
             );
             stats.put("todayPosts", todayPosts);
 
@@ -129,7 +126,7 @@ public class StatisticsController {
                 applyPostScope(new LambdaQueryWrapper<Post>()
                     .eq(Post::getStatus, 0)
                     .ge(Post::getCreatedAt, yesterdayStart)
-                    .lt(Post::getCreatedAt, yesterdayEnd), scope, userId, scopedPostInSql)
+                    .lt(Post::getCreatedAt, yesterdayEnd), allowAll, allowedUserIds)
             );
             stats.put("yesterdayPosts", yesterdayPosts);
 
@@ -145,7 +142,7 @@ public class StatisticsController {
         if (canVerify) {
             Long pendingVerifications = identityVerificationMapper.selectCount(
                 applyVerificationScope(new LambdaQueryWrapper<IdentityVerification>()
-                    .eq(IdentityVerification::getStatus, 0), scope, userId, scopedUserInSql)
+                    .eq(IdentityVerification::getStatus, 0), allowAll, allowedUserIds)
             );
             stats.put("pendingVerifications", pendingVerifications);
         }
@@ -154,7 +151,7 @@ public class StatisticsController {
             Long pendingReports = reportMapper.selectCount(
                 applyReportScope(new LambdaQueryWrapper<Report>()
                     .eq(Report::getStatus, 0)
-                    .eq(Report::getDeleted, 0), scope, userId, scopedPostInSql)
+                    .eq(Report::getDeleted, 0), allowAll, allowedPostIds)
             );
             stats.put("pendingReports", pendingReports);
         }
@@ -230,22 +227,30 @@ public class StatisticsController {
         }
 
         Long userId = StpUtil.getLoginIdAsLong();
-        DataScope scope = buildDataScope(userId);
-        String scopedUserInSql = buildUserInSql(scope);
-        String scopedPostInSql = buildPostInSql(scope, userId, scopedUserInSql);
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(userId);
+        boolean allowAll = scope.isAllowAll();
+        List<Long> allowedUserIds = allowAll ? List.of() : dataScopeService.resolveAllowedUserIds(scope, userId);
 
         // 获取最近的帖子
         List<Post> recentPosts = postMapper.selectList(
             applyPostScope(new LambdaQueryWrapper<Post>()
                 .orderByDesc(Post::getCreatedAt)
-                .last("LIMIT 10"), scope, userId, scopedPostInSql)
+                .last("LIMIT 10"), allowAll, allowedUserIds)
         );
+
+        Map<Long, User> userMap = recentPosts.isEmpty() ? Map.of() : userMapper.selectBatchIds(
+                recentPosts.stream()
+                        .map(Post::getUserId)
+                        .filter(id -> id != null)
+                        .distinct()
+                        .collect(Collectors.toList())
+        ).stream().collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
 
         for (Post post : recentPosts) {
             Map<String, Object> activity = new HashMap<>();
             
             // 获取用户信息
-            User user = userMapper.selectById(post.getUserId());
+            User user = userMap.get(post.getUserId());
             String nickname = user != null ? user.getNickname() : "未知用户";
             String avatar = user != null ? user.getAvatar() : null;
             
@@ -301,17 +306,26 @@ public class StatisticsController {
         }
 
         Long userId = StpUtil.getLoginIdAsLong();
-        DataScope scope = buildDataScope(userId);
-        String scopedUserInSql = buildUserInSql(scope);
-        String scopedPostInSql = buildPostInSql(scope, userId, scopedUserInSql);
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(userId);
+        boolean allowAll = scope.isAllowAll();
+        List<Long> allowedUserIds = allowAll ? List.of() : dataScopeService.resolveAllowedUserIds(scope, userId);
+        List<Long> allowedPostIds = allowAll ? List.of() : resolveScopedPostIds(allowedUserIds);
 
         List<Report> reports = reportMapper.selectList(
             applyReportScope(new LambdaQueryWrapper<Report>()
                 .eq(Report::getStatus, 0)
                 .eq(Report::getDeleted, 0)
                 .orderByDesc(Report::getCreatedAt)
-                .last("LIMIT 6"), scope, userId, scopedPostInSql)
+                .last("LIMIT 6"), allowAll, allowedPostIds)
         );
+
+        Map<Long, User> reporterMap = reports.isEmpty() ? Map.of() : userMapper.selectBatchIds(
+                reports.stream()
+                        .map(Report::getReporterId)
+                        .filter(id -> id != null)
+                        .distinct()
+                        .collect(Collectors.toList())
+        ).stream().collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
 
         for (Report report : reports) {
             Map<String, Object> item = new HashMap<>();
@@ -319,7 +333,7 @@ public class StatisticsController {
             item.put("reason", report.getReason());
             item.put("status", report.getStatus());
             item.put("createdAt", report.getCreatedAt());
-            User reporter = userMapper.selectById(report.getReporterId());
+            User reporter = reporterMap.get(report.getReporterId());
             item.put("reporterName", reporter != null ? reporter.getNickname() : "未知用户");
             item.put("postId", report.getPostId());
             result.add(item);
@@ -337,15 +351,24 @@ public class StatisticsController {
         }
 
         Long userId = StpUtil.getLoginIdAsLong();
-        DataScope scope = buildDataScope(userId);
-        String scopedUserInSql = buildUserInSql(scope);
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(userId);
+        boolean allowAll = scope.isAllowAll();
+        List<Long> allowedUserIds = allowAll ? List.of() : dataScopeService.resolveAllowedUserIds(scope, userId);
 
         List<IdentityVerification> verifications = identityVerificationMapper.selectList(
             applyVerificationScope(new LambdaQueryWrapper<IdentityVerification>()
                 .eq(IdentityVerification::getStatus, 0)
                 .orderByDesc(IdentityVerification::getCreatedAt)
-                .last("LIMIT 6"), scope, userId, scopedUserInSql)
+                .last("LIMIT 6"), allowAll, allowedUserIds)
         );
+
+        Map<Long, User> verifyUserMap = verifications.isEmpty() ? Map.of() : userMapper.selectBatchIds(
+                verifications.stream()
+                        .map(IdentityVerification::getUserId)
+                        .filter(id -> id != null)
+                        .distinct()
+                        .collect(Collectors.toList())
+        ).stream().collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
 
         for (IdentityVerification verification : verifications) {
             Map<String, Object> item = new HashMap<>();
@@ -353,7 +376,7 @@ public class StatisticsController {
             item.put("status", verification.getStatus());
             item.put("createdAt", verification.getCreatedAt());
             item.put("userId", verification.getUserId());
-            User user = userMapper.selectById(verification.getUserId());
+            User user = verifyUserMap.get(verification.getUserId());
             item.put("nickname", user != null ? user.getNickname() : "未知用户");
             result.add(item);
         }
@@ -446,180 +469,59 @@ public class StatisticsController {
         }
     }
 
-    private LambdaQueryWrapper<User> applyUserScope(LambdaQueryWrapper<User> wrapper, DataScope scope, Long userId, String userInSql) {
-        if (scope.allowAll) {
-            return wrapper;
-        }
-        if (userInSql == null || userInSql.isEmpty()) {
-            return wrapper.eq(User::getId, userId);
-        }
-        if (scope.allowSelf) {
-            return wrapper.and(w -> w.eq(User::getId, userId).or().inSql(User::getId, userInSql));
-        }
-        return wrapper.inSql(User::getId, userInSql);
-    }
-
-    private LambdaQueryWrapper<Post> applyPostScope(LambdaQueryWrapper<Post> wrapper, DataScope scope, Long userId, String postInSql) {
-        if (scope.allowAll) {
-            return wrapper;
-        }
-        if (postInSql == null || postInSql.isEmpty()) {
-            return wrapper.eq(Post::getUserId, userId);
-        }
-        if (scope.allowSelf) {
-            return wrapper.and(w -> w.eq(Post::getUserId, userId).or().inSql(Post::getUserId, postInSql));
-        }
-        return wrapper.inSql(Post::getUserId, postInSql);
-    }
-
-    private LambdaQueryWrapper<Report> applyReportScope(LambdaQueryWrapper<Report> wrapper, DataScope scope, Long userId, String postInSql) {
-        if (scope.allowAll) {
-            return wrapper;
-        }
-        String selfPostSql = "SELECT id FROM posts WHERE user_id = " + userId;
-        if (postInSql == null || postInSql.isEmpty()) {
-            return wrapper.inSql(Report::getPostId, selfPostSql);
-        }
-        if (scope.allowSelf) {
-            return wrapper.and(w -> w.inSql(Report::getPostId, postInSql).or().inSql(Report::getPostId, selfPostSql));
-        }
-        return wrapper.inSql(Report::getPostId, postInSql);
-    }
-
-    private LambdaQueryWrapper<IdentityVerification> applyVerificationScope(LambdaQueryWrapper<IdentityVerification> wrapper, DataScope scope, Long userId, String userInSql) {
-        if (scope.allowAll) {
-            return wrapper;
-        }
-        if (userInSql == null || userInSql.isEmpty()) {
-            return wrapper.eq(IdentityVerification::getUserId, userId);
-        }
-        if (scope.allowSelf) {
-            return wrapper.and(w -> w.eq(IdentityVerification::getUserId, userId).or().inSql(IdentityVerification::getUserId, userInSql));
-        }
-        return wrapper.inSql(IdentityVerification::getUserId, userInSql);
-    }
-
-    private String buildPostInSql(DataScope scope, Long userId, String userInSql) {
-        if (scope.allowAll) {
-            return null;
-        }
-        if (userInSql == null || userInSql.isEmpty()) {
-            return "SELECT id FROM posts WHERE user_id = " + userId;
-        }
-        return "SELECT id FROM posts WHERE user_id IN (" + userInSql + ")";
-    }
-
-    private String buildUserInSql(DataScope scope) {
-        if (scope.allowAll) {
-            return null;
-        }
-        if (scope.scopedDeptIds.isEmpty()) {
-            return null;
-        }
-        String deptIdSql = scope.scopedDeptIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-        return "SELECT id FROM users WHERE deleted = 0 AND dept_id IN (" + deptIdSql + ")";
-    }
-
-    private DataScope buildDataScope(Long userId) {
-        if (SecurityUtil.isSuperAdmin()) {
-            return DataScope.all();
-        }
-
-        List<Long> deptIds = roleDeptMapper.selectDeptIdsByUserId(userId);
-        if (deptIds == null) {
-            deptIds = new ArrayList<>();
-        }
-        User user = userMapper.selectById(userId);
-        if (user != null && user.getDeptId() != null) {
-            if (!deptIds.contains(user.getDeptId())) {
-                deptIds.add(user.getDeptId());
-            }
-        }
-
-        if (deptIds.isEmpty()) {
-            return DataScope.selfOnly();
-        }
-
-        List<com.campus.wall.entity.system.SysDept> depts = deptMapper.selectBatchIds(deptIds);
-        boolean allowAll = false;
-        boolean allowSelf = false;
-        List<Long> allowDeptIds = new ArrayList<>();
-        boolean includeChildren = false;
-
-        for (com.campus.wall.entity.system.SysDept dept : depts) {
-            if (dept == null) continue;
-            Integer scope = dept.getDataScope() != null ? dept.getDataScope() : SecurityConstants.DATA_SCOPE_DEPT;
-            if (scope == SecurityConstants.DATA_SCOPE_ALL) {
-                allowAll = true;
-                break;
-            }
-            if (scope == SecurityConstants.DATA_SCOPE_SELF) {
-                allowSelf = true;
-            } else if (scope == SecurityConstants.DATA_SCOPE_DEPT) {
-                allowDeptIds.add(dept.getId());
-            } else if (scope == SecurityConstants.DATA_SCOPE_DEPT_AND_CHILD) {
-                allowDeptIds.add(dept.getId());
-                includeChildren = true;
-            } else if (scope == SecurityConstants.DATA_SCOPE_CUSTOM) {
-                allowDeptIds.add(dept.getId());
-            }
-        }
-
+    private LambdaQueryWrapper<User> applyUserScope(LambdaQueryWrapper<User> wrapper, boolean allowAll, List<Long> allowedUserIds) {
         if (allowAll) {
-            return DataScope.all();
+            return wrapper;
         }
-
-        List<Long> scopedDeptIds = includeChildren ? expandDeptIds(allowDeptIds) : allowDeptIds;
-        return new DataScope(false, allowSelf, scopedDeptIds);
+        if (allowedUserIds == null || allowedUserIds.isEmpty()) {
+            return wrapper.eq(User::getId, -1L);
+        }
+        return wrapper.in(User::getId, allowedUserIds);
     }
 
-    private List<Long> expandDeptIds(List<Long> deptIds) {
-        if (deptIds == null || deptIds.isEmpty()) {
+    private LambdaQueryWrapper<Post> applyPostScope(LambdaQueryWrapper<Post> wrapper, boolean allowAll, List<Long> allowedUserIds) {
+        if (allowAll) {
+            return wrapper;
+        }
+        if (allowedUserIds == null || allowedUserIds.isEmpty()) {
+            return wrapper.eq(Post::getId, -1L);
+        }
+        return wrapper.in(Post::getUserId, allowedUserIds);
+    }
+
+    private LambdaQueryWrapper<Report> applyReportScope(LambdaQueryWrapper<Report> wrapper, boolean allowAll, List<Long> allowedPostIds) {
+        if (allowAll) {
+            return wrapper;
+        }
+        if (allowedPostIds == null || allowedPostIds.isEmpty()) {
+            return wrapper.eq(Report::getId, -1L);
+        }
+        return wrapper.in(Report::getPostId, allowedPostIds);
+    }
+
+    private LambdaQueryWrapper<IdentityVerification> applyVerificationScope(LambdaQueryWrapper<IdentityVerification> wrapper, boolean allowAll, List<Long> allowedUserIds) {
+        if (allowAll) {
+            return wrapper;
+        }
+        if (allowedUserIds == null || allowedUserIds.isEmpty()) {
+            return wrapper.eq(IdentityVerification::getId, -1L);
+        }
+        return wrapper.in(IdentityVerification::getUserId, allowedUserIds);
+    }
+
+    private List<Long> resolveScopedPostIds(List<Long> allowedUserIds) {
+        if (allowedUserIds == null || allowedUserIds.isEmpty()) {
             return List.of();
         }
-        List<com.campus.wall.entity.system.SysDept> allDepts = deptMapper.selectList(null);
-        Map<Long, List<Long>> childrenMap = new HashMap<>();
-        for (com.campus.wall.entity.system.SysDept dept : allDepts) {
-            childrenMap.computeIfAbsent(dept.getParentId(), key -> new ArrayList<>()).add(dept.getId());
-        }
-        List<Long> result = new ArrayList<>();
-        for (Long rootId : deptIds) {
-            collectDeptChildren(rootId, childrenMap, result);
-        }
-        return result.stream().distinct().collect(Collectors.toList());
-    }
-
-    private void collectDeptChildren(Long deptId, Map<Long, List<Long>> childrenMap, List<Long> result) {
-        if (deptId == null) {
-            return;
-        }
-        result.add(deptId);
-        List<Long> children = childrenMap.get(deptId);
-        if (children != null) {
-            for (Long childId : children) {
-                collectDeptChildren(childId, childrenMap, result);
-            }
-        }
-    }
-
-    private static class DataScope {
-        private final boolean allowAll;
-        private final boolean allowSelf;
-        private final List<Long> scopedDeptIds;
-
-        private DataScope(boolean allowAll, boolean allowSelf, List<Long> scopedDeptIds) {
-            this.allowAll = allowAll;
-            this.allowSelf = allowSelf;
-            this.scopedDeptIds = scopedDeptIds != null ? scopedDeptIds : List.of();
-        }
-
-        private static DataScope all() {
-            return new DataScope(true, false, List.of());
-        }
-
-        private static DataScope selfOnly() {
-            return new DataScope(false, true, List.of());
-        }
+        return postMapper.selectList(
+                        new LambdaQueryWrapper<Post>()
+                                .select(Post::getId)
+                                .in(Post::getUserId, allowedUserIds)
+                ).stream()
+                .map(Post::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     private String getActionText(Post post) {

@@ -505,6 +505,18 @@ export interface FileQuery {
     keyword?: string
 }
 
+export interface FileCleanupConfig {
+    markOrphanHours: number
+    retainDays: number
+    deleteLimit: number
+}
+
+export interface FileCleanupResult {
+    marked: number
+    deleted: number
+    failed: number
+}
+
 export function getFileCategories() {
     return request.get<FileCategoryVO[]>('/api/v1/console/files/categories')
 }
@@ -567,6 +579,18 @@ export function updateConsoleFileVisibility(id: number, visibility: string) {
 
 export function updateConsoleGalleryVisibility(id: number, visibility: string) {
     return request.post(`/api/v1/console/gallery/${id}/visibility`, { visibility })
+}
+
+export function getFileCleanupConfig() {
+    return request.get<FileCleanupConfig>('/api/v1/console/files/cleanup/config')
+}
+
+export function updateFileCleanupConfig(data: Partial<FileCleanupConfig>) {
+    return request.put<FileCleanupConfig>('/api/v1/console/files/cleanup/config', data)
+}
+
+export function runFileCleanup(data?: Partial<FileCleanupConfig>) {
+    return request.post<FileCleanupResult>('/api/v1/console/files/cleanup', data || {})
 }
 
 // --- Oper Log ---

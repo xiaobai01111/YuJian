@@ -1,6 +1,5 @@
 package com.campus.wall.controller.system;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.system.OnlineUserKickoutDTO;
@@ -23,13 +22,11 @@ public class OnlineUserController {
 
     private final OnlineUserService onlineUserService;
 
-    @SaCheckPermission("system:online:list")
     @GetMapping
     public R<PageResult<OnlineUserVO>> list(@Validated OnlineUserQueryDTO query) {
         return R.ok(onlineUserService.queryOnlineUsers(query));
     }
 
-    @SaCheckPermission("system:online:kickout")
     @PostMapping("/kickout")
     public R<Void> kickout(@Valid @RequestBody OnlineUserKickoutDTO dto) {
         onlineUserService.kickoutByToken(dto.getToken());

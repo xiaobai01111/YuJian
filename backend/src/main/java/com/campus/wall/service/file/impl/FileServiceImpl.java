@@ -5,7 +5,9 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.ResultCode;
+import com.campus.wall.config.FileCleanupProperties;
 import com.campus.wall.config.StorageProperties;
+import com.campus.wall.dto.system.FileCleanupRequestDTO;
 import com.campus.wall.entity.file.FileRecord;
 import com.campus.wall.enums.file.FileVisibility;
 import com.campus.wall.enums.file.StorageProviderType;
@@ -16,6 +18,8 @@ import com.campus.wall.service.file.FileService;
 import com.campus.wall.service.storage.StorageProvider;
 import com.campus.wall.service.storage.StorageProviderRegistry;
 import com.campus.wall.vo.file.FileVO;
+import com.campus.wall.vo.system.FileCleanupConfigVO;
+import com.campus.wall.vo.system.FileCleanupResultVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -44,12 +48,17 @@ public class FileServiceImpl implements FileService {
     private final StorageProviderRegistry storageProviderRegistry;
     private final StorageProperties storageProperties;
     private final FileAccessService fileAccessService;
+    private final FileCleanupProperties cleanupProperties;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
             "image/jpeg", "image/png", "image/webp"
     );
     private static final long MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final long MAX_FILE_SIZE = 200L * 1024 * 1024; // 200MB
+
+    private static final Set<String> ALLOWED_TARGET_TYPES = Set.of(
+            "post", "avatar", "file", "gallery", "public", "package", "resource"
+    );
     
     // Magic bytes for file type validation
     private static final byte[] JPEG_MAGIC = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
@@ -58,7 +67,8 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public FileVO uploadFile(MultipartFile file, String targetType, String visibility) {
-        validateFile(file, targetType);
+        String normalizedTargetType = normalizeTargetType(targetType);
+        validateFile(file, normalizedTargetType);
 
         try {
             Long userId = StpUtil.getLoginIdAsLong();
@@ -66,8 +76,8 @@ public class FileServiceImpl implements FileService {
             // 生成文件路径
             String originalFilename = file.getOriginalFilename();
             String extension = getFileExtension(originalFilename);
-            String objectName = generateObjectName(targetType, extension);
-            FileVisibility resolvedVisibility = resolveVisibility(targetType, visibility);
+            String objectName = generateObjectName(normalizedTargetType, extension);
+            FileVisibility resolvedVisibility = resolveVisibility(normalizedTargetType, visibility);
             StorageProvider provider = resolvePrimaryProvider();
             String storedPath;
             try {
@@ -88,7 +98,7 @@ public class FileServiceImpl implements FileService {
             record.setPath(storedPath);
             record.setSize(file.getSize());
             record.setMimeType(file.getContentType());
-            record.setTargetType(targetType);
+            record.setTargetType(normalizedTargetType);
             record.setStatus(0);
             record.setAuditStatus(0); // 待审核
             record.setStorageClass("STANDARD");
@@ -167,11 +177,42 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public void cleanOrphanFiles() {
-        // 标记超过24小时未绑定的文件
-        fileRecordMapper.markOrphanFilesForCleanup();
-        
-        // 删除超过7天的已标记文件
-        List<FileRecord> filesToDelete = fileRecordMapper.selectFilesToDelete();
+        cleanOrphanFiles(null);
+    }
+
+    @Override
+    public FileCleanupConfigVO getCleanupConfig() {
+        return buildCleanupConfig(cleanupProperties.getMarkOrphanHours(),
+                cleanupProperties.getRetainDays(),
+                cleanupProperties.getDeleteLimit());
+    }
+
+    @Override
+    public FileCleanupConfigVO updateCleanupConfig(FileCleanupRequestDTO dto) {
+        if (dto == null) {
+            return getCleanupConfig();
+        }
+        if (dto.getMarkOrphanHours() != null) {
+            cleanupProperties.setMarkOrphanHours(dto.getMarkOrphanHours());
+        }
+        if (dto.getRetainDays() != null) {
+            cleanupProperties.setRetainDays(dto.getRetainDays());
+        }
+        if (dto.getDeleteLimit() != null) {
+            cleanupProperties.setDeleteLimit(dto.getDeleteLimit());
+        }
+        return getCleanupConfig();
+    }
+
+    @Override
+    public FileCleanupResultVO cleanOrphanFiles(FileCleanupRequestDTO dto) {
+        CleanupOptions options = resolveCleanupOptions(dto);
+
+        int marked = fileRecordMapper.markOrphanFilesForCleanupByHours(options.markOrphanHours);
+        List<FileRecord> filesToDelete = fileRecordMapper.selectFilesToDeleteByRetention(options.retainDays, options.deleteLimit);
+
+        int deleted = 0;
+        int failed = 0;
         for (FileRecord record : filesToDelete) {
             try {
                 StorageProvider provider = fileAccessService.getProvider(record.getStorageProvider());
@@ -179,9 +220,64 @@ public class FileServiceImpl implements FileService {
                     provider.delete(record.getPath());
                 }
                 fileRecordMapper.deleteById(record.getId());
+                deleted++;
             } catch (Exception e) {
+                failed++;
                 log.error("清理孤儿文件失败: {}", record.getPath(), e);
             }
+        }
+
+        FileCleanupResultVO result = new FileCleanupResultVO();
+        result.setMarked(marked);
+        result.setDeleted(deleted);
+        result.setFailed(failed);
+        return result;
+    }
+
+    private FileCleanupConfigVO buildCleanupConfig(int markOrphanHours, int retainDays, int deleteLimit) {
+        FileCleanupConfigVO config = new FileCleanupConfigVO();
+        config.setMarkOrphanHours(markOrphanHours);
+        config.setRetainDays(retainDays);
+        config.setDeleteLimit(deleteLimit);
+        return config;
+    }
+
+    private CleanupOptions resolveCleanupOptions(FileCleanupRequestDTO dto) {
+        int markOrphanHours = cleanupProperties.getMarkOrphanHours();
+        int retainDays = cleanupProperties.getRetainDays();
+        int deleteLimit = cleanupProperties.getDeleteLimit();
+        if (dto != null) {
+            if (dto.getMarkOrphanHours() != null) {
+                markOrphanHours = dto.getMarkOrphanHours();
+            }
+            if (dto.getRetainDays() != null) {
+                retainDays = dto.getRetainDays();
+            }
+            if (dto.getDeleteLimit() != null && dto.getDeleteLimit() > 0) {
+                deleteLimit = dto.getDeleteLimit();
+            }
+        }
+        if (markOrphanHours < 0) {
+            markOrphanHours = 0;
+        }
+        if (retainDays < 0) {
+            retainDays = 0;
+        }
+        if (deleteLimit <= 0) {
+            deleteLimit = 200;
+        }
+        return new CleanupOptions(markOrphanHours, retainDays, deleteLimit);
+    }
+
+    private static class CleanupOptions {
+        private final int markOrphanHours;
+        private final int retainDays;
+        private final int deleteLimit;
+
+        private CleanupOptions(int markOrphanHours, int retainDays, int deleteLimit) {
+            this.markOrphanHours = markOrphanHours;
+            this.retainDays = retainDays;
+            this.deleteLimit = deleteLimit;
         }
     }
 
@@ -225,6 +321,17 @@ public class FileServiceImpl implements FileService {
                 throw new BusinessException(ResultCode.BAD_REQUEST, "无法读取文件内容");
             }
         }
+    }
+
+    private String normalizeTargetType(String targetType) {
+        if (!StringUtils.hasText(targetType)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "type不合法");
+        }
+        String normalized = targetType.trim().toLowerCase();
+        if (!ALLOWED_TARGET_TYPES.contains(normalized)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "type不合法");
+        }
+        return normalized;
     }
     
     private boolean isValidImageMagic(byte[] header, String contentType) {

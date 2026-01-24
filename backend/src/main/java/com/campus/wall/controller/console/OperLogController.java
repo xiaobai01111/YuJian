@@ -1,6 +1,5 @@
 package com.campus.wall.controller.console;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.PageResult;
@@ -20,8 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,7 +36,6 @@ public class OperLogController {
 
     private final SysOperLogMapper operLogMapper;
 
-    @SaCheckPermission("system:operlog:list")
     @GetMapping
     public R<PageResult<OperLogVO>> list(OperLogQueryDTO query) {
         LambdaQueryWrapper<SysOperLog> wrapper = buildWrapper(query);
@@ -51,21 +47,18 @@ public class OperLogController {
         return R.ok(PageResult.of(records, page.getTotal(), page.getSize(), page.getCurrent()));
     }
 
-    @SaCheckPermission("system:operlog:delete")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         operLogMapper.deleteById(id);
         return R.ok();
     }
 
-    @SaCheckPermission("system:operlog:clear")
     @DeleteMapping("/clear")
     public R<Void> clear() {
         operLogMapper.delete(new LambdaQueryWrapper<SysOperLog>());
         return R.ok();
     }
 
-    @SaCheckPermission("system:operlog:export")
     @GetMapping("/export")
     public void export(OperLogQueryDTO query, HttpServletResponse response) {
         LambdaQueryWrapper<SysOperLog> wrapper = buildWrapper(query);
@@ -97,8 +90,7 @@ public class OperLogController {
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8");
         try {
-            String fileName = URLEncoder.encode("操作日志.xlsx", StandardCharsets.UTF_8);
-            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+            response.setHeader("Content-Disposition", com.campus.wall.util.HttpHeaderUtil.buildContentDisposition("操作日志.xlsx", true));
             writer.flush(response.getOutputStream(), true);
             writer.close();
         } catch (IOException e) {

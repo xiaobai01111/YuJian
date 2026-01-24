@@ -1,7 +1,6 @@
 package com.campus.wall.controller.user;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.common.PageResult;
@@ -98,7 +97,6 @@ public class ProfileController {
 
     @Operation(summary = "更新我的个人信息")
     @SaCheckLogin
-    @SaCheckPermission("system:profile:edit")
     @RequestMapping(value = "/me", method = {RequestMethod.PUT, RequestMethod.POST})
     public R<Void> updateMyInfo(@Valid @RequestBody UserProfileUpdateDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();

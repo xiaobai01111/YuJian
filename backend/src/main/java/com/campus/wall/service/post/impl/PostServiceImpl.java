@@ -447,7 +447,16 @@ public class PostServiceImpl implements PostService {
             return wrapper;
         }
         if (normalizedBoard != null) {
-            wrapper.inSql(Post::getId, "SELECT post_id FROM post_boards WHERE board = '" + normalizedBoard + "'");
+            List<Long> postIds = postBoardMapper.selectList(
+                    new LambdaQueryWrapper<PostBoard>()
+                            .select(PostBoard::getPostId)
+                            .eq(PostBoard::getBoard, normalizedBoard)
+            ).stream().map(PostBoard::getPostId).collect(Collectors.toList());
+            if (postIds.isEmpty()) {
+                wrapper.eq(Post::getId, -1L);
+                return wrapper;
+            }
+            wrapper.in(Post::getId, postIds);
         }
 
         if (query.getCategory() != null && !query.getCategory().isEmpty()) {
@@ -483,16 +492,12 @@ public class PostServiceImpl implements PostService {
         if (scope.isAllowAll()) {
             return;
         }
-        String userInSql = dataScopeService.buildUserInSql(scope);
-        if (userInSql == null || userInSql.isEmpty()) {
-            wrapper.eq(Post::getUserId, userId);
+        List<Long> allowedUserIds = dataScopeService.resolveAllowedUserIds(scope, userId);
+        if (allowedUserIds.isEmpty()) {
+            wrapper.eq(Post::getUserId, -1L);
             return;
         }
-        if (scope.isAllowSelf()) {
-            wrapper.and(w -> w.eq(Post::getUserId, userId).or().inSql(Post::getUserId, userInSql));
-        } else {
-            wrapper.inSql(Post::getUserId, userInSql);
-        }
+        wrapper.in(Post::getUserId, allowedUserIds);
     }
 
     private void assertCanManagePost(Post post, String reason, String action) {

@@ -1,6 +1,5 @@
 package com.campus.wall.controller.console;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.post.PostQueryDTO;
@@ -31,21 +30,18 @@ public class PostConsoleController {
     private final PostService postService;
 
     @Operation(summary = "控制台帖子列表", description = "按数据权限查询帖子列表")
-    @SaCheckPermission("content:post:list")
     @GetMapping
     public R<PageResult<PostVO>> list(PostQueryDTO query) {
         return R.ok(postService.queryPostsForConsole(query));
     }
 
     @Operation(summary = "控制台创建帖子")
-    @SaCheckPermission("content:post:add")
     @PostMapping
     public R<Long> create(@Valid @RequestBody PostCreateDTO dto) {
         return R.ok(postService.createPostByAdmin(dto));
     }
 
     @Operation(summary = "控制台编辑帖子")
-    @SaCheckPermission("content:post:edit")
     @PutMapping("/{id}")
     public R<Void> update(@PathVariable Long id,
                           @Valid @RequestBody PostUpdateDTO dto,
@@ -55,7 +51,6 @@ public class PostConsoleController {
     }
 
     @Operation(summary = "控制台删除帖子")
-    @SaCheckPermission("content:post:delete")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id,
                           @RequestParam(value = "reason", required = false) String reason) {
@@ -64,7 +59,6 @@ public class PostConsoleController {
     }
 
     @Operation(summary = "控制台标记已解决")
-    @SaCheckPermission("content:post:resolve")
     @PutMapping("/{id}/resolve")
     public R<Void> resolve(@PathVariable Long id,
                            @RequestParam(value = "reason", required = false) String reason) {

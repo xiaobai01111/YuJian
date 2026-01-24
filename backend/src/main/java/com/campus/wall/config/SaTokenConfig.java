@@ -2,11 +2,18 @@ package com.campus.wall.config;
 
 import cn.dev33.satoken.context.SaHolder;
 import cn.dev33.satoken.interceptor.SaInterceptor;
-import cn.dev33.satoken.router.SaRouter;
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.common.BusinessException;
+import com.campus.wall.common.ResultCode;
+import com.campus.wall.entity.system.SysApiPermission;
+import com.campus.wall.service.system.PermissionService;
+import com.campus.wall.util.SecurityUtil;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -15,13 +22,19 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Sa-Token 配置
  */
 @Configuration
+@RequiredArgsConstructor
 public class SaTokenConfig implements WebMvcConfigurer {
+
+    private static final Logger log = LoggerFactory.getLogger(SaTokenConfig.class);
 
     @Value("${cors.allowed-origins:}")
     private String allowedOrigins;
 
     @Value("${cors.allowed-origin-patterns:}")
     private String allowedOriginPatterns;
+
+    private final PermissionService permissionService;
+    private final SecurityProperties securityProperties;
 
     @Override
     public void addInterceptors(@NonNull InterceptorRegistry registry) {
@@ -31,33 +44,36 @@ public class SaTokenConfig implements WebMvcConfigurer {
             if ("OPTIONS".equalsIgnoreCase(method)) {
                 return;
             }
-            // 公开接口白名单
-            SaRouter.match("/**")
-                    .notMatch(
-                            // 静态资源
-                            "/favicon.ico",
-                            "/error",
-                            // API 文档
-                            "/doc.html",
-                            "/swagger-ui.html",
-                            "/swagger-ui/**",
-                            "/swagger-resources/**",
-                            "/v3/api-docs/**",
-                            "/webjars/**",
-                            // 认证接口
-                            "/api/v1/auth/register",
-                            "/api/v1/auth/login",
-                            "/api/v1/auth/logout",
-                            // 公告公开接口
-                            "/api/v1/notices/public",
-                            "/api/v1/notices/public/**",
-                            // 私有文件预览（签名校验）
-                            "/api/v1/files/preview/**",
-                            // 公开查询接口（仅健康检查，其他需登录）
-                            "/api/health",
-                            "/api/v1/posts"
-                    )
-                    .check(r -> StpUtil.checkLogin());
+            String uri = SaHolder.getRequest().getRequestPath();
+            if (!uri.startsWith("/api/")) {
+                return;
+            }
+
+            SysApiPermission rule = permissionService.getApiPermissionByUrl(uri, method);
+            if (rule == null) {
+                applyDefaultPolicy();
+                return;
+            }
+
+            String requiredPerm = rule.getPermission();
+            if (isPublicPermission(requiredPerm)) {
+                return;
+            }
+
+            StpUtil.checkLogin();
+            if (isLoginOnlyPermission(requiredPerm)) {
+                return;
+            }
+
+            if (StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())) {
+                return;
+            }
+
+            Long userId = StpUtil.getLoginIdAsLong();
+            if (!permissionService.hasPermission(userId, requiredPerm)) {
+                log.warn("用户 {} 访问 {} {} 权限不足，需要权限: {}", userId, method, uri, requiredPerm);
+                throw new BusinessException(ResultCode.FORBIDDEN);
+            }
         })).addPathPatterns("/**");
     }
 
@@ -67,7 +83,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("Authorization", "X-Trace-Id")
-                .allowCredentials(true)
                 .maxAge(3600);
 
         String[] origins = splitAndTrim(allowedOrigins);
@@ -78,6 +93,12 @@ public class SaTokenConfig implements WebMvcConfigurer {
         if (patterns.length > 0) {
             registration.allowedOriginPatterns(patterns);
         }
+        boolean hasWildcard = containsWildcard(origins) || containsWildcard(patterns);
+        boolean allowCredentials = !hasWildcard && (origins.length > 0 || patterns.length > 0);
+        if (hasWildcard) {
+            log.warn("CORS 配置包含通配符，已禁用 allowCredentials 以降低风险");
+        }
+        registration.allowCredentials(allowCredentials);
     }
 
     private String[] splitAndTrim(String value) {
@@ -88,5 +109,53 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 .map(String::trim)
                 .filter(v -> !v.isEmpty())
                 .toArray(String[]::new);
+    }
+
+    private boolean containsWildcard(String[] values) {
+        if (values == null) {
+            return false;
+        }
+        for (String value : values) {
+            if (value != null && value.contains("*")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isPublicPermission(String permission) {
+        if (permission == null) {
+            return false;
+        }
+        return permission.equalsIgnoreCase(securityProperties.getApiPublicPermissionKey());
+    }
+
+    private boolean isLoginOnlyPermission(String permission) {
+        if (permission == null) {
+            return false;
+        }
+        return permission.equalsIgnoreCase(securityProperties.getApiLoginPermissionKey());
+    }
+
+    private void applyDefaultPolicy() {
+        String mode = securityProperties.getApiDefaultMode();
+        if (!permissionService.hasApiPermissions()) {
+            mode = securityProperties.getApiBootstrapMode();
+        }
+        if (mode == null) {
+            StpUtil.checkLogin();
+            return;
+        }
+        switch (mode.trim().toLowerCase()) {
+            case "public":
+                return;
+            case "login":
+                StpUtil.checkLogin();
+                return;
+            case "deny":
+                throw new BusinessException(ResultCode.FORBIDDEN);
+            default:
+                StpUtil.checkLogin();
+        }
     }
 }

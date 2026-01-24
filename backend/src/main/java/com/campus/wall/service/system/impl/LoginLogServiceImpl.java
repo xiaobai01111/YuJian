@@ -22,8 +22,6 @@ import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -101,8 +99,7 @@ public class LoginLogServiceImpl implements LoginLogService {
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8");
         try {
-            String fileName = URLEncoder.encode("登录日志.xlsx", StandardCharsets.UTF_8);
-            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+            response.setHeader("Content-Disposition", com.campus.wall.util.HttpHeaderUtil.buildContentDisposition("登录日志.xlsx", true));
             writer.flush(response.getOutputStream(), true);
             writer.close();
         } catch (IOException e) {

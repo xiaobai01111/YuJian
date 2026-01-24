@@ -1,7 +1,6 @@
 package com.campus.wall.controller.system;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.R;
@@ -40,7 +39,6 @@ public class SensitiveWordController {
      * 查询敏感词列表
      */
     @SaCheckLogin
-    @SaCheckPermission("system:sensitive-word:list")
     @GetMapping("/api/v1/system/sensitive-words")
     public R<PageResult<SensitiveWordVO>> query(
             @RequestParam(defaultValue = "1") int page,
@@ -71,7 +69,6 @@ public class SensitiveWordController {
      * 新增敏感词
      */
     @SaCheckLogin
-    @SaCheckPermission("system:sensitive-word:add")
     @PostMapping("/api/v1/system/sensitive-words")
     public R<SensitiveWordVO> create(@RequestBody SensitiveWordDTO dto) {
         String word = normalizeWord(dto.getWord());
@@ -105,7 +102,6 @@ public class SensitiveWordController {
      * 批量导入敏感词
      */
     @SaCheckLogin
-    @SaCheckPermission("system:sensitive-word:add")
     @PostMapping("/api/v1/system/sensitive-words/batch")
     public R<BatchImportResult> createBatch(@RequestBody BatchImportDTO dto) {
         if (dto.getWords() == null || dto.getWords().isEmpty()) {
@@ -183,7 +179,6 @@ public class SensitiveWordController {
      * 删除敏感词
      */
     @SaCheckLogin
-    @SaCheckPermission("system:sensitive-word:delete")
     @DeleteMapping("/api/v1/system/sensitive-words/{id}")
     public R<Void> delete(@PathVariable Long id) {
         SensitiveWord word = sensitiveWordMapper.selectById(id);
@@ -203,7 +198,6 @@ public class SensitiveWordController {
      * 批量删除敏感词
      */
     @SaCheckLogin
-    @SaCheckPermission("system:sensitive-word:delete")
     @DeleteMapping("/api/v1/system/sensitive-words")
     public R<Integer> deleteBatch(@RequestBody List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
@@ -222,7 +216,6 @@ public class SensitiveWordController {
      * 更新敏感词级别
      */
     @SaCheckLogin
-    @SaCheckPermission("system:sensitive-word:edit")
     @PutMapping("/api/v1/system/sensitive-words/{id}")
     public R<SensitiveWordVO> update(@PathVariable Long id, @RequestBody SensitiveWordDTO dto) {
         SensitiveWord word = sensitiveWordMapper.selectById(id);

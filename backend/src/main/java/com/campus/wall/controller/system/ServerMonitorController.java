@@ -1,6 +1,5 @@
 package com.campus.wall.controller.system;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.R;
 import com.campus.wall.util.FileUtil;
 import com.campus.wall.vo.system.ServerMonitorVO;
@@ -34,7 +33,6 @@ public class ServerMonitorController {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    @SaCheckPermission("system:monitor:server")
     @GetMapping
     public R<ServerMonitorVO> getServerInfo() {
         ServerMonitorVO vo = new ServerMonitorVO();

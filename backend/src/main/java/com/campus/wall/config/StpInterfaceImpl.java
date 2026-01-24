@@ -44,7 +44,7 @@ public class StpInterfaceImpl implements StpInterface {
         // 超级管理员拥有所有权限
         String adminRoleKey = SecurityUtil.getSuperAdminRoleKey();
         List<String> roleKeys = roleMapper.selectRoleKeysByUserId(userId);
-        if (roleKeys.contains(adminRoleKey)) {
+        if (roleKeys != null && roleKeys.contains(adminRoleKey)) {
             List<String> allPerms = new ArrayList<>(menuMapper.selectAllPerms());
             allPerms.add(SecurityConstants.ALL_PERMISSION);
             return allPerms;
@@ -77,6 +77,7 @@ public class StpInterfaceImpl implements StpInterface {
                 return new ArrayList<>();
             }
         }
-        return roleMapper.selectRoleKeysByUserId(userId);
+        List<String> roleKeys = roleMapper.selectRoleKeysByUserId(userId);
+        return roleKeys != null ? roleKeys : new ArrayList<>();
     }
 }

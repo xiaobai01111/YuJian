@@ -1,7 +1,6 @@
 package com.campus.wall.controller.system;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.system.AuthRuleDTO;
@@ -23,7 +22,6 @@ public class AuthRuleController {
 
     @Operation(summary = "查询认证规则")
     @SaCheckLogin
-    @SaCheckPermission("system:auth-rule:list")
     @GetMapping
     public R<PageResult<AuthRuleVO>> list(
             @RequestParam(defaultValue = "1") int page,
@@ -36,7 +34,6 @@ public class AuthRuleController {
 
     @Operation(summary = "新增认证规则")
     @SaCheckLogin
-    @SaCheckPermission("system:auth-rule:add")
     @PostMapping
     public R<Long> create(@RequestBody @Valid AuthRuleDTO dto) {
         return R.ok(authRuleService.createRule(dto));
@@ -44,7 +41,6 @@ public class AuthRuleController {
 
     @Operation(summary = "更新认证规则")
     @SaCheckLogin
-    @SaCheckPermission("system:auth-rule:edit")
     @PutMapping("/{id}")
     public R<Void> update(@PathVariable Long id, @RequestBody @Valid AuthRuleDTO dto) {
         authRuleService.updateRule(id, dto);
@@ -53,7 +49,6 @@ public class AuthRuleController {
 
     @Operation(summary = "删除认证规则")
     @SaCheckLogin
-    @SaCheckPermission("system:auth-rule:delete")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         authRuleService.deleteRule(id);

@@ -1,6 +1,9 @@
 package com.campus.wall.service.file;
 
 import com.campus.wall.vo.file.FileVO;
+import com.campus.wall.dto.system.FileCleanupRequestDTO;
+import com.campus.wall.vo.system.FileCleanupConfigVO;
+import com.campus.wall.vo.system.FileCleanupResultVO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -34,4 +37,19 @@ public interface FileService {
      * 清理孤儿文件
      */
     void cleanOrphanFiles();
+
+    /**
+     * 获取清理策略配置
+     */
+    FileCleanupConfigVO getCleanupConfig();
+
+    /**
+     * 更新清理策略配置
+     */
+    FileCleanupConfigVO updateCleanupConfig(FileCleanupRequestDTO dto);
+
+    /**
+     * 手动清理孤儿文件
+     */
+    FileCleanupResultVO cleanOrphanFiles(FileCleanupRequestDTO dto);
 }

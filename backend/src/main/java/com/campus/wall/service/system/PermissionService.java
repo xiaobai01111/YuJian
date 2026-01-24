@@ -1,9 +1,21 @@
 package com.campus.wall.service.system;
 
+import com.campus.wall.entity.system.SysApiPermission;
+
 /**
  * 权限服务接口
  */
 public interface PermissionService {
+
+    /**
+     * 根据URL和HTTP方法获取权限规则
+     */
+    SysApiPermission getApiPermissionByUrl(String url, String httpMethod);
+
+    /**
+     * 是否存在 API 权限规则
+     */
+    boolean hasApiPermissions();
 
     /**
      * 根据URL和HTTP方法获取所需权限标识

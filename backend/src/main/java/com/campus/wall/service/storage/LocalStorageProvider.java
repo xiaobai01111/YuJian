@@ -27,9 +27,11 @@ public class LocalStorageProvider implements StorageProvider {
 
     @Override
     public String store(MultipartFile file, String objectName) throws Exception {
-        Path basePath = resolveBasePath();
-        Path target = basePath.resolve(objectName);
-        Files.createDirectories(target.getParent());
+        Path target = resolveSafePath(objectName);
+        Path parent = target.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         try (InputStream inputStream = file.getInputStream()) {
             Files.copy(inputStream, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
@@ -38,8 +40,7 @@ public class LocalStorageProvider implements StorageProvider {
 
     @Override
     public InputStream open(String path) throws Exception {
-        Path basePath = resolveBasePath();
-        Path target = basePath.resolve(path);
+        Path target = resolveSafePath(path);
         if (!Files.exists(target)) {
             throw new IOException("Local file not found");
         }
@@ -48,8 +49,7 @@ public class LocalStorageProvider implements StorageProvider {
 
     @Override
     public void delete(String path) throws Exception {
-        Path basePath = resolveBasePath();
-        Path target = basePath.resolve(path);
+        Path target = resolveSafePath(path);
         Files.deleteIfExists(target);
     }
 
@@ -73,5 +73,14 @@ public class LocalStorageProvider implements StorageProvider {
             basePath = Paths.get(System.getProperty("user.dir")).resolve(basePath);
         }
         return basePath.normalize();
+    }
+
+    private Path resolveSafePath(String path) throws IOException {
+        Path basePath = resolveBasePath();
+        Path target = basePath.resolve(path).normalize();
+        if (!target.startsWith(basePath)) {
+            throw new IOException("Invalid local file path");
+        }
+        return target;
     }
 }

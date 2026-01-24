@@ -60,7 +60,7 @@ public class NoticeServiceImpl implements NoticeService {
         }
         
         List<SysNotice> notices = noticeMapper.selectPublicNotices(fetchSize, LocalDateTime.now());
-        List<NoticeVO> result = notices.stream().map(this::toVO).collect(Collectors.toList());
+        List<NoticeVO> result = toVOList(notices);
         
         // 更新缓存
         publicNoticesCache = result;
@@ -88,8 +88,8 @@ public class NoticeServiceImpl implements NoticeService {
         int offset = (currentPage - 1) * pageSize;
         List<SysNotice> notices = noticeMapper.selectVisibleNotices(userId, deptId, now, pageSize, offset);
         long total = noticeMapper.countVisibleNotices(userId, deptId, now);
-        
-        List<NoticeVO> pageData = notices.stream().map(this::toVO).collect(Collectors.toList());
+
+        List<NoticeVO> pageData = toVOList(notices);
         return PageResult.of(pageData, total, pageSize, currentPage);
     }
 
@@ -145,7 +145,7 @@ public class NoticeServiceImpl implements NoticeService {
                .orderByDesc(SysNotice::getCreatedAt);
 
         Page<SysNotice> pageResult = noticeMapper.selectPage(new Page<>(currentPage, pageSize), wrapper);
-        List<NoticeVO> voList = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<NoticeVO> voList = toVOList(pageResult.getRecords());
         return PageResult.of(voList, pageResult.getTotal(), pageSize, currentPage);
     }
 
@@ -392,17 +392,45 @@ public class NoticeServiceImpl implements NoticeService {
         }
     }
 
+    private List<NoticeVO> toVOList(List<SysNotice> notices) {
+        if (notices == null || notices.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, User> creatorMap = loadCreators(notices);
+        return notices.stream()
+                .map(notice -> toVO(notice, creatorMap))
+                .collect(Collectors.toList());
+    }
+
+    private Map<Long, User> loadCreators(List<SysNotice> notices) {
+        List<Long> creatorIds = notices.stream()
+                .map(SysNotice::getCreatedBy)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (creatorIds.isEmpty()) {
+            return Map.of();
+        }
+        List<User> users = userMapper.selectBatchIds(creatorIds);
+        return users.stream().collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
+    }
+
     private NoticeVO toVO(SysNotice notice) {
+        return toVO(notice, Map.of());
+    }
+
+    private NoticeVO toVO(SysNotice notice, Map<Long, User> creatorMap) {
         NoticeVO vo = new NoticeVO();
         BeanUtils.copyProperties(notice, vo);
         vo.setStatusText(getStatusText(notice.getStatus()));
         vo.setScopeTypeText(getScopeTypeText(notice.getScopeType()));
         vo.setScopeIds(fromJson(notice.getScopeIds()));
-        
+        vo.setContent(sanitizeContent(vo.getContent()));
+
         if (notice.getCreatedByName() != null && !notice.getCreatedByName().isBlank()) {
             vo.setCreatedByName(notice.getCreatedByName());
         } else if (notice.getCreatedBy() != null) {
-            User creator = userMapper.selectById(notice.getCreatedBy());
+            User creator = creatorMap.get(notice.getCreatedBy());
             if (creator != null) {
                 vo.setCreatedByName(creator.getNickname());
             }

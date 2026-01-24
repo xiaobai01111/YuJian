@@ -15,6 +15,9 @@
           <button v-if="canUpload" class="btn btn-sm btn-primary" :disabled="uploading" @click="openUpload">
             {{ uploading ? '上传中...' : '上传文件' }}
           </button>
+          <button v-if="canCleanup" class="btn btn-sm btn-secondary btn-outline" @click="openCleanupModal">
+            孤儿清理
+          </button>
           <button
             v-if="canDelete"
             class="btn btn-sm btn-error btn-outline"
@@ -147,13 +150,65 @@
         </div>
       </div>
     </div>
+
+    <div class="modal" :class="{ 'modal-open': showCleanupModal }">
+      <div class="modal-box max-w-xl">
+        <h3 class="font-bold text-lg">孤儿文件清理</h3>
+        <p class="text-sm text-slate-500 mt-2">未绑定文件会先标记，再按保留期删除。本次执行将使用下面的策略。</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">未绑定小时</span></div>
+            <input
+              v-model.number="cleanupForm.markOrphanHours"
+              type="number"
+              min="0"
+              class="input input-bordered input-sm"
+            />
+          </label>
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">保留天数</span></div>
+            <input
+              v-model.number="cleanupForm.retainDays"
+              type="number"
+              min="0"
+              class="input input-bordered input-sm"
+            />
+          </label>
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">单次删除上限</span></div>
+            <input
+              v-model.number="cleanupForm.deleteLimit"
+              type="number"
+              min="1"
+              class="input input-bordered input-sm"
+            />
+          </label>
+        </div>
+
+        <div v-if="cleanupResult" class="mt-4 text-sm text-slate-600">
+          上次执行：标记 {{ cleanupResult.marked }}，删除 {{ cleanupResult.deleted }}，失败 {{ cleanupResult.failed }}
+        </div>
+
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="closeCleanupModal">取消</button>
+          <button class="btn btn-outline" :disabled="cleanupSaving" @click="saveCleanupConfig">
+            {{ cleanupSaving ? '保存中...' : '保存策略' }}
+          </button>
+          <button class="btn btn-primary" :disabled="cleanupRunning" @click="runCleanup">
+            {{ cleanupRunning ? '执行中...' : '立即清理' }}
+          </button>
+        </div>
+      </div>
+      <div class="modal-backdrop"><button @click="closeCleanupModal">close</button></div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { usePermissionStore } from '@/stores/permission'
-import { batchDeleteConsoleFiles, deleteConsoleFile, getFileCategories, getFileList, updateConsoleFileVisibility, uploadConsoleFile, type FileCategoryVO, type FileManageVO } from '@/api/system'
+import { batchDeleteConsoleFiles, deleteConsoleFile, getFileCategories, getFileCleanupConfig, getFileList, runFileCleanup, updateConsoleFileVisibility, updateFileCleanupConfig, uploadConsoleFile, type FileCategoryVO, type FileCleanupConfig, type FileCleanupResult, type FileManageVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
 const categories = ref<FileCategoryVO[]>([])
@@ -170,12 +225,18 @@ const uploading = ref(false)
 const deleting = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadVisibility = ref<'PUBLIC' | 'PRIVATE'>('PUBLIC')
+const showCleanupModal = ref(false)
+const cleanupForm = ref<FileCleanupConfig>({ markOrphanHours: 24, retainDays: 7, deleteLimit: 200 })
+const cleanupSaving = ref(false)
+const cleanupRunning = ref(false)
+const cleanupResult = ref<FileCleanupResult | null>(null)
 
 const permissionStore = usePermissionStore()
 const dialog = useDialog()
 const canUpload = computed(() => permissionStore.hasPermission(['system:file:upload']))
 const canDelete = computed(() => permissionStore.hasPermission(['system:file:delete']))
 const canEditVisibility = computed(() => permissionStore.hasPermission(['system:file:permission']))
+const canCleanup = computed(() => permissionStore.hasPermission(['system:file:cleanup']))
 const isAllSelected = computed(() => files.value.length > 0 && files.value.every(file => selectedIds.value.includes(file.id)))
 
 const reloadAll = () => {
@@ -185,6 +246,9 @@ const reloadAll = () => {
 
 onMounted(() => {
   reloadAll()
+  if (canCleanup.value) {
+    fetchCleanupConfig()
+  }
 })
 
 const fetchCategories = async () => {
@@ -218,6 +282,19 @@ const fetchFiles = async () => {
   }
 }
 
+const fetchCleanupConfig = async () => {
+  try {
+    const res = await getFileCleanupConfig()
+    cleanupForm.value = {
+      markOrphanHours: res?.markOrphanHours ?? cleanupForm.value.markOrphanHours,
+      retainDays: res?.retainDays ?? cleanupForm.value.retainDays,
+      deleteLimit: res?.deleteLimit ?? cleanupForm.value.deleteLimit
+    }
+  } catch (error) {
+    // ignore
+  }
+}
+
 const selectCategory = (key: string) => {
   activeCategory.value = key
   page.value = 1
@@ -242,6 +319,37 @@ const changePage = (p: number) => {
 
 const openUpload = () => {
   fileInput.value?.click()
+}
+
+const openCleanupModal = async () => {
+  await fetchCleanupConfig()
+  showCleanupModal.value = true
+}
+
+const closeCleanupModal = () => {
+  showCleanupModal.value = false
+}
+
+const saveCleanupConfig = async () => {
+  cleanupSaving.value = true
+  try {
+    await updateFileCleanupConfig(cleanupForm.value)
+    await dialog.alert('清理策略已保存')
+  } finally {
+    cleanupSaving.value = false
+  }
+}
+
+const runCleanup = async () => {
+  if (!await dialog.confirm('确认立即执行孤儿文件清理吗？')) return
+  cleanupRunning.value = true
+  try {
+    const res = await runFileCleanup(cleanupForm.value)
+    cleanupResult.value = res || null
+    await dialog.alert(`清理完成：标记 ${res?.marked ?? 0}，删除 ${res?.deleted ?? 0}，失败 ${res?.failed ?? 0}`)
+  } finally {
+    cleanupRunning.value = false
+  }
 }
 
 const handleUpload = async (event: Event) => {

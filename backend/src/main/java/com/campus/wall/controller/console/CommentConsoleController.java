@@ -1,6 +1,5 @@
 package com.campus.wall.controller.console;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.post.CommentBatchDeleteDTO;
@@ -28,13 +27,11 @@ public class CommentConsoleController {
 
     private final CommentService commentService;
 
-    @SaCheckPermission("content:comment:list")
     @GetMapping
     public R<PageResult<CommentConsoleVO>> list(@Validated CommentQueryDTO query) {
         return R.ok(commentService.queryCommentsForConsole(query));
     }
 
-    @SaCheckPermission("content:comment:delete")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id,
                           @RequestParam(value = "reason", required = false) String reason) {
@@ -42,14 +39,12 @@ public class CommentConsoleController {
         return R.ok();
     }
 
-    @SaCheckPermission("content:comment:batch-delete")
     @PostMapping("/batch-delete")
     public R<Void> batchDelete(@RequestBody @Valid CommentBatchDeleteDTO dto) {
         commentService.deleteCommentsByAdmin(dto);
         return R.ok();
     }
 
-    @SaCheckPermission("content:comment:edit")
     @PutMapping("/{id}")
     public R<Void> update(@PathVariable Long id,
                           @RequestBody @Valid CommentUpdateDTO dto,

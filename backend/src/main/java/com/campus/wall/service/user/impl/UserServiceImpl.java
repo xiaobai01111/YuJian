@@ -35,8 +35,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -315,7 +313,12 @@ public class UserServiceImpl implements UserService {
             wrapper.eq(User::getDeptId, query.getDeptId());
         }
         if (query.getRoleId() != null) {
-            wrapper.inSql(User::getId, "SELECT user_id FROM sys_user_roles WHERE role_id = " + query.getRoleId());
+            List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(query.getRoleId());
+            if (userIds == null || userIds.isEmpty()) {
+                wrapper.eq(User::getId, -1L);
+            } else {
+                wrapper.in(User::getId, userIds);
+            }
         }
 
         applyLoginDateRange(wrapper, query.getLoginDateStart(), query.getLoginDateEnd());
@@ -508,8 +511,7 @@ public class UserServiceImpl implements UserService {
         // 输出响应
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8");
         try {
-            String fileName = URLEncoder.encode("用户列表.xlsx", StandardCharsets.UTF_8);
-            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+            response.setHeader("Content-Disposition", com.campus.wall.util.HttpHeaderUtil.buildContentDisposition("用户列表.xlsx", true));
             writer.flush(response.getOutputStream(), true);
             writer.close();
         } catch (IOException e) {
@@ -596,8 +598,7 @@ public class UserServiceImpl implements UserService {
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8");
         try {
-            String fileName = URLEncoder.encode("用户导入模板.xlsx", StandardCharsets.UTF_8);
-            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+            response.setHeader("Content-Disposition", com.campus.wall.util.HttpHeaderUtil.buildContentDisposition("用户导入模板.xlsx", true));
             writer.flush(response.getOutputStream(), true);
             writer.close();
         } catch (IOException e) {

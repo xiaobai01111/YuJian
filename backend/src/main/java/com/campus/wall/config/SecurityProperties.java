@@ -15,6 +15,31 @@ public class SecurityProperties {
      */
     private String superAdminRoleKey = "admin";
 
+    /**
+     * API 权限：公开访问标识
+     */
+    private String apiPublicPermissionKey = "public";
+
+    /**
+     * API 权限：仅登录标识
+     */
+    private String apiLoginPermissionKey = "login";
+
+    /**
+     * API 默认策略（public/login/deny）
+     */
+    private String apiDefaultMode = "login";
+
+    /**
+     * API 启动引导策略（public/login/deny）
+     */
+    private String apiBootstrapMode = "public";
+
+    /**
+     * 启动时检查关键密钥
+     */
+    private boolean failFastSecrets = true;
+
     @PostConstruct
     public void init() {
         SecurityUtil.setSuperAdminRoleKey(superAdminRoleKey);

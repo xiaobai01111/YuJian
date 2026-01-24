@@ -410,6 +410,7 @@ CREATE TABLE anonymous_mappings (
 COMMENT ON TABLE anonymous_mappings IS '匿名映射表';
 
 CREATE INDEX idx_anonymous_post ON anonymous_mappings(post_id);
+CREATE UNIQUE INDEX idx_anonymous_post_user ON anonymous_mappings(post_id, user_id_encrypted);
 
 CREATE TABLE notifications (
     id BIGSERIAL PRIMARY KEY,
@@ -480,7 +481,7 @@ CREATE TABLE files (
     status SMALLINT DEFAULT 0,
     audit_status SMALLINT DEFAULT 0,
     storage_class VARCHAR(50),
-    storage_provider VARCHAR(32) NOT NULL DEFAULT 'MINIO',
+    storage_provider VARCHAR(32) NOT NULL DEFAULT 'LOCAL',
     visibility VARCHAR(16) NOT NULL DEFAULT 'PRIVATE',
     last_accessed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

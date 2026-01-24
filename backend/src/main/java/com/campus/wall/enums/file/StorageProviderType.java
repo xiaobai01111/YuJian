@@ -21,13 +21,13 @@ public enum StorageProviderType {
 
     public static StorageProviderType fromCode(String code) {
         if (code == null) {
-            return MINIO;
+            return LOCAL;
         }
         for (StorageProviderType type : values()) {
             if (type.code.equalsIgnoreCase(code)) {
                 return type;
             }
         }
-        return MINIO;
+        return LOCAL;
     }
 }

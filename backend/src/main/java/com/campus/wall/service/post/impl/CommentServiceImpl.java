@@ -456,21 +456,21 @@ public class CommentServiceImpl implements CommentService {
         if (scope.isAllowAll()) {
             return;
         }
-        if (scope.isAllowSelf() && scope.getScopedDeptIds().isEmpty()) {
-            wrapper.eq(Comment::getUserId, userId);
+        List<Long> allowedUserIds = dataScopeService.resolveAllowedUserIds(scope, userId);
+        if (allowedUserIds.isEmpty()) {
+            wrapper.eq(Comment::getId, -1L);
             return;
         }
-        String postInSql = dataScopeService.buildPostInSql(scope, userId);
-        String selfPostSql = "SELECT id FROM posts WHERE user_id = " + userId;
-        if (postInSql == null || postInSql.isEmpty()) {
-            wrapper.inSql(Comment::getPostId, selfPostSql);
+        List<Long> postIds = postMapper.selectList(
+                new LambdaQueryWrapper<Post>()
+                        .select(Post::getId)
+                        .in(Post::getUserId, allowedUserIds)
+        ).stream().map(Post::getId).collect(Collectors.toList());
+        if (postIds.isEmpty()) {
+            wrapper.eq(Comment::getId, -1L);
             return;
         }
-        if (scope.isAllowSelf()) {
-            wrapper.and(w -> w.inSql(Comment::getPostId, postInSql).or().inSql(Comment::getPostId, selfPostSql));
-        } else {
-            wrapper.inSql(Comment::getPostId, postInSql);
-        }
+        wrapper.in(Comment::getPostId, postIds);
     }
 
     private List<CommentVO> buildCommentTree(List<Comment> comments, Post post, boolean isAnonymousPost, Map<Long, User> userMap) {

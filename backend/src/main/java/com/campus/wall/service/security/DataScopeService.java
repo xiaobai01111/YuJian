@@ -7,6 +7,7 @@ import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.util.SecurityUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -98,28 +99,36 @@ public class DataScopeService {
         return scope.getScopedDeptIds().contains(targetUser.getDeptId());
     }
 
-    public String buildUserInSql(DataScope scope) {
-        if (scope == null || scope.isAllowAll()) {
-            return null;
+    public List<Long> resolveScopedUserIds(DataScope scope) {
+        if (scope == null || scope.isAllowAll() || scope.getScopedDeptIds().isEmpty()) {
+            return List.of();
         }
-        if (scope.getScopedDeptIds().isEmpty()) {
-            return null;
-        }
-        String deptIdSql = scope.getScopedDeptIds().stream()
-                .map(String::valueOf)
-                .collect(Collectors.joining(","));
-        return "SELECT id FROM users WHERE deleted = 0 AND dept_id IN (" + deptIdSql + ")";
+        List<User> users = userMapper.selectList(
+                new LambdaQueryWrapper<User>()
+                        .select(User::getId)
+                        .eq(User::getDeleted, 0)
+                        .in(User::getDeptId, scope.getScopedDeptIds())
+        );
+        return users.stream()
+                .map(User::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
-    public String buildPostInSql(DataScope scope, Long userId) {
+    public List<Long> resolveAllowedUserIds(DataScope scope, Long userId) {
         if (scope == null || scope.isAllowAll()) {
-            return null;
+            return List.of();
         }
-        String userInSql = buildUserInSql(scope);
-        if (userInSql == null || userInSql.isEmpty()) {
-            return "SELECT id FROM posts WHERE user_id = " + userId;
+        List<Long> scopedUserIds = resolveScopedUserIds(scope);
+        if (scope.isAllowSelf() && userId != null && !scopedUserIds.contains(userId)) {
+            scopedUserIds = new ArrayList<>(scopedUserIds);
+            scopedUserIds.add(userId);
         }
-        return "SELECT id FROM posts WHERE user_id IN (" + userInSql + ")";
+        if (scopedUserIds.isEmpty() && scope.isAllowSelf() && userId != null) {
+            return List.of(userId);
+        }
+        return scopedUserIds;
     }
 
     private List<Long> expandDeptIds(List<Long> deptIds) {

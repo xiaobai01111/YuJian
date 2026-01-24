@@ -1,6 +1,5 @@
 package com.campus.wall.controller.console;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
@@ -36,28 +35,24 @@ public class UserController {
     private final UserService userService;
 
     @Operation(summary = "用户列表", description = "分页查询用户列表")
-    @SaCheckPermission("system:user:list")
     @GetMapping
     public R<PageResult<UserVO>> list(UserQueryDTO query) {
         return R.ok(userService.queryUsers(query));
     }
 
     @Operation(summary = "用户详情", description = "获取用户详细信息")
-    @SaCheckPermission("system:user:list")
     @GetMapping("/{id}")
     public R<UserDetailVO> detail(@PathVariable Long id) {
         return R.ok(userService.getUserDetail(id));
     }
 
     @Operation(summary = "新增用户", description = "创建新用户")
-    @SaCheckPermission("system:user:add")
     @PostMapping
     public R<Long> create(@RequestBody @Valid UserCreateDTO dto) {
         return R.ok(userService.createUser(dto));
     }
 
     @Operation(summary = "修改用户", description = "修改用户信息")
-    @SaCheckPermission("system:user:edit")
     @PutMapping("/{id}")
     public R<Void> edit(@PathVariable Long id, @RequestBody @Valid UserEditDTO dto) {
         userService.editUser(id, dto);
@@ -65,7 +60,6 @@ public class UserController {
     }
 
     @Operation(summary = "删除用户", description = "批量删除用户（软删除，可恢复）")
-    @SaCheckPermission("system:user:delete")
     @DeleteMapping
     public R<Void> delete(@RequestBody UserDeleteDTO dto) {
         Long operatorId = StpUtil.getLoginIdAsLong();
@@ -74,7 +68,6 @@ public class UserController {
     }
 
     @Operation(summary = "分配角色", description = "为用户分配角色")
-    @SaCheckPermission("system:user:role")
     @PutMapping("/{id}/role")
     public R<Void> assignRole(@PathVariable Long id, @RequestBody @Valid UserRoleDTO dto) {
         userService.assignRoles(id, dto.getRoleIds());
@@ -82,7 +75,6 @@ public class UserController {
     }
 
     @Operation(summary = "批量分配角色", description = "为多个用户批量分配角色")
-    @SaCheckPermission("system:user:role")
     @PutMapping("/batch-role")
     public R<Void> batchAssignRole(@RequestBody @Valid BatchUserRoleDTO dto) {
         userService.batchAssignRoles(dto.getUserIds(), dto.getRoleIds());
@@ -90,7 +82,6 @@ public class UserController {
     }
 
     @Operation(summary = "按条件批量分配", description = "按筛选条件批量分配角色/部门")
-    @SaCheckPermission("system:user:role")
     @PostMapping("/batch-assign")
     public R<Integer> batchAssignByQuery(@RequestBody @Valid UserBatchAssignDTO dto) {
         Long operatorId = StpUtil.getLoginIdAsLong();
@@ -99,7 +90,6 @@ public class UserController {
     }
 
     @Operation(summary = "封禁/解封用户", description = "封禁或解封用户，封禁时强制下线，返回最新用户状态")
-    @SaCheckPermission("system:user:ban")
     @PutMapping("/{id}/ban")
     public R<UserVO> ban(@PathVariable Long id, @RequestBody @Valid UserBanDTO dto) {
         Long operatorId = StpUtil.getLoginIdAsLong();
@@ -113,14 +103,12 @@ public class UserController {
     }
 
     @Operation(summary = "导出用户", description = "导出用户列表到Excel")
-    @SaCheckPermission("system:user:export")
     @GetMapping("/export")
     public void export(UserQueryDTO query, HttpServletResponse response) {
         userService.exportUsers(query, response);
     }
 
     @Operation(summary = "导入用户", description = "从Excel导入用户")
-    @SaCheckPermission("system:user:import")
     @PostMapping("/import")
     public R<String> importUsers(@RequestParam("file") MultipartFile file,
                                  @RequestParam(value = "updateExisting", defaultValue = "false") boolean updateExisting) {
@@ -134,7 +122,6 @@ public class UserController {
     }
 
     @Operation(summary = "恢复用户", description = "恢复已删除的用户")
-    @SaCheckPermission("system:user:delete")
     @PutMapping("/{id}/restore")
     public R<Void> restore(@PathVariable Long id) {
         Long operatorId = StpUtil.getLoginIdAsLong();

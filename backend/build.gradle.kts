@@ -68,6 +68,9 @@ dependencies {
     // MinIO (S3 协议文件存储)
     implementation("io.minio:minio:$minioVersion")
 
+    // Environment Variables
+    implementation("me.paulschwarz:spring-dotenv:4.0.0")
+
     // Utilities
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")

@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -376,21 +377,21 @@ public class ReportServiceImpl implements ReportService {
         if (scope.isAllowAll()) {
             return;
         }
-        if (scope.isAllowSelf() && scope.getScopedDeptIds().isEmpty()) {
-            wrapper.eq(Report::getReporterId, userId);
+        List<Long> allowedUserIds = dataScopeService.resolveAllowedUserIds(scope, userId);
+        if (allowedUserIds.isEmpty()) {
+            wrapper.eq(Report::getId, -1L);
             return;
         }
-        String postInSql = dataScopeService.buildPostInSql(scope, userId);
-        String selfPostSql = "SELECT id FROM posts WHERE user_id = " + userId;
-        if (postInSql == null || postInSql.isEmpty()) {
-            wrapper.inSql(Report::getPostId, selfPostSql);
+        List<Long> postIds = postMapper.selectList(
+                new LambdaQueryWrapper<Post>()
+                        .select(Post::getId)
+                        .in(Post::getUserId, allowedUserIds)
+        ).stream().map(Post::getId).collect(Collectors.toList());
+        if (postIds.isEmpty()) {
+            wrapper.eq(Report::getId, -1L);
             return;
         }
-        if (scope.isAllowSelf()) {
-            wrapper.and(w -> w.inSql(Report::getPostId, postInSql).or().inSql(Report::getPostId, selfPostSql));
-        } else {
-            wrapper.inSql(Report::getPostId, postInSql);
-        }
+        wrapper.in(Report::getPostId, postIds);
     }
 
     private void ensureCanAccessReport(Report report) {

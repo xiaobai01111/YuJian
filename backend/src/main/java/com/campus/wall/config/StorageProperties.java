@@ -13,7 +13,7 @@ public class StorageProperties {
     /**
      * 主存储提供者
      */
-    private StorageProviderType primaryProvider = StorageProviderType.MINIO;
+    private StorageProviderType primaryProvider = StorageProviderType.LOCAL;
 
     /**
      * 失败兜底存储提供者
@@ -38,5 +38,5 @@ public class StorageProperties {
     /**
      * 私有链接签名密钥
      */
-    private String signingSecret = "change-me";
+    private String signingSecret;
 }

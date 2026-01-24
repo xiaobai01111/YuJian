@@ -81,6 +81,9 @@ public class FileAccessService {
     private String sign(Long fileId, long expires) {
         String payload = fileId + ":" + expires;
         String secret = storageProperties.getSigningSecret();
+        if (!StringUtils.hasText(secret) || "change-me".equalsIgnoreCase(secret)) {
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "签名密钥未配置");
+        }
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
             mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

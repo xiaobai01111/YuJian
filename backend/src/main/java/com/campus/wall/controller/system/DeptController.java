@@ -1,6 +1,5 @@
 package com.campus.wall.controller.system;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.R;
 import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.dto.system.DeptDeleteDTO;
@@ -25,14 +24,12 @@ public class DeptController {
     private final DeptService deptService;
 
     @Operation(summary = "获取部门列表")
-    @SaCheckPermission("system:dept:list")
     @GetMapping("/list")
     public R<List<SysDept>> list() {
         return R.ok(deptService.listAll());
     }
 
     @Operation(summary = "获取部门树")
-    @SaCheckPermission("system:dept:list")
     @GetMapping("/tree")
     public R<List<DeptTreeVO>> tree() {
         List<SysDept> allDepts = deptService.listAll();
@@ -111,21 +108,18 @@ public class DeptController {
     }
 
     @Operation(summary = "获取部门详情")
-    @SaCheckPermission("system:dept:list")
     @GetMapping("/{id}")
     public R<SysDept> getById(@PathVariable Long id) {
         return R.ok(deptService.getById(id));
     }
 
     @Operation(summary = "新增部门")
-    @SaCheckPermission("system:dept:add")
     @PostMapping
     public R<Long> create(@RequestBody SysDept dept) {
         return R.ok(deptService.create(dept));
     }
 
     @Operation(summary = "修改部门")
-    @SaCheckPermission("system:dept:edit")
     @PutMapping("/{id}")
     public R<Void> update(@PathVariable Long id, @RequestBody SysDept dept) {
         deptService.update(id, dept);
@@ -133,7 +127,6 @@ public class DeptController {
     }
 
     @Operation(summary = "删除部门")
-    @SaCheckPermission("system:dept:delete")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         deptService.delete(id, null);
@@ -141,7 +134,6 @@ public class DeptController {
     }
 
     @Operation(summary = "删除部门（带用户处理策略）")
-    @SaCheckPermission("system:dept:delete")
     @PostMapping("/{id}/delete")
     public R<Void> deleteWithStrategy(@PathVariable Long id, @RequestBody DeptDeleteDTO dto) {
         deptService.delete(id, dto);
@@ -149,7 +141,6 @@ public class DeptController {
     }
 
     @Operation(summary = "更新部门状态")
-    @SaCheckPermission("system:dept:edit")
     @PutMapping("/{id}/status")
     public R<Void> updateStatus(@PathVariable Long id, @RequestBody SysDept dept) {
         if (dept.getStatus() == null) {
@@ -163,14 +154,12 @@ public class DeptController {
     }
 
     @Operation(summary = "获取部门用户列表")
-    @SaCheckPermission("system:dept:list")
     @GetMapping("/{id}/users")
     public R<List<UserVO>> getDeptUsers(@PathVariable Long id) {
         return R.ok(deptService.getDeptUsers(id));
     }
 
     @Operation(summary = "获取部门用户数量")
-    @SaCheckPermission("system:dept:list")
     @GetMapping("/{id}/user-count")
     public R<Long> getDeptUserCount(@PathVariable Long id) {
         return R.ok(deptService.getDeptUserCount(id));

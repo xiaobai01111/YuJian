@@ -1,6 +1,5 @@
 package com.campus.wall.controller.system;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.campus.wall.common.R;
 import com.campus.wall.util.FileUtil;
 import com.campus.wall.vo.system.RedisMonitorVO;
@@ -28,7 +27,6 @@ public class RedisMonitorController {
 
     private final StringRedisTemplate redisTemplate;
 
-    @SaCheckPermission("system:monitor:redis")
     @GetMapping
     public R<RedisMonitorVO> getRedisInfo() {
         Map<String, String> info = fetchInfo();
