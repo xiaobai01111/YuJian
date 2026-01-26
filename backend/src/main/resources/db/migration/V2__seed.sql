@@ -15,13 +15,7 @@ VALUES
 
 SELECT setval('sys_roles_id_seq', (SELECT MAX(id) FROM sys_roles));
 
--- 3) 管理员账号（默认密码：Admin@123）
-INSERT INTO users (id, username, password, nickname, dept_id, user_type, verify_status, status, credit_score)
-VALUES (1, 'admin', '$2y$10$tyTtSrcuzDqXLgTlfM0GTuh0TR7/.cFUceo6y720YixN4Anr0HaWy', '系统管理员', 1, 1, 2, 0, 100);
-
-SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
-
-INSERT INTO sys_user_roles (user_id, role_id) VALUES (1, 1);
+-- 3) 管理员账号由初始化向导创建
 
 -- 4) 菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
@@ -207,6 +201,8 @@ DELETE FROM sys_api_permissions;
 INSERT INTO sys_api_permissions (url, http_method, permission, description, status) VALUES
     ('/api/v1/auth/login', 'POST', 'public', 'auth.login', TRUE),
     ('/api/v1/auth/register', 'POST', 'public', 'auth.register', TRUE),
+    ('/api/v1/setup/status', 'GET', 'public', 'setup.status', TRUE),
+    ('/api/v1/setup/init', 'POST', 'public', 'setup.init', TRUE),
     ('/api/v1/notices/public/**', 'GET', 'public', 'notice.public', TRUE),
     ('/api/v1/posts', 'GET', 'public', 'post.list.public', TRUE),
     ('/api/v1/comments/post/*', 'GET', 'public', 'comment.list.public', TRUE),

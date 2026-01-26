@@ -17,6 +17,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        boolean usesLocal = storageProperties.getPrimaryProvider() == com.campus.wall.enums.file.StorageProviderType.LOCAL
+                || storageProperties.getFallbackProvider() == com.campus.wall.enums.file.StorageProviderType.LOCAL;
+        if (!usesLocal || !storageProperties.isLocalPublicEnabled()) {
+            return;
+        }
         String path = storageProperties.getLocalPath();
         java.nio.file.Path basePath = java.nio.file.Paths.get(path);
         if (!basePath.isAbsolute()) {

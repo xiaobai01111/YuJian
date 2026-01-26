@@ -97,6 +97,7 @@ app:
   storage:
     primary-provider: ${STORAGE_PRIMARY_PROVIDER:LOCAL}
     fallback-provider: ${STORAGE_FALLBACK_PROVIDER:LOCAL}
+    local-public-enabled: ${LOCAL_PUBLIC_ENABLED:false}
     signing-secret: ${STORAGE_SIGNING_SECRET:}
   async:
     core-pool-size: ${ASYNC_CORE_POOL_SIZE:4}
@@ -120,8 +121,11 @@ app:
     api-public-permission-key: ${API_PUBLIC_PERMISSION_KEY:public}
     api-login-permission-key: ${API_LOGIN_PERMISSION_KEY:login}
     api-default-mode: ${API_DEFAULT_MODE:login}
-    api-bootstrap-mode: ${API_BOOTSTRAP_MODE:public}
+    api-bootstrap-mode: ${API_BOOTSTRAP_MODE:login}
     fail-fast-secrets: ${SECURITY_FAIL_FAST_SECRETS:true}
+    fail-fast-permissions: ${SECURITY_FAIL_FAST_PERMISSIONS:true}
+    permission-cache-ttl-seconds: ${PERMISSION_CACHE_TTL_SECONDS:1800}
+    permission-cache-max-size: ${PERMISSION_CACHE_MAX_SIZE:20000}
 
 # CORS（生产环境建议配置为官网域名，例如 https://campus.example.com）
 cors:

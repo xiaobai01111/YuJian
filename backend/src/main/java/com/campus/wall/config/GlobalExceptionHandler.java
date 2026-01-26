@@ -16,6 +16,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -108,6 +110,26 @@ public class GlobalExceptionHandler {
     public R<Void> handleException(Exception e, HttpServletRequest request) {
         log.error("系统异常: {} - {}", request.getRequestURI(), e.getMessage(), e);
         return R.fail(ResultCode.INTERNAL_ERROR);
+    }
+
+    /**
+     * 资源不存在（静态资源等）
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public R<Void> handleNoResourceFound(NoResourceFoundException e, HttpServletRequest request) {
+        log.warn("资源不存在: {} - {}", request.getRequestURI(), e.getMessage());
+        return R.fail(ResultCode.NOT_FOUND);
+    }
+
+    /**
+     * 无匹配处理器
+     */
+    @ExceptionHandler(NoHandlerFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public R<Void> handleNoHandlerFound(NoHandlerFoundException e, HttpServletRequest request) {
+        log.warn("未找到接口: {} - {}", request.getRequestURI(), e.getMessage());
+        return R.fail(ResultCode.NOT_FOUND);
     }
 
     /**

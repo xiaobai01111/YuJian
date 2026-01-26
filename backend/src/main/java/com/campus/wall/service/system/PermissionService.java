@@ -31,4 +31,9 @@ public interface PermissionService {
      * 刷新权限缓存
      */
     void refreshCache();
+
+    /**
+     * 清除指定用户权限缓存
+     */
+    void clearUserCache(Long userId);
 }

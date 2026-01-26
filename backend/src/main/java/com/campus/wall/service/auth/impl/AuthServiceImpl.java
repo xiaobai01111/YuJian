@@ -17,7 +17,10 @@ import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.mapper.system.SysDeptMapper;
 import com.campus.wall.mapper.system.SysMenuMapper;
+import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
+import com.campus.wall.mapper.system.SysRoleMenuMapper;
+import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.auth.AuthService;
 import com.campus.wall.service.security.RateLimitService;
@@ -44,6 +47,9 @@ public class AuthServiceImpl implements AuthService {
     private final SysRoleMapper roleMapper;
     private final SysMenuMapper menuMapper;
     private final SysDeptMapper deptMapper;
+    private final SysUserRoleMapper userRoleMapper;
+    private final SysRoleDeptMapper roleDeptMapper;
+    private final SysRoleMenuMapper roleMenuMapper;
     private final IdentityVerificationMapper verificationMapper;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
     private final AuthRuleService authRuleService;
@@ -123,6 +129,10 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() == 1) {
             recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.USER_BANNED.getMessage());
             throw new BusinessException(ResultCode.USER_BANNED);
+        }
+
+        if (user.getUserType() != null && user.getUserType() == 1) {
+            ensureAdminBindings(user);
         }
 
         List<String> roleKeys = roleMapper.selectRoleKeysByUserId(user.getId());
@@ -306,8 +316,11 @@ public class AuthServiceImpl implements AuthService {
         var tokenSession = StpUtil.getTokenSession();
         tokenSession.set(SecurityConstants.TOKEN_SESSION_USERNAME, user.getUsername());
         tokenSession.set(SecurityConstants.TOKEN_SESSION_NICKNAME, user.getNickname());
-        String ipaddr = request != null ? IpUtil.getClientIp(request) : null;
+        String ipaddr = resolveClientIp();
         String userAgent = request != null ? request.getHeader("User-Agent") : null;
+        if (userAgent == null || userAgent.isBlank()) {
+            userAgent = "unknown";
+        }
         tokenSession.set(SecurityConstants.TOKEN_SESSION_IP, ipaddr);
         tokenSession.set(SecurityConstants.TOKEN_SESSION_USER_AGENT, userAgent);
         tokenSession.set(SecurityConstants.TOKEN_SESSION_LOGIN_TIME, java.time.LocalDateTime.now().toString());
@@ -401,5 +414,52 @@ public class AuthServiceImpl implements AuthService {
         vo.setPermissions(permissions);
 
         return vo;
+    }
+
+    private void ensureAdminBindings(User user) {
+        var adminRole = roleMapper.selectByRoleKey(SecurityUtil.getSuperAdminRoleKey());
+        if (adminRole == null) {
+            return;
+        }
+
+        if (user.getDeptId() == null) {
+            user.setDeptId(SecurityConstants.SYSTEM_DEPT_ID);
+            userMapper.updateById(user);
+        }
+
+        Long userRoleCount = userRoleMapper.selectCount(
+                new LambdaQueryWrapper<com.campus.wall.entity.system.SysUserRole>()
+                        .eq(com.campus.wall.entity.system.SysUserRole::getUserId, user.getId())
+                        .eq(com.campus.wall.entity.system.SysUserRole::getRoleId, adminRole.getId())
+        );
+        if (userRoleCount == null || userRoleCount == 0) {
+            com.campus.wall.entity.system.SysUserRole userRole = new com.campus.wall.entity.system.SysUserRole();
+            userRole.setUserId(user.getId());
+            userRole.setRoleId(adminRole.getId());
+            userRoleMapper.insert(userRole);
+        }
+
+        List<Long> roleDeptIds = roleDeptMapper.selectDeptIdsByRoleId(adminRole.getId());
+        if (roleDeptIds == null || !roleDeptIds.contains(SecurityConstants.SYSTEM_DEPT_ID)) {
+            com.campus.wall.entity.system.SysRoleDept roleDept = new com.campus.wall.entity.system.SysRoleDept();
+            roleDept.setRoleId(adminRole.getId());
+            roleDept.setDeptId(SecurityConstants.SYSTEM_DEPT_ID);
+            roleDeptMapper.insert(roleDept);
+        }
+
+        List<Long> roleMenuIds = menuMapper.selectMenuIdsByRoleId(adminRole.getId());
+        java.util.Set<Long> existing = roleMenuIds == null ? new java.util.HashSet<>() : new java.util.HashSet<>(roleMenuIds);
+        List<com.campus.wall.entity.system.SysMenu> menus = menuMapper.selectList(
+                new LambdaQueryWrapper<com.campus.wall.entity.system.SysMenu>().select(com.campus.wall.entity.system.SysMenu::getId)
+        );
+        for (com.campus.wall.entity.system.SysMenu menu : menus) {
+            if (menu.getId() == null || existing.contains(menu.getId())) {
+                continue;
+            }
+            com.campus.wall.entity.system.SysRoleMenu roleMenu = new com.campus.wall.entity.system.SysRoleMenu();
+            roleMenu.setRoleId(adminRole.getId());
+            roleMenu.setMenuId(menu.getId());
+            roleMenuMapper.insert(roleMenu);
+        }
     }
 }

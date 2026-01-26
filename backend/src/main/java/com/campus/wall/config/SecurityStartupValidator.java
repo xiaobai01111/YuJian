@@ -17,15 +17,17 @@ public class SecurityStartupValidator implements ApplicationRunner {
     private final StorageProperties storageProperties;
     private final ObjectProvider<MinioConfig> minioConfigProvider;
     private final SecurityProperties securityProperties;
+    private final com.campus.wall.service.system.PermissionService permissionService;
 
     @Override
     public void run(ApplicationArguments args) {
         if (!securityProperties.isFailFastSecrets()) {
             log.warn("Secret validation is disabled (app.security.fail-fast-secrets=false).");
-            return;
+        } else {
+            validateSigningSecret();
+            validateMinioSecrets();
         }
-        validateSigningSecret();
-        validateMinioSecrets();
+        validateApiPermissions();
     }
 
     private void validateSigningSecret() {
@@ -47,6 +49,16 @@ public class SecurityStartupValidator implements ApplicationRunner {
         }
         if (!StringUtils.hasText(minioConfig.getAccessKey()) || !StringUtils.hasText(minioConfig.getSecretKey())) {
             throw new IllegalStateException("MinIO accessKey/secretKey is required.");
+        }
+    }
+
+    private void validateApiPermissions() {
+        if (!securityProperties.isFailFastPermissions()) {
+            log.warn("Permission validation is disabled (app.security.fail-fast-permissions=false).");
+            return;
+        }
+        if (!permissionService.hasApiPermissions()) {
+            throw new IllegalStateException("API permission rules are empty; refuse to start.");
         }
     }
 }

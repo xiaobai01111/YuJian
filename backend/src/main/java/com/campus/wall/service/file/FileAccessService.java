@@ -39,6 +39,9 @@ public class FileAccessService {
         if (visibility == FileVisibility.PRIVATE) {
             return buildSignedPreviewUrl(record.getId());
         }
+        if (provider.getType() == StorageProviderType.LOCAL && !storageProperties.isLocalPublicEnabled()) {
+            return buildPublicPreviewUrl(record.getId());
+        }
         return provider.buildPublicUrl(record.getPath());
     }
 

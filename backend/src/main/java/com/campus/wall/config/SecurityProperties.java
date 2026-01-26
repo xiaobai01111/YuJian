@@ -33,12 +33,27 @@ public class SecurityProperties {
     /**
      * API 启动引导策略（public/login/deny）
      */
-    private String apiBootstrapMode = "public";
+    private String apiBootstrapMode = "login";
 
     /**
      * 启动时检查关键密钥
      */
     private boolean failFastSecrets = true;
+
+    /**
+     * 启动时检查权限规则
+     */
+    private boolean failFastPermissions = true;
+
+    /**
+     * 用户权限缓存过期时间（秒）
+     */
+    private long permissionCacheTtlSeconds = 1800;
+
+    /**
+     * 用户权限缓存最大容量
+     */
+    private long permissionCacheMaxSize = 20000;
 
     @PostConstruct
     public void init() {

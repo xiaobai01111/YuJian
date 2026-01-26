@@ -509,3 +509,25 @@ COMMENT ON TABLE market_orders IS '市集订单表';
 
 CREATE INDEX idx_market_orders_post ON market_orders(post_id);
 CREATE INDEX idx_market_orders_seller ON market_orders(seller_id);
+
+CREATE TABLE sys_site_settings (
+    id BIGSERIAL PRIMARY KEY,
+    site_name VARCHAR(100) NOT NULL,
+    logo_url VARCHAR(500),
+    favicon_url VARCHAR(500),
+    theme VARCHAR(50),
+    storage_provider VARCHAR(32),
+    local_path VARCHAR(500),
+    local_public_enabled BOOLEAN DEFAULT FALSE,
+    admin_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    setup_completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE sys_site_settings IS '站点初始化配置';
+
+CREATE INDEX idx_site_settings_setup ON sys_site_settings(setup_completed);
+CREATE UNIQUE INDEX ux_site_settings_setup_completed
+    ON sys_site_settings(setup_completed)
+    WHERE setup_completed = TRUE;

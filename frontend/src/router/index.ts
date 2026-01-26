@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
+import { getSetupStatus } from '@/api/setup'
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -10,6 +11,12 @@ const router = createRouter({
             name: 'Home',
             component: () => import('@/views/home/index.vue'),
             meta: { heroKey: 'HOME' }
+        },
+        {
+            path: '/setup',
+            name: 'Setup',
+            component: () => import('@/views/setup/index.vue'),
+            meta: { layout: 'div' }
         },
         {
             path: '/confessions',
@@ -304,12 +311,34 @@ const router = createRouter({
     ]
 })
 
+let setupChecked = false
+let setupCompleted = true
+
 router.beforeEach(async (to, _from, next) => {
     const userStore = useUserStore()
     const permissionStore = usePermissionStore()
 
+    if (!setupChecked) {
+        try {
+            const res = await getSetupStatus()
+            setupCompleted = Boolean(res?.setupCompleted)
+        } catch (error) {
+            setupCompleted = true
+        } finally {
+            setupChecked = true
+        }
+    }
+    if (!setupCompleted && to.path !== '/setup') {
+        next('/setup')
+        return
+    }
+    if (setupCompleted && to.path === '/setup') {
+        next('/')
+        return
+    }
+
     // 未登录允许访问的路径
-    const whiteList = ['/', '/notices']
+    const whiteList = ['/', '/notices', '/setup']
     const isWhitelisted = whiteList.includes(to.path) || to.path.startsWith('/notices/')
 
     if (userStore.token) {

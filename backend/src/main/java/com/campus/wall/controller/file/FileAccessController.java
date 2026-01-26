@@ -58,11 +58,20 @@ public class FileAccessController {
         if (!StringUtils.hasText(contentType)) {
             contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
         }
+        boolean isImage = contentType.toLowerCase().startsWith("image/");
 
         response.setContentType(contentType);
         response.setHeader("X-Content-Type-Options", "nosniff");
+        if (!isImage) {
+            download = true;
+        }
         if (visibility == FileVisibility.PRIVATE) {
             response.setHeader("Cache-Control", "no-store");
+            if (!isImage) {
+                download = true;
+            } else {
+                download = false;
+            }
         }
 
         response.setHeader("Content-Disposition", HttpHeaderUtil.buildContentDisposition(filename, download));

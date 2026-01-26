@@ -17,6 +17,7 @@ import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.entity.system.SysRole;
+import com.campus.wall.service.system.PermissionService;
 import com.campus.wall.service.user.UserService;
 import com.campus.wall.vo.user.UserDetailVO;
 import com.campus.wall.vo.user.UserVO;
@@ -52,6 +53,7 @@ public class UserServiceImpl implements UserService {
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleMapper sysRoleMapper;
     private final com.campus.wall.service.system.OperLogService operLogService;
+    private final PermissionService permissionService;
 
     @Override
     public PageResult<UserVO> queryUsers(UserQueryDTO query) {
@@ -201,6 +203,8 @@ public class UserServiceImpl implements UserService {
             userRoleMapper.insert(userRole);
         }
 
+        permissionService.clearUserCache(userId);
+
         // 记录审计日志
         operLogService.log("user", userId, "role_assign", null);
     }
@@ -218,6 +222,7 @@ public class UserServiceImpl implements UserService {
                 userRole.setRoleId(roleId);
                 userRoleMapper.insert(userRole);
             }
+            permissionService.clearUserCache(userId);
             // 记录审计日志
             operLogService.log("user", userId, "role_assign", null);
         }
@@ -277,6 +282,7 @@ public class UserServiceImpl implements UserService {
                     }
                 }
 
+                permissionService.clearUserCache(userId);
                 affected++;
             }
 
@@ -401,11 +407,19 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
 
+        if (isSystemAdminUserId(userId)) {
+            if (dto.getDeptId() != null || dto.getUserType() != null) {
+                throw new BusinessException("管理员账号不允许调整部门或用户类型");
+            }
+        }
+
         user.setNickname(dto.getNickname());
         if (dto.getEmail() != null) user.setEmail(dto.getEmail());
         if (dto.getPhone() != null) user.setPhone(dto.getPhone());
-        if (dto.getDeptId() != null) user.setDeptId(dto.getDeptId());
-        if (dto.getUserType() != null) user.setUserType(dto.getUserType());
+        if (!isSystemAdminUserId(userId)) {
+            if (dto.getDeptId() != null) user.setDeptId(dto.getDeptId());
+            if (dto.getUserType() != null) user.setUserType(dto.getUserType());
+        }
         if (dto.getSex() != null) user.setSex(dto.getSex());
         if (dto.getRemark() != null) user.setRemark(dto.getRemark());
 

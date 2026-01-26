@@ -5,6 +5,9 @@
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
       </form>
       <h3 class="font-bold text-lg mb-6">{{ isEdit ? '编辑用户' : '添加用户' }}</h3>
+      <div v-if="isEdit && isAdminEdit" class="text-xs text-warning mb-4">
+        系统管理员账号不允许关停、删除或调整角色/部门
+      </div>
       
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <div class="grid grid-cols-2 gap-4">
@@ -154,6 +157,7 @@ const emit = defineEmits<{
 const modalRef = ref<HTMLDialogElement>()
 const loading = ref(false)
 const isEdit = ref(false)
+const isAdminEdit = ref(false)
 
 const initialForm: UserForm = {
   username: '',
@@ -174,6 +178,7 @@ const dialog = useDialog()
 
 const open = (user?: UserVO) => {
   isEdit.value = !!user
+  isAdminEdit.value = !!user && user.userType === 1
   if (user) {
     Object.assign(form, {
       id: user.id,

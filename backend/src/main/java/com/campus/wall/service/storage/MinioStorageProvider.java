@@ -15,6 +15,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 @ConditionalOnBean(MinioClient.class)
@@ -23,6 +24,7 @@ public class MinioStorageProvider implements StorageProvider {
 
     private final MinioClient minioClient;
     private final MinioConfig minioConfig;
+    private final AtomicBoolean bucketReady = new AtomicBoolean(false);
 
     @Override
     public StorageProviderType getType() {
@@ -71,6 +73,9 @@ public class MinioStorageProvider implements StorageProvider {
     }
 
     private void ensureBucketExists() throws Exception {
+        if (bucketReady.get()) {
+            return;
+        }
         boolean found = minioClient.bucketExists(BucketExistsArgs.builder()
                 .bucket(minioConfig.getBucketName())
                 .build());
@@ -79,5 +84,6 @@ public class MinioStorageProvider implements StorageProvider {
                     .bucket(minioConfig.getBucketName())
                     .build());
         }
+        bucketReady.set(true);
     }
 }

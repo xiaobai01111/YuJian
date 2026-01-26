@@ -166,7 +166,7 @@
                 </td>
                 <td>
                   <div class="flex items-center gap-2">
-                    <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="user.status === 0" :disabled="user.username === 'admin'" @change="handleStatusChange(user)" />
+                    <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="user.status === 0" :disabled="user.userType === 1" @change="handleStatusChange(user)" />
                     <span v-if="user.status === 1" class="badge badge-error badge-sm">已封禁</span>
                     <span v-else class="badge badge-success badge-sm">正常</span>
                   </div>
@@ -174,17 +174,17 @@
                 <td class="text-sm text-base-content/60">{{ user.loginDate ? formatDate(user.loginDate) : '-' }}</td>
                 <td>
                   <div class="flex justify-center gap-2">
-                    <button v-if="userStore.hasPermission('system:user:edit') && user.username !== 'admin'" class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" @click="handleEditSingle(user)" title="编辑">
+                    <button v-if="userStore.hasPermission('system:user:edit')" class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" @click="handleEditSingle(user)" title="编辑">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button v-if="userStore.hasPermission('system:user:ban') && user.username !== 'admin'" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" @click="handleBan(user)" title="封禁">
+                    <button v-if="userStore.hasPermission('system:user:ban') && user.userType !== 1" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" @click="handleBan(user)" title="封禁">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                       </svg>
                     </button>
-                    <button v-if="userStore.hasPermission('system:user:role') && user.username !== 'admin'" class="btn btn-square btn-xs bg-amber-50 text-amber-600 border-none hover:bg-amber-100" @click="openRoleModal(user)" title="分配角色">
+                    <button v-if="userStore.hasPermission('system:user:role') && user.userType !== 1" class="btn btn-square btn-xs bg-amber-50 text-amber-600 border-none hover:bg-amber-100" @click="openRoleModal(user)" title="分配角色">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
@@ -403,14 +403,14 @@ const toggleSelectAll = () => {
 }
 
 const handleStatusChange = async (user: UserVO) => {
+  // 禁止操作系统管理员账号
+  if (user.userType === 1) {
+    await dialog.alert('系统管理员账号不允许关停或封禁')
+    return
+  }
   // 禁止操作自己
   if (user.id === currentUserId.value) {
     await dialog.alert('不能操作自己的账号')
-    return
-  }
-  // 禁止操作 admin
-  if (user.username === 'admin') {
-    await dialog.alert('不能操作管理员账号')
     return
   }
 
@@ -530,6 +530,11 @@ const openRoleModal = (user: UserVO) => {
 }
 
 const handleBan = (user: UserVO) => {
+  // 禁止操作系统管理员账号
+  if (user.userType === 1) {
+    void dialog.alert('系统管理员账号不允许关停或封禁')
+    return
+  }
   // 禁止操作自己
   if (user.id === currentUserId.value) {
     void dialog.alert('不能操作自己的账号')

@@ -1,0 +1,9 @@
+app:
+  storage:
+    primary-provider: LOCAL
+    fallback-provider: LOCAL
+    signing-secret: test-secret
+spring:
+  task:
+    scheduling:
+      enabled: false

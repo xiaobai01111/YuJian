@@ -10,6 +10,7 @@ import com.campus.wall.config.StorageProperties;
 import com.campus.wall.dto.system.FileCleanupRequestDTO;
 import com.campus.wall.entity.file.FileRecord;
 import com.campus.wall.enums.file.FileVisibility;
+import com.campus.wall.enums.file.FileTargetType;
 import com.campus.wall.enums.file.StorageProviderType;
 import com.campus.wall.mapper.file.FileRecordMapper;
 import com.campus.wall.service.file.FileAccessService;
@@ -56,10 +57,6 @@ public class FileServiceImpl implements FileService {
     private static final long MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final long MAX_FILE_SIZE = 200L * 1024 * 1024; // 200MB
 
-    private static final Set<String> ALLOWED_TARGET_TYPES = Set.of(
-            "post", "avatar", "file", "gallery", "public", "package", "resource"
-    );
-    
     // Magic bytes for file type validation
     private static final byte[] JPEG_MAGIC = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
     private static final byte[] PNG_MAGIC = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47};
@@ -148,6 +145,7 @@ public class FileServiceImpl implements FileService {
         if (fileIds == null || fileIds.isEmpty()) {
             return;
         }
+        String normalizedTargetType = normalizeTargetType(targetType);
         Long userId = StpUtil.getLoginIdAsLong();
         for (Long fileId : fileIds) {
             FileRecord record = fileRecordMapper.selectById(fileId);
@@ -159,7 +157,7 @@ public class FileServiceImpl implements FileService {
                     throw new BusinessException(ResultCode.BAD_REQUEST, "文件已绑定其他资源");
                 }
                 record.setTargetId(targetId);
-                record.setTargetType(targetType);
+                record.setTargetType(normalizedTargetType);
                 fileRecordMapper.updateById(record);
             }
         }
@@ -287,7 +285,9 @@ public class FileServiceImpl implements FileService {
         }
 
         // 文件大小校验
-        long limit = requiresImageOnly(targetType) ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+        boolean privileged = isPrivilegedUploader();
+        boolean imageOnly = requiresImageOnly(targetType) || !privileged;
+        long limit = imageOnly ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
         if (file.getSize() > limit) {
             throw new BusinessException(ResultCode.FILE_SIZE_EXCEEDED);
         }
@@ -297,7 +297,6 @@ public class FileServiceImpl implements FileService {
         if (contentType == null) {
             throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED);
         }
-        boolean imageOnly = requiresImageOnly(targetType);
         if (contentType.startsWith("image/")) {
             if (!ALLOWED_IMAGE_TYPES.contains(contentType)) {
                 throw new BusinessException(ResultCode.FILE_TYPE_NOT_ALLOWED);
@@ -327,11 +326,11 @@ public class FileServiceImpl implements FileService {
         if (!StringUtils.hasText(targetType)) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "type不合法");
         }
-        String normalized = targetType.trim().toLowerCase();
-        if (!ALLOWED_TARGET_TYPES.contains(normalized)) {
+        FileTargetType type = FileTargetType.fromCode(targetType);
+        if (type == null) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "type不合法");
         }
-        return normalized;
+        return type.getCode();
     }
     
     private boolean isValidImageMagic(byte[] header, String contentType) {
@@ -404,6 +403,12 @@ public class FileServiceImpl implements FileService {
     }
 
     private boolean canOverrideVisibility() {
+        return StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())
+                || StpUtil.hasPermission("system:file:upload")
+                || StpUtil.hasPermission("system:gallery:upload");
+    }
+
+    private boolean isPrivilegedUploader() {
         return StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())
                 || StpUtil.hasPermission("system:file:upload")
                 || StpUtil.hasPermission("system:gallery:upload");

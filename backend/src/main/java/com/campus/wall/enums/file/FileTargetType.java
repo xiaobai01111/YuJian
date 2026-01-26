@@ -8,10 +8,15 @@ import lombok.Getter;
 @Getter
 public enum FileTargetType {
 
-    POST("POST", "帖子"),
-    COMMENT("COMMENT", "评论"),
-    AVATAR("AVATAR", "头像"),
-    ID_CARD("ID_CARD", "学生证");
+    POST("post", "帖子"),
+    COMMENT("comment", "评论"),
+    AVATAR("avatar", "头像"),
+    ID_CARD("id_card", "学生证"),
+    FILE("file", "文件"),
+    GALLERY("gallery", "图库"),
+    PUBLIC("public", "公开"),
+    PACKAGE("package", "安装包"),
+    RESOURCE("resource", "资源");
 
     private final String code;
     private final String name;
@@ -22,11 +27,19 @@ public enum FileTargetType {
     }
 
     public static FileTargetType fromCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        String normalized = code.trim();
         for (FileTargetType type : values()) {
-            if (type.getCode().equals(code)) {
+            if (type.getCode().equalsIgnoreCase(normalized)) {
                 return type;
             }
         }
         return null;
+    }
+
+    public static boolean isValid(String code) {
+        return fromCode(code) != null;
     }
 }

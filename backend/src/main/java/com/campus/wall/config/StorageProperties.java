@@ -31,6 +31,11 @@ public class StorageProperties {
     private String localUrlPrefix = "/uploads";
 
     /**
+     * 是否开启本地静态公开访问
+     */
+    private boolean localPublicEnabled = false;
+
+    /**
      * 私有文件预览链接有效期（秒）
      */
     private long privateUrlTtlSeconds = 600;

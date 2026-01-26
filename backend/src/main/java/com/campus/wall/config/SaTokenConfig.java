@@ -79,22 +79,27 @@ public class SaTokenConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(@NonNull CorsRegistry registry) {
+        String[] origins = splitAndTrim(allowedOrigins);
+        String[] patterns = splitAndTrim(allowedOriginPatterns);
+        if (origins.length == 0 && patterns.length == 0) {
+            log.warn("CORS 未配置允许来源，已默认拒绝跨域访问");
+            return;
+        }
+
         var registration = registry.addMapping("/**")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("Authorization", "X-Trace-Id")
                 .maxAge(3600);
 
-        String[] origins = splitAndTrim(allowedOrigins);
         if (origins.length > 0) {
             registration.allowedOrigins(origins);
         }
-        String[] patterns = splitAndTrim(allowedOriginPatterns);
         if (patterns.length > 0) {
             registration.allowedOriginPatterns(patterns);
         }
         boolean hasWildcard = containsWildcard(origins) || containsWildcard(patterns);
-        boolean allowCredentials = !hasWildcard && (origins.length > 0 || patterns.length > 0);
+        boolean allowCredentials = !hasWildcard;
         if (hasWildcard) {
             log.warn("CORS 配置包含通配符，已禁用 allowCredentials 以降低风险");
         }
