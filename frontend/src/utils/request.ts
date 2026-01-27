@@ -39,8 +39,11 @@ service.interceptors.response.use(
         // Handle auth errors (401)
         if (error.response && error.response.status === 401) {
             const userStore = useUserStore()
-            userStore.logout()
-            location.reload()
+            // 仅在存在登录态时才触发强制退出，避免未登录用户首页刷新死循环
+            if (userStore.token) {
+                userStore.logout()
+                location.reload()
+            }
         }
         if (error.response && error.response.data) {
             const data = error.response.data

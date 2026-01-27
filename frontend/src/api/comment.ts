@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { UserVO } from './system'
+import type { PageResult, UserVO } from './system'
 
 export interface CommentConsoleVO {
   id: number
@@ -19,6 +19,24 @@ export interface CommentQueryDTO {
 }
 
 export interface CommentUpdateDTO {
+  content: string
+}
+
+export interface CommentVO {
+  id: number
+  postId: number
+  parentId?: number | null
+  content: string
+  anonymousId?: string
+  isOwner?: boolean
+  createdAt: string
+  author?: UserVO
+  children?: CommentVO[]
+}
+
+export interface CommentCreateDTO {
+  postId: number
+  parentId?: number | null
   content: string
 }
 
@@ -43,4 +61,12 @@ export function batchDeleteConsoleComments(ids: number[], reason?: string) {
     ids,
     reason
   })
+}
+
+export function getPostCommentsPage(postId: number, params: { page: number; size: number }) {
+  return request.get<PageResult<CommentVO>>(`/api/v1/comments/post/${postId}/page`, { params })
+}
+
+export function createComment(data: CommentCreateDTO) {
+  return request.post('/api/v1/comments', data)
 }

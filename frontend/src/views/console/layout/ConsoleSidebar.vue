@@ -40,7 +40,7 @@ const props = defineProps<{
 }>()
 
 const menuRoutes = computed(() => {
-    return props.routes.filter(route => !route.hidden && route.meta)
+    return props.routes.filter(route => route.meta && !route.meta.hidden)
 })
 
 const adminTitles = new Set(['仪表盘', '系统管理', '系统监控', '系统工具'])

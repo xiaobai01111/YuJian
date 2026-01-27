@@ -62,7 +62,7 @@ public interface PostService {
     /**
      * 记录阅读
      */
-    void recordPostView(Long postId);
+    boolean recordPostView(Long postId);
 
     /**
      * 分页查询帖子
@@ -105,14 +105,24 @@ public interface PostService {
     PageResult<PostVO> getUserBookmarks(Long userId, int page, int size);
 
     /**
-     * 标记帖子为已解决
+     * 标记帖子为已解决（适用于树洞、失物招领等）
      */
     void markAsResolved(Long postId);
+
+    /**
+     * 标记帖子为已售出（适用于市集交易）
+     */
+    void markAsSold(Long postId);
 
     /**
      * 控制台标记已解决
      */
     void markAsResolvedByAdmin(Long postId, String reason);
+
+    /**
+     * 控制台标记已售出
+     */
+    void markAsSoldByAdmin(Long postId, String reason);
 
     /**
      * 全文搜索帖子

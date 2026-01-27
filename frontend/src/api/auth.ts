@@ -10,8 +10,8 @@ api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token')
         if (token) {
-            // Sa-Token expects token directly without Bearer prefix
-            config.headers.Authorization = token
+            // Sa-Token expects Bearer prefix
+            config.headers.Authorization = `Bearer ${token}`
         }
         return config
     },
@@ -68,10 +68,15 @@ export interface RegisterDTO {
     confirmPassword: string
     nickname?: string
     email?: string
+    emailCode?: string
 }
 
 export const register = (data: RegisterDTO) => {
     return api.post<any, number>('/api/v1/auth/register', data)
+}
+
+export const sendRegisterEmailCode = (email: string) => {
+    return api.post('/api/v1/auth/register-email-code', { email })
 }
 
 export const login = (data: LoginDTO) => {
@@ -110,10 +115,16 @@ export interface UserProfileVO {
     avatar?: string
     email?: string
     phone?: string
+    eduEmail?: string
     sex?: number
     verifyStatus?: number
+    verifyMethod?: string
     creditScore?: number
+    status?: number
+    roleIds?: number[]
+    remark?: string
     createdAt?: string
+    updatedAt?: string
 }
 
 export const getMyProfile = () => {
@@ -122,4 +133,33 @@ export const getMyProfile = () => {
 
 export const updateProfile = (data: UserProfileUpdateDTO) => {
     return api.post('/api/v1/users/me', data)
+}
+
+export const getMyPosts = (page = 1, size = 10) => {
+    return api.get<any, any>('/api/v1/users/me/posts', { params: { page, size } })
+}
+
+export const getMyBookmarks = (page = 1, size = 10) => {
+    return api.get<any, any>('/api/v1/users/bookmarks', { params: { page, size } })
+}
+
+export const getMyCreditScore = () => {
+    return api.get<any, number>('/api/v1/users/credit')
+}
+
+export const verifyEmail = (eduEmail: string) => {
+    return api.post('/api/v1/auth/verify-email', { eduEmail })
+}
+
+export const confirmEmail = (code: string) => {
+    return api.post('/api/v1/auth/confirm-email', { code })
+}
+
+export interface SubmitIdCardDTO {
+    imageUrl: string
+    studentId?: string
+}
+
+export const submitIdCard = (data: SubmitIdCardDTO) => {
+    return api.post('/api/v1/auth/submit-id-card', data)
 }

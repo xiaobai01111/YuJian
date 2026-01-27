@@ -1,5 +1,9 @@
 <template>
-  <div class="modal" :class="{ 'modal-open': state.open }">
+  <dialog
+    ref="modalRef"
+    class="modal z-[9999]"
+    @cancel.prevent="handleBackdrop"
+  >
     <div class="modal-box">
       <h3 class="font-bold text-lg">{{ state.title }}</h3>
       <p class="py-4 whitespace-pre-wrap">{{ state.message }}</p>
@@ -34,10 +38,10 @@
         <button class="btn btn-primary" @click="handleConfirm">{{ state.confirmText }}</button>
       </div>
     </div>
-    <div class="modal-backdrop">
-      <button @click="handleBackdrop">close</button>
-    </div>
-  </div>
+    <form method="dialog" class="modal-backdrop" @click.prevent="handleBackdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 </template>
 
 <script setup lang="ts">
@@ -46,6 +50,7 @@ import { useDialogState } from '@/composables/useDialog'
 
 const { state, closeDialog } = useDialogState()
 
+const modalRef = ref<HTMLDialogElement | null>(null)
 const inputRef = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 const inputValue = ref('')
 const errorMessage = ref('')
@@ -59,6 +64,15 @@ const resetPrompt = () => {
 watch(
   () => state.open,
   open => {
+    const modal = modalRef.value
+    if (!modal) return
+    if (open) {
+      if (!modal.open) {
+        modal.showModal()
+      }
+    } else if (modal.open) {
+      modal.close()
+    }
     if (open && state.mode === 'prompt') {
       resetPrompt()
     }

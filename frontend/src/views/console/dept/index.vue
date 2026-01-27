@@ -20,7 +20,7 @@
           </div>
 
           <div class="flex gap-2">
-            <button class="btn btn-circle btn-ghost btn-sm" @click="fetchDeptTree">
+            <button class="btn btn-circle btn-ghost btn-sm" @click="() => fetchDeptTree()">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
@@ -438,12 +438,12 @@ onMounted(() => {
   fetchDeptTree()
 })
 
-const fetchDeptTree = async () => {
+const fetchDeptTree = async (preserveExpanded = false) => {
   loading.value = true
   try {
     const res: any = await getDeptTree()
     deptTree.value = res || []
-    applySearch()
+    applySearch(preserveExpanded)
   } catch (error) {
     console.error(error)
   } finally {
@@ -487,12 +487,15 @@ const resetSearch = () => {
   applySearch()
 }
 
-const applySearch = () => {
+const applySearch = (preserveExpanded = false) => {
   const keyword = searchKeyword.value.trim()
   if (!keyword) {
     visibleTree.value = deptTree.value
-    expandedIds.value = new Set()
-    isExpanded.value = false
+    // 仅在非保留模式下重置展开状态
+    if (!preserveExpanded) {
+      expandedIds.value = new Set()
+      isExpanded.value = false
+    }
     return
   }
   const { tree, expanded } = filterDeptTree(deptTree.value, keyword)
@@ -564,7 +567,7 @@ const submitForm = async () => {
     }
     const modal = document.getElementById('dept_form_modal') as HTMLDialogElement
     modal.close()
-    fetchDeptTree()
+    fetchDeptTree(true)
   } catch (error) {
     console.error(error)
   } finally {
@@ -621,7 +624,7 @@ const confirmDelete = async () => {
       reason: deleteReason.value || undefined
     })
     closeDeleteModal()
-    fetchDeptTree()
+    fetchDeptTree(true)
   } catch (error: any) {
     await dialog.alert(error?.response?.data?.message || '删除失败')
   } finally {
@@ -634,16 +637,16 @@ const handleStatusChange = async (dept: DeptVO) => {
   const actionName = newStatus === 1 ? '停用' : '启用'
   
   if (!await dialog.confirm(`确定要${actionName}部门 ${dept.deptName} 吗？${newStatus === 1 ? '\n停用后该部门下的用户将被踢出登录。' : ''}`)) {
-    fetchDeptTree()
+    fetchDeptTree(true)
     return
   }
   
   try {
     await updateDeptStatus(dept.id, newStatus)
-    fetchDeptTree()
+    fetchDeptTree(true)
   } catch (error: any) {
     await dialog.alert(error?.response?.data?.message || '操作失败')
-    fetchDeptTree()
+    fetchDeptTree(true)
   }
 }
 </script>

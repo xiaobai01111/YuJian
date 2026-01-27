@@ -107,6 +107,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { createPost, createConsolePost, type PostCreateDTO } from '@/api/post'
+import { uploadPostImage } from '@/api/file'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 import { BOARD_OPTIONS, normalizeBoardKeys } from '@/utils/boards'
@@ -135,6 +136,7 @@ const form = reactive<PostCreateDTO>({
   price: undefined,
   location: '',
   lostTime: '',
+  fileIds: [],
   showOnHome: true
 })
 
@@ -156,6 +158,7 @@ const resetForm = () => {
   form.price = undefined
   form.location = ''
   form.lostTime = ''
+  form.fileIds = []
   form.showOnHome = true
   files.value = []
 }
@@ -211,6 +214,20 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
+    if (files.value.length > 0) {
+      const uploadedIds: number[] = []
+      for (const file of files.value) {
+        const res: any = await uploadPostImage(file)
+        const fileId = typeof res === 'number' ? res : res?.id || res?.data?.id
+        if (!fileId) {
+          throw new Error('图片上传失败')
+        }
+        uploadedIds.push(Number(fileId))
+      }
+      form.fileIds = uploadedIds
+    } else {
+      form.fileIds = []
+    }
     const res: any = props.useConsoleApi ? await createConsolePost(form) : await createPost(form)
     const postId = typeof res === 'number' ? res : res?.id || res?.data?.id || 0
     emit('success', postId)

@@ -52,20 +52,22 @@
 
         <div v-else v-for="post in postList" :key="post.id" class="card bg-base-100 shadow-sm hover:shadow-md transition-all border border-base-200 cursor-pointer" @click="goToDetail(post.id)">
           <div class="card-body p-6">
-            <div class="flex justify-between items-start">
-              <h3 class="card-title text-lg font-bold text-base-content mb-2">
+            <div class="flex justify-between items-start gap-3">
+            <h3 class="card-title text-lg font-bold text-base-content mb-2 min-w-0 flex-1">
+              <span class="line-clamp-1 break-words min-w-0 block">
                 <template v-for="(part, index) in highlightParts(post.title)" :key="index">
                   <span v-if="part.match" class="bg-warning/30 text-warning-content font-bold px-1 rounded">{{ part.text }}</span>
                   <span v-else>{{ part.text }}</span>
                 </template>
-              </h3>
+              </span>
+            </h3>
               <div class="flex flex-wrap gap-2">
                 <div v-for="board in getPostBoards(post)" :key="board" class="badge badge-ghost badge-sm">
                   {{ getBoardLabel(board) }}
                 </div>
               </div>
             </div>
-            <p class="text-base-content/70 text-sm line-clamp-2 mb-2">
+            <p class="text-base-content/70 text-sm line-clamp-2 mb-2 break-words">
               <template v-for="(part, index) in highlightParts(post.content)" :key="index">
                 <span v-if="part.match" class="bg-warning/30 text-warning-content font-bold px-1 rounded">{{ part.text }}</span>
                 <span v-else>{{ part.text }}</span>
@@ -76,7 +78,7 @@
               <span>{{ formatDate(post.createdAt) }}</span>
               <div class="flex gap-3">
                 <span>{{ post.viewCount }} 阅读</span>
-                <span>{{ post.likeCount }} 点赞</span>
+                <button :class="post.isLiked ? 'text-pink-500' : ''" @click.stop="toggleLike(post)">{{ post.likeCount }} 点赞</button>
                 <span>{{ post.commentCount }} 评论</span>
               </div>
             </div>
@@ -99,11 +101,15 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getPostList, likePost, unlikePost, type PostVO, type PostQueryDTO } from '@/api/post'
 import { getBoardLabel, getPostBoards } from '@/utils/boards'
+import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
+const dialog = useDialog()
 
 const keyword = ref('')
 const loading = ref(false)
@@ -116,6 +122,26 @@ const queryParams = reactive<PostQueryDTO>({
   size: 10,
   keyword: ''
 })
+
+const toggleLike = async (post: PostVO) => {
+  if (!userStore.token) {
+    await dialog.alert('请先登录')
+    return
+  }
+  try {
+    if (post.isLiked) {
+      await unlikePost(post.id)
+      post.likeCount = Math.max(0, (post.likeCount || 0) - 1)
+      post.isLiked = false
+    } else {
+      await likePost(post.id)
+      post.likeCount = (post.likeCount || 0) + 1
+      post.isLiked = true
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
 
 onMounted(() => {
   if (route.query.q) {

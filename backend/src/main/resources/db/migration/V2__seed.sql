@@ -36,14 +36,14 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (15, 2, '公告管理', '/console/notice', 'views/console/notice/index.vue', 1, 'bell', 6, TRUE, 0),
     (16, 2, '登录日志', '/console/login-log', 'views/console/login-log/index.vue', 1, 'logininfor', 7, TRUE, 0),
     (17, 2, '操作日志', '/console/oper-log', 'views/console/oper-log/index.vue', 1, 'form', 8, TRUE, 0),
-    (18, 2, '个人中心', '/console/profile', 'views/console/profile/index.vue', 1, 'user', 9, TRUE, 0);
+    (18, 2, '个人中心', '/console/profile', 'views/console/profile/index.vue', 1, 'user', 9, TRUE, 0),
+    (19, 2, '邮箱管理', '/console/email-config', 'views/console/email-config/index.vue', 1, 'email', 10, TRUE, 0);
 
 -- 内容管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
     (20, 3, '帖子管理', '/console/post', 'views/console/post/index.vue', 1, 'post', 1, TRUE, 0),
     (21, 3, '评论管理', '/console/comment', 'views/console/comment/index.vue', 1, 'message', 2, TRUE, 0),
-    (22, 3, '举报管理', '/console/report', 'views/console/report/index.vue', 1, 'warning', 3, TRUE, 0),
-    (23, 3, '身份审核', '/console/verification', 'views/console/verification/index.vue', 1, 'id-card', 4, TRUE, 0);
+    (22, 3, '举报管理', '/console/report', 'views/console/report/index.vue', 1, 'warning', 3, TRUE, 0);
 
 -- 系统监控子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
@@ -63,7 +63,8 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
 
 -- 校园管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
-    (60, 6, 'Hero管理', '/console/campus/hero', 'views/console/campus/hero/index.vue', 1, 'image', 1, TRUE, 0);
+    (60, 6, 'Hero管理', '/console/campus/hero', 'views/console/campus/hero/index.vue', 1, 'image', 1, TRUE, 0),
+    (23, 6, '身份审核', '/console/verification', 'views/console/verification/index.vue', 1, 'id-card', 2, TRUE, 0);
 
 -- 按钮权限
 INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, status) VALUES
@@ -201,6 +202,7 @@ DELETE FROM sys_api_permissions;
 INSERT INTO sys_api_permissions (url, http_method, permission, description, status) VALUES
     ('/api/v1/auth/login', 'POST', 'public', 'auth.login', TRUE),
     ('/api/v1/auth/register', 'POST', 'public', 'auth.register', TRUE),
+    ('/api/v1/auth/register-email-code', 'POST', 'public', 'auth.register.email.code', TRUE),
     ('/api/v1/setup/status', 'GET', 'public', 'setup.status', TRUE),
     ('/api/v1/setup/init', 'POST', 'public', 'setup.init', TRUE),
     ('/api/v1/notices/public/**', 'GET', 'public', 'notice.public', TRUE),
@@ -423,3 +425,10 @@ INSERT INTO campus_heroes (
      TRUE, '12,000+', '同学已加入', '[]'::jsonb, '寻回率', '85%', 6);
 
 SELECT setval('campus_heroes_id_seq', (SELECT MAX(id) FROM campus_heroes));
+
+-- 系统配置
+INSERT INTO sys_config (id, config_key, config_value, config_type, remark) VALUES
+    (1, 'email.allowed_domains', '["edu.cn"]', 'json', '允许的教育邮箱域名后缀'),
+    (2, 'email.verification_enabled', 'true', 'boolean', '是否启用邮箱认证');
+
+SELECT setval('sys_config_id_seq', (SELECT MAX(id) FROM sys_config));

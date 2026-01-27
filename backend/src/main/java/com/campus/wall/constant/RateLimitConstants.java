@@ -23,9 +23,20 @@ public final class RateLimitConstants {
     public static final int REGISTER_LIMIT_PER_MINUTE = 5;
 
     /**
-     * 邮箱验证码限流 - 每分钟请求数（按用户）
+     * 邮箱验证码限流 - 每分钟请求数（按IP）
      */
     public static final int EMAIL_CODE_LIMIT_PER_MINUTE = 3;
+    
+    /**
+     * 邮箱验证码限流 - 同一邮箱冷却时间（秒）
+     * 同一邮箱在此时间内只能发送一次验证码
+     */
+    public static final int EMAIL_CODE_COOLDOWN_SECONDS = 60;
+    
+    /**
+     * 邮箱验证码限流 - 同一邮箱每小时最大次数
+     */
+    public static final int EMAIL_CODE_LIMIT_PER_HOUR = 5;
 
     /**
      * 用户发帖限流 - 每分钟发帖数

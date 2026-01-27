@@ -57,9 +57,8 @@ public class PostController {
     @Operation(summary = "记录阅读")
     @SaCheckLogin
     @PostMapping("/{id}/view")
-    public R<Void> recordView(@PathVariable Long id) {
-        postService.recordPostView(id);
-        return R.ok();
+    public R<Boolean> recordView(@PathVariable Long id) {
+        return R.ok(postService.recordPostView(id));
     }
 
     @Operation(summary = "创建帖子")
@@ -85,11 +84,19 @@ public class PostController {
         return R.ok();
     }
 
-    @Operation(summary = "标记已解决")
+    @Operation(summary = "标记已解决（树洞/失物招领等）")
     @SaCheckLogin
     @PutMapping("/{id}/resolve")
     public R<Void> resolve(@PathVariable Long id) {
         postService.markAsResolved(id);
+        return R.ok();
+    }
+
+    @Operation(summary = "标记已售出（市集交易）")
+    @SaCheckLogin
+    @PutMapping("/{id}/sold")
+    public R<Void> sold(@PathVariable Long id) {
+        postService.markAsSold(id);
         return R.ok();
     }
 

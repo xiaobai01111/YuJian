@@ -34,13 +34,15 @@
         <div class="card-body p-6">
           <div class="flex justify-between items-start gap-3">
             <div class="flex items-center gap-2 min-w-0">
-              <h2 class="card-title text-lg font-bold text-base-content mb-2 line-clamp-1">{{ post.title }}</h2>
+            <h2 class="card-title text-lg font-bold text-base-content mb-2 min-w-0">
+              <span class="line-clamp-1 break-words min-w-0">{{ post.title }}</span>
+            </h2>
               <span v-if="post.status === 1" class="badge badge-success badge-sm">已解决</span>
             </div>
             <div class="badge badge-ghost badge-sm" v-if="post.category">{{ post.category }}</div>
           </div>
           
-          <p class="text-base-content/70 text-sm line-clamp-2 mb-4">{{ post.content }}</p>
+          <p class="text-base-content/70 text-sm line-clamp-2 mb-4 break-words">{{ post.content }}</p>
           
           <!-- Image Preview (if any) -->
           <div v-if="post.files && post.files.length > 0" class="flex gap-2 mb-4 overflow-x-auto pb-2">
@@ -74,10 +76,10 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                 {{ post.viewCount || 0 }}
               </span>
-              <span class="flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+              <button class="flex items-center gap-1 transition-colors" :class="post.isLiked ? 'text-pink-500' : ''" @click.stop="toggleLike(post)" :aria-pressed="post.isLiked">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :fill="post.isLiked ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                 {{ post.likeCount || 0 }}
-              </span>
+              </button>
               <span class="flex items-center gap-1">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                 {{ post.commentCount || 0 }}
@@ -104,13 +106,17 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getPostList, likePost, unlikePost, type PostVO, type PostQueryDTO } from '@/api/post'
 import { getBoardLabel, normalizeBoardKey } from '@/utils/boards'
 import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
+import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const dialog = useDialog()
 
 const boardKey = computed(() => normalizeBoardKey(route.name as string))
 const title = computed(() => (boardKey.value ? getBoardLabel(boardKey.value) : '板块'))
@@ -147,6 +153,26 @@ const changePage = (page: number) => {
 
 const goToDetail = (id: number) => {
   router.push(`/posts/${id}`)
+}
+
+const toggleLike = async (post: PostVO) => {
+  if (!userStore.token) {
+    await dialog.alert('请先登录')
+    return
+  }
+  try {
+    if (post.isLiked) {
+      await unlikePost(post.id)
+      post.likeCount = Math.max(0, (post.likeCount || 0) - 1)
+      post.isLiked = false
+    } else {
+      await likePost(post.id)
+      post.likeCount = (post.likeCount || 0) + 1
+      post.isLiked = true
+    }
+  } catch (e) {
+    console.error(e)
+  }
 }
 
 const openPublish = () => {

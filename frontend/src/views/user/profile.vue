@@ -77,20 +77,22 @@
             />
             <div class="flex-1">
               <div class="flex justify-between items-start">
-                <h3 class="card-title text-lg font-bold text-base-content mb-2">{{ post.title }}</h3>
+                <h3 class="card-title text-lg font-bold text-base-content mb-2 min-w-0">
+                  <span class="line-clamp-1 break-words min-w-0">{{ post.title }}</span>
+                </h3>
                 <div class="flex flex-wrap gap-2">
                   <div v-for="board in getPostBoards(post)" :key="board" class="badge badge-ghost badge-sm">
                     {{ getBoardLabel(board) }}
                   </div>
                 </div>
               </div>
-              <p class="text-base-content/70 text-sm line-clamp-2 mb-2">{{ post.content }}</p>
+              <p class="text-base-content/70 text-sm line-clamp-2 mb-2 break-words">{{ post.content }}</p>
 
               <div class="flex items-center justify-between text-xs text-base-content/50 mt-2">
                 <span>{{ formatDate(post.createdAt) }}</span>
                 <div class="flex gap-3">
                   <span>{{ post.viewCount }} 阅读</span>
-                  <span>{{ post.likeCount }} 点赞</span>
+                  <button :class="post.isLiked ? 'text-pink-500' : ''" @click.stop="toggleLike(post)">{{ post.likeCount }} 点赞</button>
                   <span>{{ post.commentCount }} 评论</span>
                 </div>
               </div>
@@ -107,7 +109,7 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getUserDetail, getUserPosts, getMyBookmarks, type UserDetailVO } from '@/api/user'
-import { batchBookmarkPosts, batchReportPosts, type PostVO } from '@/api/post'
+import { batchBookmarkPosts, batchReportPosts, likePost, unlikePost, type PostVO } from '@/api/post'
 import { getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useDialog } from '@/composables/useDialog'
 
@@ -252,6 +254,26 @@ const handleBatchReport = async () => {
   } catch (error) {
     console.error(error)
     await dialog.alert('批量举报失败')
+  }
+}
+
+const toggleLike = async (post: PostVO) => {
+  if (!userStore.token) {
+    await dialog.alert('请先登录')
+    return
+  }
+  try {
+    if (post.isLiked) {
+      await unlikePost(post.id)
+      post.likeCount = Math.max(0, (post.likeCount || 0) - 1)
+      post.isLiked = false
+    } else {
+      await likePost(post.id)
+      post.likeCount = (post.likeCount || 0) + 1
+      post.isLiked = true
+    }
+  } catch (error) {
+    console.error(error)
   }
 }
 

@@ -71,8 +71,11 @@
                 <span v-if="post.status === 1" class="badge badge-success badge-sm">已解决</span>
               </div>
               
+              <!-- Title -->
+              <h3 v-if="post.title" class="font-bold text-slate-800 text-base mb-2 truncate">{{ truncateText(post.title, 20) }}</h3>
+              
               <!-- Content -->
-              <p class="text-slate-700 text-sm leading-relaxed line-clamp-3 mb-3">{{ post.content }}</p>
+              <p class="text-slate-700 text-sm leading-relaxed line-clamp-3 mb-3 break-words">{{ truncateText(post.content, 100) }}</p>
               
               <!-- Images -->
               <div v-if="post.files && post.files.length > 0" class="flex gap-2 mb-3">
@@ -85,12 +88,12 @@
               
               <!-- Stats -->
               <div class="flex items-center gap-5 text-xs text-slate-400">
-                <span class="flex items-center gap-1 hover:text-pink-500 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button class="flex items-center gap-1 hover:text-pink-500 transition-colors" :class="post.isLiked ? 'text-pink-500' : ''" @click.stop="toggleLike(post)" :aria-pressed="post.isLiked">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :fill="post.isLiked ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
                   {{ post.likeCount || 0 }}
-                </span>
+                </button>
                 <span class="flex items-center gap-1 hover:text-blue-500 transition-colors">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -171,15 +174,19 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getPostList, likePost, unlikePost, type PostVO, type PostQueryDTO } from '@/api/post'
 import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
+import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const mounted = ref(false)
 const showPublish = ref(false)
 const showPostDetail = ref(false)
 const selectedPostId = ref<number | null>(null)
+const userStore = useUserStore()
+const dialog = useDialog()
 
 const tabs = [
   { label: '最新', value: 'latest' },
@@ -218,6 +225,26 @@ const openPublish = () => {
   showPublish.value = true
 }
 
+const toggleLike = async (post: PostVO) => {
+  if (!userStore.token) {
+    await dialog.alert('请先登录')
+    return
+  }
+  try {
+    if (post.isLiked) {
+      await unlikePost(post.id)
+      post.likeCount = Math.max(0, (post.likeCount || 0) - 1)
+      post.isLiked = false
+    } else {
+      await likePost(post.id)
+      post.likeCount = (post.likeCount || 0) + 1
+      post.isLiked = true
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 const openPostDetail = (id: number) => {
   selectedPostId.value = id
   showPostDetail.value = true
@@ -235,6 +262,11 @@ const formatDate = (dateStr: string) => {
   if (diff < 604800000) return Math.floor(diff / 86400000) + '天前'
   
   return date.toLocaleDateString()
+}
+
+const truncateText = (text: string | undefined, maxLength: number) => {
+  if (!text) return ''
+  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
 }
 
 onMounted(() => {

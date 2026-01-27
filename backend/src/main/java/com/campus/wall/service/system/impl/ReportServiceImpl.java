@@ -33,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -193,7 +192,7 @@ public class ReportServiceImpl implements ReportService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
         Long operatorId = StpUtil.getLoginIdAsLong();
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, report.getReporterId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权删除该举报");
         }
         if (!Objects.equals(operatorId, report.getReporterId()) && !StringUtils.hasText(reason)) {
@@ -220,7 +219,7 @@ public class ReportServiceImpl implements ReportService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
         Long operatorId = StpUtil.getLoginIdAsLong();
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, report.getReporterId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权恢复该举报");
         }
         if (!Objects.equals(operatorId, report.getReporterId()) && !StringUtils.hasText(reason)) {
@@ -247,7 +246,7 @@ public class ReportServiceImpl implements ReportService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
         Long operatorId = StpUtil.getLoginIdAsLong();
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, report.getReporterId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权删除该举报");
         }
         if (!Objects.equals(operatorId, report.getReporterId()) && !StringUtils.hasText(reason)) {
@@ -382,16 +381,7 @@ public class ReportServiceImpl implements ReportService {
             wrapper.eq(Report::getId, -1L);
             return;
         }
-        List<Long> postIds = postMapper.selectList(
-                new LambdaQueryWrapper<Post>()
-                        .select(Post::getId)
-                        .in(Post::getUserId, allowedUserIds)
-        ).stream().map(Post::getId).collect(Collectors.toList());
-        if (postIds.isEmpty()) {
-            wrapper.eq(Report::getId, -1L);
-            return;
-        }
-        wrapper.in(Report::getPostId, postIds);
+        wrapper.in(Report::getReporterId, allowedUserIds);
     }
 
     private void ensureCanAccessReport(Report report) {
@@ -400,7 +390,7 @@ public class ReportServiceImpl implements ReportService {
         if (post == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, report.getReporterId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权查看该举报");
         }
     }
@@ -419,10 +409,10 @@ public class ReportServiceImpl implements ReportService {
         if (post == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
-        if (!dataScopeService.canAccessUser(handlerId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(handlerId, report.getReporterId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权处理该举报");
         }
-        if (!handlerId.equals(post.getUserId()) && !StringUtils.hasText(remark)) {
+        if (!handlerId.equals(report.getReporterId()) && !StringUtils.hasText(remark)) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "请填写处理说明");
         }
         if (report.getStatus() == STATUS_HANDLED) {

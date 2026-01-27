@@ -51,11 +51,11 @@
         >
           <div class="card-body p-5">
             <div class="flex items-start justify-between gap-3 mb-2">
-              <div class="flex items-center gap-2 min-w-0">
-                <h3 class="font-bold text-slate-800 text-base line-clamp-1">{{ post.title || '校园动态' }}</h3>
-                <span v-if="post.status === 1" class="badge badge-success badge-sm">已解决</span>
+              <div class="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                <h3 class="font-bold text-slate-800 text-base truncate flex-1 min-w-0">{{ truncateText(post.title || '校园动态', 20) }}</h3>
+                <span v-if="post.status === 1" class="badge badge-success badge-sm shrink-0">已解决</span>
               </div>
-              <div class="flex flex-wrap gap-1">
+              <div class="flex flex-wrap gap-1 shrink-0">
                 <span
                   v-for="board in getPostBoards(post)"
                   :key="board"
@@ -65,7 +65,7 @@
                 </span>
               </div>
             </div>
-            <p class="text-slate-600 text-sm line-clamp-2 mb-3">{{ post.content }}</p>
+            <p class="text-slate-600 text-sm line-clamp-2 mb-3 break-all">{{ truncateText(post.content, 100) }}</p>
             <div v-if="post.files && post.files.length > 0" class="flex gap-2 mb-3 overflow-x-auto pb-1">
               <img
                 v-for="file in post.files.slice(0, 3)"
@@ -96,12 +96,12 @@
                   </svg>
                   {{ post.viewCount || 0 }}
                 </span>
-                <span class="flex items-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button class="flex items-center gap-1 transition-colors" :class="post.isLiked ? 'text-pink-500' : ''" @click.stop="toggleLike(post)" :aria-pressed="post.isLiked">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :fill="post.isLiked ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
                   {{ post.likeCount || 0 }}
-                </span>
+                </button>
                 <span class="flex items-center gap-1">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -227,11 +227,13 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, h } from 'vue'
 import { getPublicNotices, type NoticeVO } from '@/api/system'
-import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getPostList, likePost, unlikePost, type PostVO, type PostQueryDTO } from '@/api/post'
 import { getBoardLabel, normalizeBoardKeys } from '@/utils/boards'
 import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
+import { useUserStore } from '@/stores/user'
+import { useDialog } from '@/composables/useDialog'
 
 const mounted = ref(false)
 const notices = ref<NoticeVO[]>([])
@@ -244,6 +246,8 @@ const loadingPosts = ref(false)
 const showPublish = ref(false)
 const showPostDetail = ref(false)
 const selectedPostId = ref<number | null>(null)
+const userStore = useUserStore()
+const dialog = useDialog()
 
 const postQuery = reactive<PostQueryDTO>({
   page: 1,
@@ -289,6 +293,26 @@ const openPostDetail = (id: number) => {
   showPostDetail.value = true
 }
 
+const toggleLike = async (post: PostVO) => {
+  if (!userStore.token) {
+    await dialog.alert('请先登录')
+    return
+  }
+  try {
+    if (post.isLiked) {
+      await unlikePost(post.id)
+      post.likeCount = Math.max(0, (post.likeCount || 0) - 1)
+      post.isLiked = false
+    } else {
+      await likePost(post.id)
+      post.likeCount = (post.likeCount || 0) + 1
+      post.isLiked = true
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 const getPostBoards = (post: PostVO) => {
   const raw = post.boards && post.boards.length > 0 ? post.boards : post.board ? [post.board] : []
   return normalizeBoardKeys(raw)
@@ -304,6 +328,11 @@ const formatDateTime = (dateStr?: string) => {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+const truncateText = (text: string | undefined, maxLength: number) => {
+  if (!text) return ''
+  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
 }
 
 const openNoticeDetail = (notice: NoticeVO) => {

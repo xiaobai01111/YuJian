@@ -146,19 +146,19 @@
 
     <!-- Publish Modal -->
     <PostPublishModal v-model="showPublish" :use-console-api="true" @success="handlePublishSuccess" />
+    <PostDetailModal v-model="showPostDetail" :postId="selectedPostId" @updated="loadPosts" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { getConsolePostList, resolveConsolePost, deleteConsolePost, type PostVO } from '@/api/post'
 import { BOARD_OPTIONS, getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
+import PostDetailModal from '@/components/post/PostDetailModal.vue'
 import { useDialog } from '@/composables/useDialog'
 
-const router = useRouter()
 const userStore = useUserStore()
 const dialog = useDialog()
 
@@ -168,6 +168,8 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const showPublish = ref(false)
+const showPostDetail = ref(false)
+const selectedPostId = ref<number | null>(null)
 
 const filters = reactive({
   board: '',
@@ -226,7 +228,8 @@ const formatDateTime = (value?: string) => {
 }
 
 const goToDetail = (id: number) => {
-  router.push(`/posts/${id}`)
+  selectedPostId.value = id
+  showPostDetail.value = true
 }
 
 const goToPublish = () => {

@@ -902,6 +902,39 @@ export function deleteAuthRule(id: number) {
     return request.delete(`/api/v1/system/auth-rules/${id}`)
 }
 
+// --- Verification (身份审核) ---
+export interface VerificationVO {
+    id: number
+    userId: number
+    username?: string
+    nickname?: string
+    imageUrl?: string
+    status: number
+    rejectReason?: string
+    reviewerId?: number
+    reviewerName?: string
+    createdAt?: string
+    reviewedAt?: string
+}
+
+export function getVerificationList(params: { status?: number; page?: number; size?: number }) {
+    return request.get<PageResult<VerificationVO>>('/api/v1/console/verifications', { params })
+}
+
+export function getVerificationDetail(id: number) {
+    return request.get<VerificationVO>(`/api/v1/console/verifications/${id}`)
+}
+
+export interface VerificationHandleDTO {
+    status: number
+    rejectReason?: string
+    studentId?: string
+}
+
+export function handleVerification(id: number, data: VerificationHandleDTO) {
+    return request.put(`/api/v1/console/verifications/${id}`, data)
+}
+
 // --- Statistics (统计) ---
 export interface DashboardStats {
     totalUsers: number
@@ -1001,4 +1034,49 @@ export interface LoginLogTrendItem {
 
 export function getLoginLogTrend() {
     return request.get<LoginLogTrendItem[]>('/api/v1/console/statistics/login-log-trend')
+}
+
+// --- Email Config (邮箱配置) ---
+export function getEmailDomains() {
+    return request.get<string[]>('/api/v1/console/config/email-domains')
+}
+
+export function updateEmailDomains(domains: string[]) {
+    return request.put('/api/v1/console/config/email-domains', domains)
+}
+
+export interface SmtpConfig {
+    host: string
+    port: number
+    username: string
+    password: string
+    fromName: string
+    ssl: boolean
+}
+
+export function getSmtpConfig() {
+    return request.get<SmtpConfig>('/api/v1/console/config/smtp')
+}
+
+export function updateSmtpConfig(config: SmtpConfig) {
+    return request.put('/api/v1/console/config/smtp', config)
+}
+
+export function sendTestSmtpEmail(email: string) {
+    return request.post('/api/v1/console/config/smtp/test', { email })
+}
+
+export interface EmailTemplate {
+    subject: string
+    body: string
+}
+
+export type EmailTemplates = Record<string, EmailTemplate>
+
+export function getEmailTemplates() {
+    return request.get<EmailTemplates>('/api/v1/console/config/email-templates')
+}
+
+export function updateEmailTemplates(templates: EmailTemplates) {
+    return request.put('/api/v1/console/config/email-templates', templates)
 }

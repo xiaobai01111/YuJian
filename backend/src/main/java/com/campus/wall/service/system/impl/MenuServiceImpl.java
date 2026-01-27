@@ -98,15 +98,19 @@ public class MenuServiceImpl implements MenuService {
                     if (!children.isEmpty()) {
                         router.setChildren(children);
                     }
-                    
+                    if (menu.getType() != null && menu.getType() == 0 && children.isEmpty()) {
+                        return null;
+                    }
                     return router;
                 })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
     @Override
     public Long createMenu(MenuVO menuVO) {
         Objects.requireNonNull(menuVO, "菜单信息不能为空");
+        validateMenuPath(menuVO);
         SysMenu menu = new SysMenu();
         BeanUtils.copyProperties(menuVO, menu);
         sysMenuMapper.insert(menu);
@@ -116,6 +120,7 @@ public class MenuServiceImpl implements MenuService {
     @Override
     public void updateMenu(Long menuId, MenuVO menuVO) {
         Objects.requireNonNull(menuVO, "菜单信息不能为空");
+        validateMenuPath(menuVO);
         SysMenu menu = sysMenuMapper.selectById(menuId);
         if (menu == null) {
             throw new RuntimeException("菜单不存在");
@@ -123,6 +128,37 @@ public class MenuServiceImpl implements MenuService {
         BeanUtils.copyProperties(menuVO, menu);
         menu.setId(menuId);
         sysMenuMapper.updateById(menu);
+    }
+    
+    /**
+     * P2-3: 校验菜单路径
+     * - 控制台菜单(顶级菜单)路径必须以/console开头
+     * - 子菜单路径不能以/开头（应为相对路径）
+     */
+    private void validateMenuPath(MenuVO menuVO) {
+        String path = menuVO.getPath();
+        if (path == null || path.isBlank()) {
+            return; // 按钮类型菜单可能没有path
+        }
+        
+        Long parentId = menuVO.getParentId();
+        
+        // 顶级菜单（parentId为0或null）必须以/console开头
+        if (parentId == null || parentId == 0L) {
+            if (!path.startsWith("/console")) {
+                throw new RuntimeException("控制台顶级菜单路径必须以 /console 开头，当前路径: " + path);
+            }
+        } else {
+            // 子菜单不能以/开头（避免被挂到根级别）
+            if (path.startsWith("/")) {
+                throw new RuntimeException("子菜单路径不能以 / 开头，请使用相对路径，当前路径: " + path);
+            }
+        }
+        
+        // 路径长度限制
+        if (path.length() > 200) {
+            throw new RuntimeException("菜单路径过长（最大200字符）");
+        }
     }
 
     @Override

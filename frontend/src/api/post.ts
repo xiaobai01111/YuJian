@@ -73,7 +73,7 @@ export function getPostDetail(id: number) {
 }
 
 export function recordPostView(id: number) {
-    return request.post(`/api/v1/posts/${id}/view`)
+    return request.post<boolean>(`/api/v1/posts/${id}/view`)
 }
 
 export function createPost(data: PostCreateDTO) {
@@ -120,12 +120,54 @@ export function resolvePost(id: number) {
     return request.put(`/api/v1/posts/${id}/resolve`)
 }
 
+export function soldPost(id: number) {
+    return request.put(`/api/v1/posts/${id}/sold`)
+}
+
 export function deleteConsolePost(id: number, reason?: string) {
     return request.delete(`/api/v1/console/posts/${id}`, { params: reason ? { reason } : {} })
 }
 
 export function resolveConsolePost(id: number, reason?: string) {
     return request.put(`/api/v1/console/posts/${id}/resolve`, null, { params: reason ? { reason } : {} })
+}
+
+export function soldConsolePost(id: number, reason?: string) {
+    return request.put(`/api/v1/console/posts/${id}/sold`, null, { params: reason ? { reason } : {} })
+}
+
+// 帖子状态常量
+export const POST_STATUS = {
+    NORMAL: 0,
+    RESOLVED: 1,
+    DELETED: 2,
+    PENDING_AUDIT: 3,
+    ARCHIVED: 4,
+    SOLD: 5
+} as const
+
+// 获取状态显示文本
+export function getStatusLabel(status: number): string {
+    switch (status) {
+        case POST_STATUS.RESOLVED: return '已解决'
+        case POST_STATUS.SOLD: return '已售出'
+        case POST_STATUS.DELETED: return '已删除'
+        case POST_STATUS.PENDING_AUDIT: return '待审核'
+        case POST_STATUS.ARCHIVED: return '已下架'
+        default: return ''
+    }
+}
+
+// 获取状态样式类
+export function getStatusClass(status: number): string {
+    switch (status) {
+        case POST_STATUS.RESOLVED: return 'badge-success'
+        case POST_STATUS.SOLD: return 'badge-warning'
+        case POST_STATUS.DELETED: return 'badge-error'
+        case POST_STATUS.PENDING_AUDIT: return 'badge-info'
+        case POST_STATUS.ARCHIVED: return 'badge-neutral'
+        default: return ''
+    }
 }
 
 export function searchPosts(params: { keyword: string; board?: string; page?: number; size?: number }) {

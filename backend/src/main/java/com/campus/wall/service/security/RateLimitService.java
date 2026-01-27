@@ -20,6 +20,10 @@ public class RateLimitService {
     private final StringRedisTemplate redisTemplate;
 
     public void checkRateLimit(String key, int limit, int windowSeconds, ResultCode code) {
+        checkRateLimit(key, limit, windowSeconds, code, null);
+    }
+    
+    public void checkRateLimit(String key, int limit, int windowSeconds, ResultCode code, String customMessage) {
         if (key == null || key.isBlank()) {
             return;
         }
@@ -29,6 +33,9 @@ public class RateLimitService {
                 redisTemplate.expire(key, Duration.ofSeconds(windowSeconds));
             }
             if (count != null && count > limit) {
+                if (customMessage != null && !customMessage.isBlank()) {
+                    throw new BusinessException(code, customMessage);
+                }
                 throw new BusinessException(code);
             }
         } catch (BusinessException e) {

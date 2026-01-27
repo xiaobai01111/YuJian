@@ -55,6 +55,13 @@ public class AuthController {
         return R.ok();
     }
 
+    @Operation(summary = "发送注册邮箱验证码")
+    @PostMapping("/register-email-code")
+    public R<Void> sendRegisterEmailCode(@RequestBody @Valid RegisterEmailCodeDTO dto) {
+        authService.sendRegisterEmailCode(dto.getEmail());
+        return R.ok();
+    }
+
     @Operation(summary = "发送EDU邮箱验证码")
     @PostMapping("/verify-email")
     @SaCheckLogin

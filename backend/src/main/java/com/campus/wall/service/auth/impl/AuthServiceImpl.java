@@ -26,6 +26,7 @@ import com.campus.wall.service.auth.AuthService;
 import com.campus.wall.service.security.RateLimitService;
 import com.campus.wall.service.system.AuthRuleService;
 import com.campus.wall.service.system.LoginLogService;
+import com.campus.wall.service.system.SysConfigService;
 import com.campus.wall.vo.auth.LoginVO;
 import com.campus.wall.vo.auth.UserInfoVO;
 import com.campus.wall.util.IpUtil;
@@ -35,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -55,9 +57,11 @@ public class AuthServiceImpl implements AuthService {
     private final AuthRuleService authRuleService;
     private final LoginLogService loginLogService;
     private final RateLimitService rateLimitService;
+    private final SysConfigService sysConfigService;
     private final HttpServletRequest request;
 
     private static final String EMAIL_CODE_PREFIX = "campus:verify:email:";
+    private static final String REGISTER_EMAIL_CODE_PREFIX = "campus:register:email:";
     private static final long EMAIL_CODE_TTL = 5 * 60; // 5分钟
 
     @Override
@@ -81,6 +85,35 @@ public class AuthServiceImpl implements AuthService {
         );
         if (count > 0) {
             throw new BusinessException("用户名已存在");
+        }
+
+        // 邮箱白名单校验
+        validateEmailDomain(dto.getEmail());
+
+        // 检查邮箱是否存在
+        Long emailCount = userMapper.selectCount(
+            new LambdaQueryWrapper<User>()
+                .eq(User::getEmail, dto.getEmail())
+                .or()
+                .eq(User::getEduEmail, dto.getEmail())
+        );
+        if (emailCount > 0) {
+            throw new BusinessException("邮箱已被使用");
+        }
+
+        if (sysConfigService.isEmailVerificationEnabled()) {
+            if (dto.getEmailCode() == null || dto.getEmailCode().isBlank()) {
+                throw new BusinessException("请填写邮箱验证码");
+            }
+            String emailKey = REGISTER_EMAIL_CODE_PREFIX + dto.getEmail().toLowerCase();
+            String cachedCode = redisTemplate.opsForValue().get(emailKey);
+            if (cachedCode == null) {
+                throw new BusinessException("验证码已过期，请重新获取");
+            }
+            if (!cachedCode.equals(dto.getEmailCode())) {
+                throw new BusinessException("验证码错误");
+            }
+            redisTemplate.delete(emailKey);
         }
 
         // 创建用户
@@ -229,11 +262,76 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public void sendRegisterEmailCode(String email) {
+        if (!sysConfigService.isEmailVerificationEnabled()) {
+            throw new BusinessException("邮箱验证未开启");
+        }
+        validateEmailDomain(email);
+
+        Long emailCount = userMapper.selectCount(
+            new LambdaQueryWrapper<User>()
+                .eq(User::getEmail, email)
+                .or()
+                .eq(User::getEduEmail, email)
+        );
+        if (emailCount > 0) {
+            throw new BusinessException("邮箱已被使用");
+        }
+
+        String clientIp = resolveClientIp();
+        String emailLower = email.toLowerCase();
+        
+        // 1. IP维度限流（每分钟3次）
+        rateLimitService.checkRateLimit(
+            "rate:register-email:ip:" + clientIp,
+            RateLimitConstants.EMAIL_CODE_LIMIT_PER_MINUTE,
+            RateLimitConstants.WINDOW_SECONDS,
+            ResultCode.TOO_MANY_REQUESTS
+        );
+        
+        // 2. 邮箱维度冷却检查（同一邮箱60秒内只能发一次）
+        String cooldownKey = "rate:register-email:cooldown:" + emailLower;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+            throw new BusinessException(ResultCode.TOO_MANY_REQUESTS, "请稍后再试，同一邮箱" + RateLimitConstants.EMAIL_CODE_COOLDOWN_SECONDS + "秒内只能发送一次验证码");
+        }
+        
+        // 3. 邮箱维度限流（每小时5次）
+        rateLimitService.checkRateLimit(
+            "rate:register-email:email:" + emailLower,
+            RateLimitConstants.EMAIL_CODE_LIMIT_PER_HOUR,
+            3600, // 1小时
+            ResultCode.TOO_MANY_REQUESTS,
+            "该邮箱验证码发送次数过多，请1小时后再试"
+        );
+        
+        // 设置邮箱冷却标记
+        redisTemplate.opsForValue().set(
+            cooldownKey,
+            "1",
+            RateLimitConstants.EMAIL_CODE_COOLDOWN_SECONDS,
+            java.util.concurrent.TimeUnit.SECONDS
+        );
+
+        String code = RandomUtil.randomNumbers(6);
+        String key = REGISTER_EMAIL_CODE_PREFIX + emailLower;
+        redisTemplate.opsForValue().set(
+            key,
+            code,
+            EMAIL_CODE_TTL,
+            java.util.concurrent.TimeUnit.SECONDS
+        );
+
+        Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("code", code);
+        variables.put("expireMinutes", String.valueOf(EMAIL_CODE_TTL / 60));
+        variables.put("email", email);
+        sysConfigService.sendEmailWithTemplate(email, "verification", variables);
+    }
+
+    @Override
     public void sendEmailCode(String eduEmail) {
         // 验证EDU邮箱格式
-        if (!eduEmail.endsWith(".edu.cn")) {
-            throw new BusinessException("请使用EDU邮箱");
-        }
+        validateEmailDomain(eduEmail);
 
         Long userId = StpUtil.getLoginIdAsLong();
         rateLimitService.checkRateLimit(
@@ -252,7 +350,11 @@ public class AuthServiceImpl implements AuthService {
             EMAIL_CODE_TTL, java.util.concurrent.TimeUnit.SECONDS);
 
         // 实际发送邮件
-        // emailService.sendVerificationCode(eduEmail, code);
+        Map<String, String> variables = new java.util.HashMap<>();
+        variables.put("code", code);
+        variables.put("expireMinutes", String.valueOf(EMAIL_CODE_TTL / 60));
+        variables.put("email", eduEmail);
+        sysConfigService.sendEmailWithTemplate(eduEmail, "verification", variables);
         
         // 仅在开发环境下打印验证码
         if ("dev".equals(activeProfile)) {
@@ -295,6 +397,23 @@ public class AuthServiceImpl implements AuthService {
 
         // 删除验证码
         redisTemplate.delete(key);
+    }
+
+    private void validateEmailDomain(String email) {
+        if (email == null || email.isBlank()) {
+            throw new BusinessException("邮箱不能为空");
+        }
+        List<String> allowedDomains = sysConfigService.getEmailAllowedDomains();
+        String emailLower = email.toLowerCase();
+        boolean isValidDomain = allowedDomains.stream()
+            .filter(domain -> domain != null && !domain.isBlank())
+            .anyMatch(domain -> {
+                String normalized = domain.trim().toLowerCase();
+                return emailLower.endsWith("@" + normalized) || emailLower.endsWith("." + normalized);
+            });
+        if (!isValidDomain) {
+            throw new BusinessException("请使用允许的邮箱域名（支持的域名：" + String.join(", ", allowedDomains) + "）");
+        }
     }
 
     private void recordLoginLog(Long userId, String username, Integer status, String msg) {
@@ -382,6 +501,13 @@ public class AuthServiceImpl implements AuthService {
         verification.setImageUrl(dto.getImageUrl());
         verification.setStatus(0); // 待审核
         verificationMapper.insert(verification);
+
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            user.setVerifyStatus(1); // 审核中
+            user.setVerifyMethod("MANUAL");
+            userMapper.updateById(user);
+        }
 
         return verification.getId();
     }

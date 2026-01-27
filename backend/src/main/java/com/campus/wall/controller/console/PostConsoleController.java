@@ -65,4 +65,12 @@ public class PostConsoleController {
         postService.markAsResolvedByAdmin(id, reason);
         return R.ok();
     }
+
+    @Operation(summary = "控制台标记已售出")
+    @PutMapping("/{id}/sold")
+    public R<Void> sold(@PathVariable Long id,
+                        @RequestParam(value = "reason", required = false) String reason) {
+        postService.markAsSoldByAdmin(id, reason);
+        return R.ok();
+    }
 }

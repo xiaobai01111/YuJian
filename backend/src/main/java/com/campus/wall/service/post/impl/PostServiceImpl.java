@@ -36,6 +36,7 @@ import com.campus.wall.service.system.OperLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -69,11 +70,18 @@ public class PostServiceImpl implements PostService {
     private final RateLimitService rateLimitService;
     private final DataScopeService dataScopeService;
     private final OperLogService operLogService;
+    private final StringRedisTemplate redisTemplate;
 
-    // 帖子状态：0正常 1已解决 2已删除
+    // 帖子状态：0正常 1已解决 2已删除 3待审核 4已下架 5已售出
     private static final int STATUS_NORMAL = 0;
     private static final int STATUS_RESOLVED = 1;
     private static final int STATUS_DELETED = 2;
+    private static final int STATUS_PENDING_AUDIT = 3;
+    private static final int STATUS_ARCHIVED = 4;
+    private static final int STATUS_SOLD = 5;
+    // 前端可见的状态列表
+    private static final List<Integer> VISIBLE_STATUSES = List.of(STATUS_NORMAL, STATUS_RESOLVED, STATUS_SOLD);
+    private static final String VIEW_KEY_PREFIX = "post:view:";
 
     // 板块常量
     private static final String BOARD_TREE_HOLE = BoardUtil.BOARD_TREE_HOLE;
@@ -389,12 +397,19 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
-    public void recordPostView(Long postId) {
+    public boolean recordPostView(Long postId) {
         Post post = getPostOrThrow(postId);
         if (post.getStatus() == STATUS_DELETED) {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
-        postMapper.incrementViewCount(postId);
+        Long userId = StpUtil.getLoginIdAsLong();
+        String key = VIEW_KEY_PREFIX + postId;
+        Long added = redisTemplate.opsForSet().add(key, String.valueOf(userId));
+        if (added != null && added > 0) {
+            postMapper.incrementViewCount(postId);
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -432,13 +447,14 @@ public class PostServiceImpl implements PostService {
         return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
     }
 
-    private LambdaQueryWrapper<Post> buildWrapper(PostQueryDTO query, boolean defaultNormalStatus) {
+    private LambdaQueryWrapper<Post> buildWrapper(PostQueryDTO query, boolean defaultVisibleStatus) {
         LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
 
         if (query.getStatus() != null) {
             wrapper.eq(Post::getStatus, query.getStatus());
-        } else if (defaultNormalStatus) {
-            wrapper.eq(Post::getStatus, STATUS_NORMAL);
+        } else if (defaultVisibleStatus) {
+            // 前端默认显示所有可见状态的帖子（正常、已解决、已售出）
+            wrapper.in(Post::getStatus, VISIBLE_STATUSES);
         }
 
         String normalizedBoard = BoardUtil.normalizeBoardKey(query.getBoard());
@@ -719,6 +735,42 @@ public class PostServiceImpl implements PostService {
         post.setStatus(STATUS_RESOLVED);
         postMapper.updateById(post);
         log.info("控制台标记帖子 {} 为已解决", postId);
+    }
+
+    @Override
+    @Transactional
+    public void markAsSold(Long postId) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        Post post = getPostOrThrow(postId);
+
+        // 权限校验：仅作者可标记
+        if (!post.getUserId().equals(userId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作此帖子");
+        }
+
+        // 验证帖子是否属于市集板块
+        List<String> boards = loadBoardsMap(List.of(postId)).get(postId);
+        if (boards == null || !boards.contains(BOARD_MARKET)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "只有市集帖子可以标记为已售出");
+        }
+
+        post.setStatus(STATUS_SOLD);
+        postMapper.updateById(post);
+
+        log.info("用户 {} 标记帖子 {} 为已售出", userId, postId);
+    }
+
+    @Override
+    @Transactional
+    public void markAsSoldByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "sold");
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法标记");
+        }
+        post.setStatus(STATUS_SOLD);
+        postMapper.updateById(post);
+        log.info("控制台标记帖子 {} 为已售出", postId);
     }
 
     @Override

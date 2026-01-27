@@ -101,6 +101,21 @@ CREATE TABLE sys_role_menus (
 
 COMMENT ON TABLE sys_role_menus IS '角色-菜单关联表';
 
+CREATE TABLE sys_config (
+    id BIGSERIAL PRIMARY KEY,
+    config_key VARCHAR(100) NOT NULL UNIQUE,
+    config_value TEXT,
+    config_type VARCHAR(50) DEFAULT 'string',
+    remark VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE sys_config IS '系统配置表';
+COMMENT ON COLUMN sys_config.config_key IS '配置键';
+COMMENT ON COLUMN sys_config.config_value IS '配置值';
+COMMENT ON COLUMN sys_config.config_type IS '配置类型：string, json, number, boolean';
+
 CREATE TABLE sys_role_depts (
     role_id BIGINT NOT NULL REFERENCES sys_roles(id) ON DELETE CASCADE,
     dept_id BIGINT NOT NULL REFERENCES sys_depts(id) ON DELETE CASCADE,

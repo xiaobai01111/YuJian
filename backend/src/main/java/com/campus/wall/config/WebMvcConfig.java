@@ -1,6 +1,5 @@
 package com.campus.wall.config;
 
-import com.campus.wall.config.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;

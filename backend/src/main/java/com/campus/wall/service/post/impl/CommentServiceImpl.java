@@ -169,7 +169,7 @@ public class CommentServiceImpl implements CommentService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
         Long operatorId = StpUtil.getLoginIdAsLong();
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, comment.getUserId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
         }
         if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
@@ -214,7 +214,7 @@ public class CommentServiceImpl implements CommentService {
             if (post == null) {
                 throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
             }
-            if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+            if (!dataScopeService.canAccessUser(operatorId, comment.getUserId())) {
                 throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
             }
             if (comment.getStatus() != null && comment.getStatus() == STATUS_DELETED) {
@@ -246,7 +246,7 @@ public class CommentServiceImpl implements CommentService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
         Long operatorId = StpUtil.getLoginIdAsLong();
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, comment.getUserId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
         }
         if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
@@ -303,7 +303,9 @@ public class CommentServiceImpl implements CommentService {
                 commentPage,
                 new LambdaQueryWrapper<Comment>()
                         .eq(Comment::getPostId, postId)
-                        .isNull(Comment::getParentId)
+                        .and(wrapper -> wrapper.isNull(Comment::getParentId)
+                                .or()
+                                .eq(Comment::getParentId, 0L))
                         .eq(Comment::getStatus, STATUS_NORMAL)
                         .orderByAsc(Comment::getCreatedAt)
         );
@@ -411,7 +413,7 @@ public class CommentServiceImpl implements CommentService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
         Long operatorId = StpUtil.getLoginIdAsLong();
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, comment.getUserId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
         }
         if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
@@ -439,7 +441,7 @@ public class CommentServiceImpl implements CommentService {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
         }
         Long operatorId = StpUtil.getLoginIdAsLong();
-        if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
+        if (!dataScopeService.canAccessUser(operatorId, comment.getUserId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该评论");
         }
         if (!Objects.equals(operatorId, comment.getUserId()) && !StringUtils.hasText(reason)) {
@@ -461,27 +463,18 @@ public class CommentServiceImpl implements CommentService {
             wrapper.eq(Comment::getId, -1L);
             return;
         }
-        List<Long> postIds = postMapper.selectList(
-                new LambdaQueryWrapper<Post>()
-                        .select(Post::getId)
-                        .in(Post::getUserId, allowedUserIds)
-        ).stream().map(Post::getId).collect(Collectors.toList());
-        if (postIds.isEmpty()) {
-            wrapper.eq(Comment::getId, -1L);
-            return;
-        }
-        wrapper.in(Comment::getPostId, postIds);
+        wrapper.in(Comment::getUserId, allowedUserIds);
     }
 
     private List<CommentVO> buildCommentTree(List<Comment> comments, Post post, boolean isAnonymousPost, Map<Long, User> userMap) {
         // 分离一级评论和子评论
         Map<Long, List<Comment>> childrenMap = comments.stream()
-                .filter(c -> c.getParentId() != null)
+                .filter(c -> c.getParentId() != null && c.getParentId() != 0L)
                 .collect(Collectors.groupingBy(Comment::getParentId));
 
         List<CommentVO> rootComments = new ArrayList<>();
         for (Comment comment : comments) {
-            if (comment.getParentId() == null) {
+            if (comment.getParentId() == null || comment.getParentId() == 0L) {
                 CommentVO vo = toCommentVO(comment, post, isAnonymousPost, userMap);
                 vo.setChildren(buildChildren(comment.getId(), childrenMap, post, isAnonymousPost, userMap));
                 rootComments.add(vo);

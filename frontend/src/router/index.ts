@@ -147,10 +147,13 @@ const router = createRouter({
         },
         {
             path: '/console',
+            name: 'Console',
             component: () => import('@/views/console/layout/ConsoleLayout.vue'),
             redirect: '/console/dashboard',
             meta: { layout: 'div' },
             children: [
+                // 动态路由将通过 router.addRoute 添加
+                // 基础路由保留，确保刷新时不会404
                 {
                     path: 'dashboard',
                     name: 'ConsoleDashboard',
@@ -158,148 +161,10 @@ const router = createRouter({
                     meta: { title: '仪表盘', icon: 'dashboard' }
                 },
                 {
-                    path: 'user',
-                    name: 'UserManagement',
-                    component: () => import('@/views/console/user/index.vue'),
-                    meta: { title: '用户管理', icon: 'user' }
-                },
-                {
-                    path: 'role',
-                    name: 'RoleManagement',
-                    component: () => import('@/views/console/role/index.vue'),
-                    meta: { title: '角色管理', icon: 'role' }
-                },
-                {
-                    path: 'dept',
-                    name: 'DeptManagement',
-                    component: () => import('@/views/console/dept/index.vue'),
-                    meta: { title: '部门管理', icon: 'tree' }
-                },
-                {
-                    path: 'auth-rule',
-                    name: 'AuthRuleManagement',
-                    component: () => import('@/views/console/auth-rule/index.vue'),
-                    meta: { title: '认证规则', icon: 'id-card' }
-                },
-                {
-                    path: 'sensitive-word',
-                    name: 'SensitiveWordManagement',
-                    component: () => import('@/views/console/sensitive-word/index.vue'),
-                    meta: { title: '敏感词管理', icon: 'warning' }
-                },
-                {
-                    path: 'login-log',
-                    name: 'LoginLog',
-                    component: () => import('@/views/console/login-log/index.vue'),
-                    meta: { title: '登录日志', icon: 'logininfor' }
-                },
-                {
-                    path: 'oper-log',
-                    name: 'OperLog',
-                    component: () => import('@/views/console/oper-log/index.vue'),
-                    meta: { title: '操作日志', icon: 'form' }
-                },
-                {
-                    path: 'notice',
-                    name: 'NoticeManagement',
-                    component: () => import('@/views/console/notice/index.vue'),
-                    meta: { title: '公告管理', icon: 'bell' }
-                },
-                {
-                    path: 'post',
-                    name: 'PostManagement',
-                    component: () => import('@/views/console/post/index.vue'),
-                    meta: { title: '帖子管理', icon: 'post' }
-                },
-                {
-                    path: 'comment',
-                    name: 'CommentManagement',
-                    component: () => import('@/views/console/comment/index.vue'),
-                    meta: { title: '评论管理', icon: 'message' }
-                },
-                {
-                    path: 'report',
-                    name: 'ReportManagement',
-                    component: () => import('@/views/console/report/index.vue'),
-                    meta: { title: '举报管理', icon: 'warning' }
-                },
-                {
-                    path: 'recycle/post',
-                    name: 'RecyclePost',
-                    component: () => import('@/views/console/recycle/post.vue'),
-                    meta: { title: '帖子回收站', icon: 'recycle' }
-                },
-                {
-                    path: 'recycle/comment',
-                    name: 'RecycleComment',
-                    component: () => import('@/views/console/recycle/comment.vue'),
-                    meta: { title: '评论回收站', icon: 'recycle' }
-                },
-                {
-                    path: 'recycle/report',
-                    name: 'RecycleReport',
-                    component: () => import('@/views/console/recycle/report.vue'),
-                    meta: { title: '举报回收站', icon: 'recycle' }
-                },
-                {
-                    path: 'announcement',
-                    name: 'AnnouncementManagement',
-                    component: () => import('@/views/console/notice/index.vue'),
-                    meta: { title: '公告管理', icon: 'bell' }
-                },
-                {
-                    path: 'dashboard/notice',
-                    name: 'DashboardNoticeManagement',
-                    component: () => import('@/views/console/notice/index.vue'),
-                    meta: { title: '公告管理', icon: 'bell' }
-                },
-                {
                     path: 'profile',
                     name: 'ConsoleProfile',
                     component: () => import('@/views/console/profile/index.vue'),
                     meta: { title: '个人中心', icon: 'user' }
-                },
-                {
-                    path: 'monitor/online',
-                    name: 'MonitorOnline',
-                    component: () => import('@/views/console/monitor/online/index.vue'),
-                    meta: { title: '在线用户', icon: 'users' }
-                },
-                {
-                    path: 'monitor/server',
-                    name: 'MonitorServer',
-                    component: () => import('@/views/console/monitor/server/index.vue'),
-                    meta: { title: '服务监控', icon: 'server' }
-                },
-                {
-                    path: 'monitor/redis',
-                    name: 'MonitorRedis',
-                    component: () => import('@/views/console/monitor/redis/index.vue'),
-                    meta: { title: 'Redis监控', icon: 'redis' }
-                },
-                {
-                    path: 'monitor/blocklist',
-                    name: 'MonitorBlocklist',
-                    component: () => import('@/views/console/monitor/blocklist/index.vue'),
-                    meta: { title: '阻止名单', icon: 'block' }
-                },
-                {
-                    path: 'tool/file',
-                    name: 'ToolFile',
-                    component: () => import('@/views/console/tool/file/index.vue'),
-                    meta: { title: '文件管理', icon: 'file' }
-                },
-                {
-                    path: 'tool/gallery',
-                    name: 'ToolGallery',
-                    component: () => import('@/views/console/tool/gallery/index.vue'),
-                    meta: { title: '图库管理', icon: 'image' }
-                },
-                {
-                    path: 'campus/hero',
-                    name: 'CampusHeroManagement',
-                    component: () => import('@/views/console/campus/hero/index.vue'),
-                    meta: { title: 'Hero管理', icon: 'image' }
                 }
             ]
         },
@@ -342,13 +207,12 @@ router.beforeEach(async (to, _from, next) => {
     const isWhitelisted = whiteList.includes(to.path) || to.path.startsWith('/notices/')
 
     if (userStore.token) {
-         // Check if permissions are loaded (simple check for now)
-         if (permissionStore.permissions.length === 0) {
-            // Try to fetch permissions
-            // In a real app we'd also fetch user info here
+         // 动态路由未加载时，获取权限并注册路由
+         if (!permissionStore.dynamicRoutesAdded) {
             await permissionStore.fetchPermissions()
-            await permissionStore.generateRoutes()
-            next()
+            await permissionStore.generateRoutes(router)
+            // 重新导航以确保动态路由生效
+            next({ ...to, replace: true })
          } else {
              next()
          }

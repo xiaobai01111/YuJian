@@ -12,7 +12,8 @@ public enum PostStatus {
     RESOLVED(1, "已解决"),
     DELETED(2, "已删除"),
     PENDING_AUDIT(3, "待审核"),
-    ARCHIVED(4, "已下架");
+    ARCHIVED(4, "已下架"),
+    SOLD(5, "已售出");
 
     private final int code;
     private final String name;
@@ -31,7 +32,10 @@ public enum PostStatus {
         return null;
     }
 
+    /**
+     * 是否在前端列表中可见（只有删除、待审核、下架不可见）
+     */
     public boolean isVisible() {
-        return this == NORMAL || this == RESOLVED;
+        return this == NORMAL || this == RESOLVED || this == SOLD;
     }
 }

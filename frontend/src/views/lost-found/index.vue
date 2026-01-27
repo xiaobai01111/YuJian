@@ -88,16 +88,16 @@
                   <span class="badge" :class="postType === 'lost' ? 'badge-error' : 'badge-success'">
                     {{ postType === 'lost' ? '寻物' : '招领' }}
                   </span>
-                  <span v-if="post.status === 1" class="badge badge-success badge-sm">已找到</span>
+                  <span v-if="post.status === POST_STATUS.RESOLVED" class="badge badge-success badge-sm">已找到</span>
                 </div>
                 <span class="text-xs text-slate-400">{{ formatDate(post.createdAt) }}</span>
               </div>
               
               <!-- Title -->
-              <h3 class="font-bold text-slate-800 mb-2 line-clamp-1">{{ post.title || '物品信息' }}</h3>
+              <h3 class="font-bold text-slate-800 mb-2 truncate">{{ truncateText(post.title || '物品信息', 20) }}</h3>
               
               <!-- Content -->
-              <p class="text-slate-600 text-sm line-clamp-2 mb-3">{{ post.content }}</p>
+              <p class="text-slate-600 text-sm line-clamp-2 mb-3 break-words">{{ truncateText(post.content, 100) }}</p>
               
               <!-- Info -->
               <div class="flex flex-wrap gap-3 text-xs text-slate-500">
@@ -192,7 +192,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
-import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getPostList, POST_STATUS, type PostVO, type PostQueryDTO } from '@/api/post'
 import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
@@ -254,6 +254,11 @@ const formatDate = (dateStr: string) => {
   if (diff < 604800000) return Math.floor(diff / 86400000) + '天前'
   
   return date.toLocaleDateString()
+}
+
+const truncateText = (text: string | undefined, maxLength: number) => {
+  if (!text) return ''
+  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
 }
 
 watch(postType, () => {

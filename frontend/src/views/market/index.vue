@@ -65,15 +65,15 @@
           </div>
           <!-- Status Badge -->
           <div class="absolute top-2 left-2">
-            <span class="badge badge-sm" :class="post.status === 1 ? 'badge-error' : 'badge-success'">
-              {{ post.status === 1 ? '已售' : '在售' }}
+            <span class="badge badge-sm" :class="post.status === POST_STATUS.SOLD ? 'badge-error' : 'badge-success'">
+              {{ post.status === POST_STATUS.SOLD ? '已售出' : '在售' }}
             </span>
           </div>
         </figure>
         
         <div class="card-body p-3">
           <!-- Title -->
-          <h3 class="font-medium text-slate-800 text-sm line-clamp-2 leading-snug">{{ post.title || post.content }}</h3>
+          <h3 class="font-medium text-slate-800 text-sm line-clamp-2 leading-snug break-words">{{ truncateText(post.title || post.content, 30) }}</h3>
           
           <!-- Price -->
           <div class="flex items-baseline gap-1 mt-1">
@@ -161,7 +161,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getPostList, type PostVO, type PostQueryDTO } from '@/api/post'
+import { getPostList, POST_STATUS, type PostVO, type PostQueryDTO } from '@/api/post'
 import { resolveFileUrl } from '@/utils/file'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
 import PostDetailModal from '@/components/post/PostDetailModal.vue'
@@ -213,6 +213,11 @@ const openPublish = () => {
 const openPostDetail = (id: number) => {
   selectedPostId.value = id
   showPostDetail.value = true
+}
+
+const truncateText = (text: string | undefined, maxLength: number) => {
+  if (!text) return ''
+  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
 }
 
 onMounted(() => {

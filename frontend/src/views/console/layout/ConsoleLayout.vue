@@ -34,6 +34,9 @@
         </div>
       </div>
       
+      <!-- Tab Bar -->
+      <TabBar />
+      
       <!-- Page Content -->
       <main class="flex-1 p-6 flex flex-col overflow-hidden min-h-0">
         <router-view v-slot="{ Component }">
@@ -56,6 +59,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
 import ConsoleSidebar from './ConsoleSidebar.vue'
+import TabBar from './TabBar.vue'
 import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
 
 const route = useRoute()

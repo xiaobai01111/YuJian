@@ -36,6 +36,11 @@ public interface AuthService {
     void updatePassword(com.campus.wall.dto.auth.UpdatePasswordDTO dto);
 
     /**
+     * 发送注册邮箱验证码
+     */
+    void sendRegisterEmailCode(String email);
+
+    /**
      * 发送EDU邮箱验证码
      */
     void sendEmailCode(String eduEmail);

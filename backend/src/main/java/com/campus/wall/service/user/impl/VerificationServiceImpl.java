@@ -12,12 +12,14 @@ import com.campus.wall.entity.user.IdentityVerification;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.service.file.FileAccessService;
 import com.campus.wall.service.system.AuthRuleService;
 import com.campus.wall.service.user.VerificationService;
 import com.campus.wall.vo.user.VerificationVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +32,7 @@ public class VerificationServiceImpl implements VerificationService {
     private final IdentityVerificationMapper verificationMapper;
     private final UserMapper userMapper;
     private final AuthRuleService authRuleService;
+    private final FileAccessService fileAccessService;
 
     @Override
     public PageResult<VerificationVO> queryVerifications(Integer status, int page, int size) {
@@ -83,6 +86,12 @@ public class VerificationServiceImpl implements VerificationService {
                 throw new BusinessException("拒绝时必须填写原因");
             }
             verification.setRejectReason(dto.getRejectReason());
+            User user = userMapper.selectById(verification.getUserId());
+            if (user != null) {
+                user.setVerifyStatus(0);
+                user.setVerifyMethod(null);
+                userMapper.updateById(user);
+            }
         } else if (dto.getStatus() == 1) {
             // 通过 - 更新用户验证状态
             User user = userMapper.selectById(verification.getUserId());
@@ -120,7 +129,14 @@ public class VerificationServiceImpl implements VerificationService {
         VerificationVO vo = new VerificationVO();
         vo.setId(verification.getId());
         vo.setUserId(verification.getUserId());
-        vo.setImageUrl(verification.getImageUrl());
+        String imageUrl = verification.getImageUrl();
+        if (StringUtils.hasText(imageUrl) && imageUrl.chars().allMatch(Character::isDigit)) {
+            try {
+                imageUrl = fileAccessService.buildSignedPreviewUrl(Long.valueOf(imageUrl));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        vo.setImageUrl(imageUrl);
         vo.setStatus(verification.getStatus());
         vo.setRejectReason(verification.getRejectReason());
         vo.setReviewerId(verification.getReviewerId());
