@@ -84,4 +84,25 @@ public class AuthController {
     public R<Long> submitIdCard(@RequestBody @Valid SubmitIdCardDTO dto) {
         return R.ok(authService.submitIdCard(dto));
     }
+
+    @Operation(summary = "提交学号认证")
+    @PostMapping("/submit-student-id")
+    @SaCheckLogin
+    public R<Long> submitStudentId(@RequestBody @Valid SubmitStudentIdDTO dto) {
+        return R.ok(authService.submitStudentId(dto));
+    }
+
+    @Operation(summary = "取消认证申请")
+    @PostMapping("/verification/cancel")
+    @SaCheckLogin
+    public R<Void> cancelVerification() {
+        authService.cancelVerification();
+        return R.ok();
+    }
+
+    @Operation(summary = "获取管理员联系方式")
+    @GetMapping("/admin-contact")
+    public R<com.campus.wall.vo.auth.AdminContactVO> getAdminContact() {
+        return R.ok(authService.getAdminContact());
+    }
 }

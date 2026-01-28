@@ -172,6 +172,12 @@ const router = createRouter({
             path: '/feed',
             name: 'Feed',
             component: () => import('@/views/home/index.vue')
+        },
+        {
+            path: '/console/no-permission',
+            name: 'ConsoleNoPermission',
+            component: () => import('@/views/console/no-permission/index.vue'),
+            meta: { layout: 'div' }
         }
     ]
 })
@@ -214,6 +220,31 @@ router.beforeEach(async (to, _from, next) => {
             // 重新导航以确保动态路由生效
             next({ ...to, replace: true })
          } else {
+             // 检查后台权限
+             if (to.path.startsWith('/console') && to.path !== '/console/no-permission') {
+                 // 检查用户是否有任何后台菜单权限
+                 const hasConsoleAccess = permissionStore.routes.length > 0
+                 if (!hasConsoleAccess) {
+                     next('/console/no-permission')
+                     return
+                 }
+                 // 检查具体路由权限（排除基础路由 dashboard 和 profile）
+                 const basePaths = ['/console/dashboard', '/console/profile', '/console']
+                 if (!basePaths.includes(to.path)) {
+                     const hasRouteAccess = permissionStore.routes.some(r => {
+                         if (r.path === to.path) return true
+                         if (r.children) {
+                             return r.children.some(c => c.path === to.path || `/console/${c.path}` === to.path)
+                         }
+                         return false
+                     })
+                     if (!hasRouteAccess) {
+                         // 路由不在用户权限范围内，重定向到仪表盘
+                         next('/console/dashboard')
+                         return
+                     }
+                 }
+             }
              next()
          }
     } else {

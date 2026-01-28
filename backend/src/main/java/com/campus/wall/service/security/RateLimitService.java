@@ -18,6 +18,7 @@ import java.time.Duration;
 public class RateLimitService {
 
     private final StringRedisTemplate redisTemplate;
+    private final com.campus.wall.config.SecurityProperties securityProperties;
 
     public void checkRateLimit(String key, int limit, int windowSeconds, ResultCode code) {
         checkRateLimit(key, limit, windowSeconds, code, null);
@@ -42,6 +43,9 @@ public class RateLimitService {
             throw e;
         } catch (Exception e) {
             log.warn("Rate limit check failed for key {}: {}", key, e.getMessage());
+            if (securityProperties.isRateLimitFailClosed()) {
+                throw new BusinessException(code);
+            }
         }
     }
 }

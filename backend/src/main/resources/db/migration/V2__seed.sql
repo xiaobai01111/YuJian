@@ -9,7 +9,7 @@ SELECT setval('sys_depts_id_seq', (SELECT MAX(id) FROM sys_depts));
 -- 2) 角色
 INSERT INTO sys_roles (id, role_name, role_key, status, sort_order, remark)
 VALUES
-    (1, '系统管理员', 'admin', 0, 1, '系统角色'),
+    (1, '系统管理员', 'console', 0, 1, '系统角色'),
     (2, '版主', 'moderator', 0, 2, '内容管理权限'),
     (3, '普通用户', 'user', 0, 3, '基础用户权限');
 
@@ -203,6 +203,7 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/auth/login', 'POST', 'public', 'auth.login', TRUE),
     ('/api/v1/auth/register', 'POST', 'public', 'auth.register', TRUE),
     ('/api/v1/auth/register-email-code', 'POST', 'public', 'auth.register.email.code', TRUE),
+    ('/api/v1/auth/admin-contact', 'GET', 'public', 'auth.admin.contact', TRUE),
     ('/api/v1/setup/status', 'GET', 'public', 'setup.status', TRUE),
     ('/api/v1/setup/init', 'POST', 'public', 'setup.init', TRUE),
     ('/api/v1/notices/public/**', 'GET', 'public', 'notice.public', TRUE),
@@ -222,6 +223,8 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/auth/verify-email', 'POST', 'login', 'auth.verify.email', TRUE),
     ('/api/v1/auth/confirm-email', 'POST', 'login', 'auth.confirm.email', TRUE),
     ('/api/v1/auth/submit-id-card', 'POST', 'login', 'auth.submit.idcard', TRUE),
+    ('/api/v1/auth/submit-student-id', 'POST', 'login', 'auth.submit.student.id', TRUE),
+    ('/api/v1/auth/verification/cancel', 'POST', 'login', 'auth.verify.cancel', TRUE),
     ('/api/v1/users/*', 'GET', 'login', 'user.detail', TRUE),
     ('/api/v1/users/bookmarks', 'GET', 'login', 'user.bookmarks', TRUE),
     ('/api/v1/users/credit', 'GET', 'login', 'user.credit', TRUE),
@@ -264,6 +267,15 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
 
 -- System / Console (permission-bound)
 INSERT INTO sys_api_permissions (url, http_method, permission, description, status) VALUES
+    ('/api/v1/console/config/email-domains', 'GET', 'system:config:list', 'console.config.email.domains.list', TRUE),
+    ('/api/v1/console/config/email-domains', 'PUT', 'system:config:edit', 'console.config.email.domains.update', TRUE),
+    ('/api/v1/console/config/smtp', 'GET', 'system:config:list', 'console.config.smtp.get', TRUE),
+    ('/api/v1/console/config/smtp', 'PUT', 'system:config:edit', 'console.config.smtp.update', TRUE),
+    ('/api/v1/console/config/smtp/test', 'POST', 'system:config:edit', 'console.config.smtp.test', TRUE),
+    ('/api/v1/console/config/email-templates', 'GET', 'system:config:list', 'console.config.email.templates.get', TRUE),
+    ('/api/v1/console/config/email-templates', 'PUT', 'system:config:edit', 'console.config.email.templates.update', TRUE),
+    ('/api/v1/console/config/student-ids', 'GET', 'system:config:list', 'console.config.student.ids.get', TRUE),
+    ('/api/v1/console/config/student-ids', 'PUT', 'system:config:edit', 'console.config.student.ids.update', TRUE),
     ('/api/v1/console/users', 'GET', 'system:user:list', 'console.users.list', TRUE),
     ('/api/v1/console/users/*', 'GET', 'system:user:list', 'console.users.detail', TRUE),
     ('/api/v1/console/users', 'POST', 'system:user:add', 'console.users.add', TRUE),

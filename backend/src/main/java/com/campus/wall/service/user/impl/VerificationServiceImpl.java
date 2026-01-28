@@ -96,7 +96,14 @@ public class VerificationServiceImpl implements VerificationService {
             // 通过 - 更新用户验证状态
             User user = userMapper.selectById(verification.getUserId());
             user.setVerifyStatus(2); // 已验证
-            user.setVerifyMethod("MANUAL");
+            String verifyMethod = dto.getVerifyMethod();
+            if (!StringUtils.hasText(verifyMethod)) {
+                verifyMethod = StringUtils.hasText(verification.getVerifyMethod())
+                    ? verification.getVerifyMethod()
+                    : "MANUAL";
+            }
+            user.setVerifyMethod(verifyMethod);
+            verification.setVerifyMethod(verifyMethod);
 
             // 如果提供了学号
             if (dto.getStudentId() != null && !dto.getStudentId().isEmpty()) {
@@ -114,12 +121,14 @@ public class VerificationServiceImpl implements VerificationService {
 
                 user.setStudentId(dto.getStudentId());
                 user.setStudentIdHash(studentIdHash);
+                verification.setStudentId(dto.getStudentId());
+                verification.setStudentIdHash(studentIdHash);
             }
 
             userMapper.updateById(user);
 
             // 认证通过后应用规则
-            authRuleService.applyRules(user, "VERIFY", "MANUAL");
+            authRuleService.applyRules(user, "VERIFY", verifyMethod);
         }
 
         verificationMapper.updateById(verification);
@@ -137,6 +146,8 @@ public class VerificationServiceImpl implements VerificationService {
             }
         }
         vo.setImageUrl(imageUrl);
+        vo.setVerifyMethod(verification.getVerifyMethod());
+        vo.setStudentId(verification.getStudentId());
         vo.setStatus(verification.getStatus());
         vo.setRejectReason(verification.getRejectReason());
         vo.setReviewerId(verification.getReviewerId());

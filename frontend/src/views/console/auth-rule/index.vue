@@ -20,14 +20,14 @@
         <div class="card-body p-4">
           <div class="flex flex-wrap gap-4 items-center">
             <div class="form-control">
-              <select v-model="filterTrigger" class="select select-bordered select-sm w-32" @change="loadRules">
+              <select v-model="filterTrigger" class="select select-bordered select-sm w-32" @change="loadRules({ reset: true })">
                 <option :value="''">全部触发</option>
                 <option value="REGISTER">注册</option>
                 <option value="VERIFY">认证通过</option>
               </select>
             </div>
             <div class="form-control">
-              <select v-model="filterMethod" class="select select-bordered select-sm w-40" @change="loadRules">
+              <select v-model="filterMethod" class="select select-bordered select-sm w-40" @change="loadRules({ reset: true })">
                 <option :value="''">全部方式</option>
                 <option value="EDU_EMAIL">EDU邮箱</option>
                 <option value="MANUAL">人工审核</option>
@@ -37,13 +37,13 @@
               </select>
             </div>
             <div class="form-control">
-              <select v-model="filterEnabled" class="select select-bordered select-sm w-32" @change="loadRules">
+              <select v-model="filterEnabled" class="select select-bordered select-sm w-32" @change="loadRules({ reset: true })">
                 <option :value="''">全部状态</option>
                 <option :value="true">启用</option>
                 <option :value="false">停用</option>
               </select>
             </div>
-            <button class="btn btn-sm btn-ghost" @click="loadRules">
+            <button class="btn btn-sm btn-ghost" @click="loadRules({ reset: true })">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -56,7 +56,7 @@
       <!-- Table -->
       <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
         <div class="card-body p-0 flex flex-col min-h-0">
-          <div class="flex-1 overflow-auto">
+          <div ref="scrollContainer" class="flex-1 overflow-auto">
             <div class="overflow-x-auto">
               <table class="table">
               <thead>
@@ -115,14 +115,11 @@
             </div>
           </div>
 
-          <!-- Pagination -->
-          <div class="flex items-center justify-between p-4 border-t border-base-200">
-            <div class="text-sm text-slate-500">共 {{ total }} 条记录</div>
-            <div class="join">
-              <button class="join-item btn btn-sm" :disabled="currentPage <= 1" @click="changePage(currentPage - 1)">«</button>
-              <button class="join-item btn btn-sm">第 {{ currentPage }} 页</button>
-              <button class="join-item btn btn-sm" :disabled="currentPage * pageSize >= total" @click="changePage(currentPage + 1)">»</button>
-            </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
+          <div class="flex items-center justify-between p-4 border-t border-base-200 text-sm text-slate-500">
+            <div>已加载 {{ rules.length }} / {{ total || '-' }} 条</div>
+            <div v-if="loadingMore">正在加载更多...</div>
+            <div v-else-if="!hasMore && rules.length > 0">没有更多了</div>
           </div>
         </div>
       </div>
@@ -151,6 +148,7 @@
               <select v-model="form.verifyMethod" class="select select-bordered" :disabled="form.triggerType === 'REGISTER'">
                 <option value="">不限</option>
                 <option value="EDU_EMAIL">EDU邮箱</option>
+                <option value="ID_CARD">学生证</option>
                 <option value="MANUAL">人工审核</option>
                 <option value="SSO">SSO</option>
                 <option value="ID_LIST">白名单</option>
@@ -165,13 +163,47 @@
               <select v-model="form.matchType" class="select select-bordered">
                 <option value="ANY">任意</option>
                 <option value="EMAIL_DOMAIN">邮箱域名</option>
-                <option value="STUDENT_ID_PREFIX">学号前缀</option>
+                <option value="STUDENT_ID_RANGE">学号范围</option>
+                <option value="STUDENT_ID_DICT">学号白名单</option>
               </select>
             </div>
             <div class="form-control">
               <label class="label"><span class="label-text font-medium">匹配值</span></label>
-              <input v-model="form.matchValue" type="text" class="input input-bordered" :disabled="form.matchType === 'ANY'"
-                placeholder="多个用英文逗号分隔" />
+              <input
+                v-if="form.matchType === 'ANY'"
+                v-model="form.matchValue"
+                type="text"
+                class="input input-bordered"
+                disabled
+                placeholder="任意匹配"
+              />
+              <div v-else-if="form.matchType === 'EMAIL_DOMAIN'" class="border border-base-200 rounded-lg p-3 max-h-40 overflow-auto">
+                <div class="text-xs text-slate-500 mb-2">选择域名（不选表示使用全部白名单）</div>
+                <label v-for="domain in emailDomains" :key="domain" class="flex items-center gap-2 py-1">
+                  <input type="checkbox" class="checkbox checkbox-sm" :value="domain" v-model="selectedDomains" />
+                  <span>{{ domain }}</span>
+                </label>
+                <div v-if="emailDomains.length === 0" class="text-xs text-slate-400">暂无域名白名单</div>
+              </div>
+              <div v-else-if="form.matchType === 'STUDENT_ID_RANGE'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input v-model="studentRangeStart" type="text" class="input input-bordered" placeholder="起始学号" />
+                <input v-model="studentRangeEnd" type="text" class="input input-bordered" placeholder="结束学号" />
+              </div>
+              <div v-else-if="form.matchType === 'STUDENT_ID_DICT'" class="border border-base-200 rounded-lg p-3 max-h-40 overflow-auto">
+                <div class="text-xs text-slate-500 mb-2">选择学号（不选表示使用全部白名单）</div>
+                <label v-for="studentId in studentIdWhitelist" :key="studentId" class="flex items-center gap-2 py-1">
+                  <input type="checkbox" class="checkbox checkbox-sm" :value="studentId" v-model="selectedStudentIds" />
+                  <span>{{ studentId }}</span>
+                </label>
+                <div v-if="studentIdWhitelist.length === 0" class="text-xs text-slate-400">暂无学号白名单</div>
+              </div>
+              <input
+                v-else
+                v-model="form.matchValue"
+                type="text"
+                class="input input-bordered"
+                placeholder="多个用英文逗号分隔"
+              />
             </div>
           </div>
 
@@ -245,7 +277,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 import {
@@ -254,6 +286,8 @@ import {
   updateAuthRule,
   deleteAuthRule,
   getRoleList,
+  getEmailDomains,
+  getStudentIdWhitelist,
   type AuthRuleVO,
   type AuthRuleDTO,
   type RoleVO
@@ -268,16 +302,27 @@ const canDelete = computed(() => userStore.hasPermission('system:auth-rule:delet
 
 const rules = ref<AuthRuleVO[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const saving = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const filterTrigger = ref<string>('')
 const filterMethod = ref<string>('')
 const filterEnabled = ref<any>('')
 
 const roleOptions = ref<RoleVO[]>([])
+const emailDomains = ref<string[]>([])
+const studentIdWhitelist = ref<string[]>([])
+const selectedDomains = ref<string[]>([])
+const selectedStudentIds = ref<string[]>([])
+const studentRangeStart = ref('')
+const studentRangeEnd = ref('')
 
 const formModal = ref<HTMLDialogElement | null>(null)
 const deleteModal = ref<HTMLDialogElement | null>(null)
@@ -307,12 +352,25 @@ const selectedRoleId = computed<number | null>({
 })
 
 onMounted(() => {
-  loadRules()
+  loadRules({ reset: true })
   loadOptions()
+  nextTick(() => setupObserver())
 })
 
-const loadRules = async () => {
-  loading.value = true
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const loadRules = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    rules.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res: any = await queryAuthRules({
       page: currentPage.value,
@@ -322,15 +380,47 @@ const loadRules = async () => {
       enabled: filterEnabled.value === '' ? undefined : filterEnabled.value
     })
     const data = res?.data || res
-    rules.value = data.records || []
+    const records = data.records || []
     total.value = data.total || 0
+    rules.value = append ? [...rules.value, ...records] : records
+    if (total.value) {
+      hasMore.value = rules.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (e: any) {
     console.error(e)
-    rules.value = []
-    total.value = 0
+    if (!append) {
+      rules.value = []
+      total.value = 0
+    }
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
+}
+
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await loadRules({ append: true })
 }
 
 const loadOptions = async () => {
@@ -338,6 +428,18 @@ const loadOptions = async () => {
     const roles: any = await getRoleList()
     roleOptions.value = roles || []
   } catch {}
+  try {
+    const domains: any = await getEmailDomains()
+    emailDomains.value = Array.isArray(domains) ? domains : []
+  } catch {
+    emailDomains.value = []
+  }
+  try {
+    const ids: any = await getStudentIdWhitelist()
+    studentIdWhitelist.value = Array.isArray(ids) ? ids : []
+  } catch {
+    studentIdWhitelist.value = []
+  }
 }
 
 const openCreateModal = () => {
@@ -352,6 +454,10 @@ const openCreateModal = () => {
   form.roleIds = []
   form.priority = 100
   form.remark = ''
+  selectedDomains.value = []
+  selectedStudentIds.value = []
+  studentRangeStart.value = ''
+  studentRangeEnd.value = ''
   formModal.value?.showModal()
 }
 
@@ -367,6 +473,20 @@ const openEditModal = (rule: AuthRuleVO) => {
   form.roleIds = rule.roleIds && rule.roleIds.length > 0 ? [rule.roleIds[0]] : []
   form.priority = rule.priority ?? 100
   form.remark = rule.remark || ''
+  selectedDomains.value = rule.matchType === 'EMAIL_DOMAIN' && rule.matchValue
+    ? rule.matchValue.split(',').map(item => item.trim()).filter(item => item)
+    : []
+  selectedStudentIds.value = rule.matchType === 'STUDENT_ID_DICT' && rule.matchValue
+    ? rule.matchValue.split(',').map(item => item.trim()).filter(item => item)
+    : []
+  if (rule.matchType === 'STUDENT_ID_RANGE' && rule.matchValue) {
+    const [start, end] = rule.matchValue.split(',').map(item => item.trim())
+    studentRangeStart.value = start || ''
+    studentRangeEnd.value = end || ''
+  } else {
+    studentRangeStart.value = ''
+    studentRangeEnd.value = ''
+  }
   formModal.value?.showModal()
 }
 
@@ -381,13 +501,28 @@ const handleSave = async () => {
   }
   saving.value = true
   try {
+    const matchValue = (() => {
+      if (form.matchType === 'EMAIL_DOMAIN') {
+        return selectedDomains.value.length > 0 ? selectedDomains.value.join(',') : undefined
+      }
+      if (form.matchType === 'STUDENT_ID_DICT') {
+        return selectedStudentIds.value.length > 0 ? selectedStudentIds.value.join(',') : undefined
+      }
+      if (form.matchType === 'STUDENT_ID_RANGE') {
+        const start = studentRangeStart.value.trim()
+        const end = studentRangeEnd.value.trim()
+        if (!start || !end) return undefined
+        return `${start},${end}`
+      }
+      return form.matchType === 'ANY' ? undefined : form.matchValue?.trim() || undefined
+    })()
     const payload: AuthRuleDTO = {
       name: form.name.trim(),
       enabled: !!form.enabled,
       triggerType: form.triggerType,
       verifyMethod: form.triggerType === 'REGISTER' ? undefined : form.verifyMethod || undefined,
       matchType: form.matchType,
-      matchValue: form.matchType === 'ANY' ? undefined : form.matchValue?.trim() || undefined,
+      matchValue,
       roleIds: form.roleIds && form.roleIds.length > 0 ? form.roleIds : [],
       priority: form.priority ?? 100,
       remark: form.remark?.trim() || undefined
@@ -398,7 +533,7 @@ const handleSave = async () => {
       await createAuthRule(payload)
     }
     formModal.value?.close()
-    await loadRules()
+    await loadRules({ reset: true })
   } catch (e: any) {
     await dialog.alert(e.message || e.response?.data?.message || '保存失败')
   } finally {
@@ -422,7 +557,7 @@ const confirmDelete = async () => {
   try {
     await deleteAuthRule(deleteTarget.value.id)
     closeDelete()
-    await loadRules()
+    await loadRules({ reset: true })
   } catch (e: any) {
     await dialog.alert(e.message || e.response?.data?.message || '删除失败')
   } finally {
@@ -430,10 +565,6 @@ const confirmDelete = async () => {
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadRules()
-}
 
 const triggerText = (val?: string) => {
   if (val === 'REGISTER') return '注册'
@@ -444,6 +575,7 @@ const triggerText = (val?: string) => {
 const methodText = (val?: string) => {
   if (!val) return '不限'
   if (val === 'EDU_EMAIL') return 'EDU邮箱'
+  if (val === 'ID_CARD') return '学生证'
   if (val === 'MANUAL') return '人工'
   if (val === 'SSO') return 'SSO'
   if (val === 'ID_LIST') return '白名单'
@@ -453,9 +585,9 @@ const methodText = (val?: string) => {
 
 const matchText = (type?: string, value?: string) => {
   if (!type || type === 'ANY') return '任意'
-  if (!value) return type
-  if (type === 'EMAIL_DOMAIN') return `域名: ${value}`
-  if (type === 'STUDENT_ID_PREFIX') return `学号前缀: ${value}`
-  return `${type}: ${value}`
+  if (type === 'EMAIL_DOMAIN') return value ? `域名: ${value}` : '域名白名单'
+  if (type === 'STUDENT_ID_RANGE') return value ? `学号范围: ${value}` : '学号范围'
+  if (type === 'STUDENT_ID_DICT') return value ? `学号白名单: ${value}` : '学号白名单'
+  return value ? `${type}: ${value}` : type
 }
 </script>

@@ -67,7 +67,7 @@ export interface RegisterDTO {
     password: string
     confirmPassword: string
     nickname?: string
-    email?: string
+    email: string
     emailCode?: string
 }
 
@@ -119,6 +119,7 @@ export interface UserProfileVO {
     sex?: number
     verifyStatus?: number
     verifyMethod?: string
+    verifyRejectReason?: string
     creditScore?: number
     status?: number
     roleIds?: number[]
@@ -162,4 +163,25 @@ export interface SubmitIdCardDTO {
 
 export const submitIdCard = (data: SubmitIdCardDTO) => {
     return api.post('/api/v1/auth/submit-id-card', data)
+}
+
+export interface SubmitStudentIdDTO {
+    studentId: string
+}
+
+export const submitStudentId = (data: SubmitStudentIdDTO) => {
+    return api.post('/api/v1/auth/submit-student-id', data)
+}
+
+export const cancelVerification = () => {
+    return api.post('/api/v1/auth/verification/cancel')
+}
+
+export interface AdminContactVO {
+    email?: string
+    phone?: string
+}
+
+export const getAdminContact = () => {
+    return api.get<AdminContactVO>('/api/v1/auth/admin-contact')
 }

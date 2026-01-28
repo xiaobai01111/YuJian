@@ -9,6 +9,10 @@ public interface SysConfigService {
     List<String> getEmailAllowedDomains();
     
     void updateEmailAllowedDomains(List<String> domains);
+
+    List<String> getStudentIdWhitelist();
+
+    void updateStudentIdWhitelist(List<String> studentIds);
     
     boolean isEmailVerificationEnabled();
     

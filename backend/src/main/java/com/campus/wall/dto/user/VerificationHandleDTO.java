@@ -17,4 +17,7 @@ public class VerificationHandleDTO {
 
     @Schema(description = "学号（通过时可填写）")
     private String studentId;
+
+    @Schema(description = "认证方式（通过时可指定）")
+    private String verifyMethod;
 }

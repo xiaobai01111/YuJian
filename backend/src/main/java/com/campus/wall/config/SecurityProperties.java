@@ -36,6 +36,13 @@ public class SecurityProperties {
     private String apiBootstrapMode = "login";
 
     /**
+     * 加密密钥（SMTP密码等敏感信息加密用）
+     * 支持：环境变量 CAMPUS_CRYPTO_KEY 或 配置文件 app.security.crypto-key
+     * 生产环境必须配置，开发环境可使用默认值
+     */
+    private String cryptoKey = "${CAMPUS_CRYPTO_KEY:}";
+    
+    /**
      * 启动时检查关键密钥
      */
     private boolean failFastSecrets = true;
@@ -44,6 +51,11 @@ public class SecurityProperties {
      * 启动时检查权限规则
      */
     private boolean failFastPermissions = true;
+
+    /**
+     * 限流组件异常时是否拒绝请求（fail-closed）
+     */
+    private boolean rateLimitFailClosed = false;
 
     /**
      * 用户权限缓存过期时间（秒）
@@ -58,5 +70,7 @@ public class SecurityProperties {
     @PostConstruct
     public void init() {
         SecurityUtil.setSuperAdminRoleKey(superAdminRoleKey);
+        // 注入加密密钥到 CryptoUtils
+        com.campus.wall.util.CryptoUtils.setInjectedKey(cryptoKey);
     }
 }

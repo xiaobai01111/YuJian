@@ -617,7 +617,7 @@ const submitForm = async () => {
     refreshRoles()
   } catch (error: any) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '保存失败')
+    await dialog.alert(error?.message || error?.response?.data?.message || '保存失败')
   } finally {
     submitting.value = false
   }

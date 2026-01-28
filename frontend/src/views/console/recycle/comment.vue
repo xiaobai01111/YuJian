@@ -7,7 +7,7 @@
           <p class="text-gray-500 mt-1">查看已删除评论并执行恢复或彻底删除</p>
         </div>
         <div class="flex items-center gap-2">
-          <button class="btn btn-ghost btn-sm" @click="loadComments">刷新</button>
+          <button class="btn btn-ghost btn-sm" @click="loadComments({ reset: true })">刷新</button>
         </div>
       </div>
 
@@ -20,7 +20,7 @@
                 type="text"
                 placeholder="帖子ID"
                 class="input input-bordered input-sm w-32"
-                @keyup.enter="loadComments"
+                @keyup.enter="loadComments({ reset: true })"
               />
             </div>
             <div class="form-control">
@@ -29,17 +29,17 @@
                 type="text"
                 placeholder="搜索内容..."
                 class="input input-bordered input-sm w-52"
-                @keyup.enter="loadComments"
+                @keyup.enter="loadComments({ reset: true })"
               />
             </div>
-            <button class="btn btn-sm btn-ghost" @click="loadComments">搜索</button>
+            <button class="btn btn-sm btn-ghost" @click="loadComments({ reset: true })">搜索</button>
           </div>
         </div>
       </div>
 
       <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
         <div class="card-body p-0 flex flex-col min-h-0">
-          <div class="flex-1 overflow-auto">
+          <div ref="scrollContainer" class="flex-1 overflow-auto">
             <div class="overflow-x-auto">
               <table class="table">
                 <thead>
@@ -88,30 +88,21 @@
               </table>
             </div>
           </div>
-
-          <div v-if="total > pageSize" class="flex justify-center p-4 border-t">
-            <div class="join">
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage === 1"
-                @click="changePage(currentPage - 1)"
-              >«</button>
-              <button class="join-item btn btn-sm">第 {{ currentPage }} / {{ totalPages }} 页</button>
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage >= totalPages"
-                @click="changePage(currentPage + 1)"
-              >»</button>
-            </div>
-          </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
+      </div>
+
+      <div class="flex items-center justify-between text-sm text-base-content/60">
+        <div>已加载 {{ comments.length }} / {{ total || '-' }} 条</div>
+        <div v-if="loadingMore">正在加载更多...</div>
+        <div v-else-if="!hasMore && comments.length > 0">没有更多了</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
 import { getRecycleComments, purgeRecycleComment, restoreRecycleComment, type CommentConsoleVO } from '@/api/recycle'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
@@ -121,9 +112,14 @@ const dialog = useDialog()
 
 const comments = ref<CommentConsoleVO[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const filters = reactive({
   postId: '',
@@ -132,10 +128,15 @@ const filters = reactive({
 
 const canRestore = computed(() => userStore.hasPermission('content:recycle:comment:restore'))
 const canPurge = computed(() => userStore.hasPermission('content:recycle:comment:purge'))
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
-
-const loadComments = async () => {
-  loading.value = true
+const loadComments = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    comments.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res: any = await getRecycleComments({
       page: currentPage.value,
@@ -143,18 +144,43 @@ const loadComments = async () => {
       postId: filters.postId.trim() ? Number(filters.postId) : undefined,
       keyword: filters.keyword.trim() || undefined
     })
-    comments.value = res.records || []
+    const records = res.records || []
     total.value = res.total || 0
+    comments.value = append ? [...comments.value, ...records] : records
+    if (total.value) {
+      hasMore.value = comments.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (error) {
     console.error('Failed to load recycle comments', error)
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadComments()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await loadComments({ append: true })
 }
 
 const formatDateTime = (value?: string) => {
@@ -181,7 +207,7 @@ const handleRestore = async (comment: CommentConsoleVO) => {
   if (reason === null) return
   try {
     await restoreRecycleComment(comment.id, reason || undefined)
-    await loadComments()
+    await loadComments({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '恢复失败')
   }
@@ -193,13 +219,19 @@ const handlePurge = async (comment: CommentConsoleVO) => {
   if (reason === null) return
   try {
     await purgeRecycleComment(comment.id, reason || undefined)
-    await loadComments()
+    await loadComments({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '删除失败')
   }
 }
 
 onMounted(() => {
-  loadComments()
+  loadComments({ reset: true })
+  nextTick(() => setupObserver())
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
 })
 </script>

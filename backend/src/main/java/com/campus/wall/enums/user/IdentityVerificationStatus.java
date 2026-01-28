@@ -10,7 +10,8 @@ public enum IdentityVerificationStatus {
 
     PENDING(0, "待审核"),
     APPROVED(1, "通过"),
-    REJECTED(2, "拒绝");
+    REJECTED(2, "拒绝"),
+    CANCELLED(3, "已取消");
 
     private final int code;
     private final String name;

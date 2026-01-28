@@ -191,12 +191,35 @@
                 </button>
               </div>
             </div>
+
+            <!-- Student ID Verification -->
+            <div class="collapse collapse-arrow bg-base-200 mt-3">
+              <input type="radio" name="verify-accordion" v-model="verifyMethod" value="student_id" />
+              <div class="collapse-title text-md font-medium">
+                🎓 学号认证
+              </div>
+              <div class="collapse-content">
+                <p class="text-sm text-slate-500 mb-4">输入学号进行认证，一个学号仅允许绑定一个用户。</p>
+                <div class="form-control">
+                  <label class="label"><span class="label-text">学号</span></label>
+                  <input v-model="studentIdInput" type="text" class="input input-bordered" placeholder="请输入学号" />
+                </div>
+                <button class="btn btn-primary btn-sm mt-3" @click="submitStudentIdVerify" :disabled="verifying || !studentIdInput">
+                  <span v-if="verifying" class="loading loading-spinner loading-sm"></span>
+                  提交审核
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Already Verified -->
           <div v-else-if="userInfo?.verifyStatus === 1" class="mt-6 text-center">
             <div class="text-5xl mb-4">⏳</div>
             <p class="text-slate-600">您的认证申请正在审核中，请耐心等待。</p>
+            <button class="btn btn-outline btn-sm mt-4" @click="cancelVerifyRequest" :disabled="cancelingVerify">
+              <span v-if="cancelingVerify" class="loading loading-spinner loading-sm"></span>
+              取消认证申请
+            </button>
           </div>
 
           <div v-else class="mt-6 text-center">
@@ -213,7 +236,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { getUserInfo, getMyProfile, updateProfile, updatePassword, verifyEmail, confirmEmail, submitIdCard, type UserProfileVO } from '@/api/auth'
+import { getUserInfo, getMyProfile, updateProfile, updatePassword, verifyEmail, confirmEmail, submitIdCard, submitStudentId, cancelVerification, type UserProfileVO } from '@/api/auth'
 import { uploadIdCardImage } from '@/api/file'
 import { useDialog } from '@/composables/useDialog'
 
@@ -232,12 +255,14 @@ const savingPwd = ref(false)
 const activeTab = ref<'profile' | 'password' | 'verify'>('profile')
 
 // Verification
-const verifyMethod = ref<'email' | 'id_card'>('email')
+const verifyMethod = ref<'email' | 'id_card' | 'student_id'>('email')
 const eduEmailInput = ref('')
 const emailCode = ref('')
 const emailCodeSent = ref(false)
 const idCardFile = ref<File | null>(null)
 const verifying = ref(false)
+const studentIdInput = ref('')
+const cancelingVerify = ref(false)
 
 const basicForm = reactive({
   nickname: '',
@@ -300,6 +325,7 @@ const fetchUserInfo = async () => {
       sex: profileInfo?.sex ?? authInfo?.sex,
       verifyStatus: profileInfo?.verifyStatus ?? authInfo?.verifyStatus,
       verifyMethod: profileInfo?.verifyMethod ?? authInfo?.verifyMethod,
+      verifyRejectReason: profileInfo?.verifyRejectReason,
       creditScore: profileInfo?.creditScore ?? authInfo?.creditScore,
       createdAt: profileInfo?.createdAt ?? authInfo?.createdAt,
       updatedAt: profileInfo?.updatedAt,
@@ -388,6 +414,9 @@ const formatVerifyMethod = (method?: string) => {
   const normalized = method.toLowerCase()
   if (normalized === 'email' || normalized === 'edu_email') return '邮箱认证'
   if (normalized === 'id_card') return '学生证认证'
+  if (normalized === 'id_list' || normalized === 'student_id') return '学号认证'
+  if (normalized === 'ocr') return '证件OCR'
+  if (normalized === 'sso') return 'SSO认证'
   if (normalized === 'manual') return '人工审核'
   return method || ''
 }
@@ -410,6 +439,9 @@ const verifyStatusDesc = computed(() => {
   const status = userInfo.value?.verifyStatus
   if (status === 2) return '您的身份已通过认证，可以使用完整功能。'
   if (status === 1) return '您的认证申请正在审核中，请耐心等待。'
+  if (userInfo.value?.verifyRejectReason) {
+    return `认证未通过：${userInfo.value.verifyRejectReason}`
+  }
   return '完成身份认证后可以使用更多功能。'
 })
 
@@ -463,6 +495,39 @@ const submitIdCardVerify = async () => {
     await dialog.alert(e.message || e.response?.data?.message || '提交失败')
   } finally {
     verifying.value = false
+  }
+}
+
+const submitStudentIdVerify = async () => {
+  if (!studentIdInput.value.trim()) {
+    await dialog.alert('请输入学号')
+    return
+  }
+  verifying.value = true
+  try {
+    await submitStudentId({ studentId: studentIdInput.value.trim() })
+    await dialog.alert('提交成功，请等待审核。')
+    studentIdInput.value = ''
+    await fetchUserInfo()
+  } catch (e: any) {
+    await dialog.alert(e.message || e.response?.data?.message || '提交失败')
+  } finally {
+    verifying.value = false
+  }
+}
+
+const cancelVerifyRequest = async () => {
+  const ok = await dialog.confirm('确定要取消当前认证申请吗？')
+  if (!ok) return
+  cancelingVerify.value = true
+  try {
+    await cancelVerification()
+    await dialog.alert('已取消认证申请')
+    await fetchUserInfo()
+  } catch (e: any) {
+    await dialog.alert(e.message || e.response?.data?.message || '取消失败')
+  } finally {
+    cancelingVerify.value = false
   }
 }
 </script>

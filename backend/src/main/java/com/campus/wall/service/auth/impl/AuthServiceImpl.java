@@ -32,6 +32,8 @@ import com.campus.wall.vo.auth.UserInfoVO;
 import com.campus.wall.util.IpUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,9 +45,7 @@ import java.util.Map;
 public class AuthServiceImpl implements AuthService {
 
     private final UserMapper userMapper;
-    
-    @org.springframework.beans.factory.annotation.Value("${spring.profiles.active:prod}")
-    private String activeProfile;
+    private final Environment environment;
     private final SysRoleMapper roleMapper;
     private final SysMenuMapper menuMapper;
     private final SysDeptMapper deptMapper;
@@ -175,14 +175,16 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, msg);
         }
 
-        if (user.getDeptId() == null) {
-            String msg = "账号未绑定部门，请联系管理员";
+        // 通过角色获取部门（用户通过角色绑定部门）
+        List<Long> userDeptIds = roleDeptMapper.selectDeptIdsByUserId(user.getId());
+        if (userDeptIds == null || userDeptIds.isEmpty()) {
+            String msg = "账号角色未绑定部门，请联系管理员";
             recordLoginLog(user.getId(), user.getUsername(), 1, msg);
             throw new BusinessException(ResultCode.BUSINESS_ERROR, msg);
         }
 
-        // 部门停用禁止登录
-        var dept = deptMapper.selectById(user.getDeptId());
+        // 检查部门状态（取第一个部门进行校验）
+        var dept = deptMapper.selectById(userDeptIds.get(0));
         if (dept == null) {
             String msg = "账号部门不存在，请联系管理员";
             recordLoginLog(user.getId(), user.getUsername(), 1, msg);
@@ -291,7 +293,12 @@ public class AuthServiceImpl implements AuthService {
         
         // 2. 邮箱维度冷却检查（同一邮箱60秒内只能发一次）
         String cooldownKey = "rate:register-email:cooldown:" + emailLower;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+        Boolean cooldownSet = redisTemplate.opsForValue().setIfAbsent(
+            cooldownKey,
+            "1",
+            java.time.Duration.ofSeconds(RateLimitConstants.EMAIL_CODE_COOLDOWN_SECONDS)
+        );
+        if (Boolean.FALSE.equals(cooldownSet)) {
             throw new BusinessException(ResultCode.TOO_MANY_REQUESTS, "请稍后再试，同一邮箱" + RateLimitConstants.EMAIL_CODE_COOLDOWN_SECONDS + "秒内只能发送一次验证码");
         }
         
@@ -304,14 +311,6 @@ public class AuthServiceImpl implements AuthService {
             "该邮箱验证码发送次数过多，请1小时后再试"
         );
         
-        // 设置邮箱冷却标记
-        redisTemplate.opsForValue().set(
-            cooldownKey,
-            "1",
-            RateLimitConstants.EMAIL_CODE_COOLDOWN_SECONDS,
-            java.util.concurrent.TimeUnit.SECONDS
-        );
-
         String code = RandomUtil.randomNumbers(6);
         String key = REGISTER_EMAIL_CODE_PREFIX + emailLower;
         redisTemplate.opsForValue().set(
@@ -357,9 +356,13 @@ public class AuthServiceImpl implements AuthService {
         sysConfigService.sendEmailWithTemplate(eduEmail, "verification", variables);
         
         // 仅在开发环境下打印验证码
-        if ("dev".equals(activeProfile)) {
+        if (isDevProfile()) {
             System.out.println("[DEV] 邮箱验证码: " + code + " -> " + eduEmail);
         }
+    }
+
+    private boolean isDevProfile() {
+        return environment.acceptsProfiles(Profiles.of("dev"));
     }
 
     @Override
@@ -484,32 +487,112 @@ public class AuthServiceImpl implements AuthService {
 
         // 如果提供了学号，检查唯一性
         if (dto.getStudentId() != null && !dto.getStudentId().isEmpty()) {
-            String studentIdHash = SecureUtil.sha256(dto.getStudentId());
-            Long existCount = userMapper.selectCount(
-                new LambdaQueryWrapper<User>()
-                    .eq(User::getStudentIdHash, studentIdHash)
-                    .ne(User::getId, userId)
-            );
-            if (existCount > 0) {
-                throw new BusinessException(ResultCode.STUDENT_ID_EXISTS);
-            }
+            assertStudentIdAvailable(dto.getStudentId(), userId);
         }
 
         // 创建审核记录
         IdentityVerification verification = new IdentityVerification();
         verification.setUserId(userId);
         verification.setImageUrl(dto.getImageUrl());
+        verification.setVerifyMethod("ID_CARD");
+        if (dto.getStudentId() != null && !dto.getStudentId().isEmpty()) {
+            verification.setStudentId(dto.getStudentId());
+            verification.setStudentIdHash(SecureUtil.sha256(dto.getStudentId()));
+        }
         verification.setStatus(0); // 待审核
         verificationMapper.insert(verification);
 
         User user = userMapper.selectById(userId);
         if (user != null) {
             user.setVerifyStatus(1); // 审核中
-            user.setVerifyMethod("MANUAL");
+            user.setVerifyMethod("ID_CARD");
             userMapper.updateById(user);
         }
 
         return verification.getId();
+    }
+
+    @Override
+    @Transactional
+    public Long submitStudentId(SubmitStudentIdDTO dto) {
+        Long userId = StpUtil.getLoginIdAsLong();
+
+        Long pendingCount = verificationMapper.selectCount(
+            new LambdaQueryWrapper<IdentityVerification>()
+                .eq(IdentityVerification::getUserId, userId)
+                .eq(IdentityVerification::getStatus, 0)
+        );
+        if (pendingCount > 0) {
+            throw new BusinessException("您已有待审核的申请，请耐心等待");
+        }
+
+        assertStudentIdAvailable(dto.getStudentId(), userId);
+
+        IdentityVerification verification = new IdentityVerification();
+        verification.setUserId(userId);
+        verification.setVerifyMethod("ID_LIST");
+        verification.setStudentId(dto.getStudentId());
+        verification.setStudentIdHash(SecureUtil.sha256(dto.getStudentId()));
+        verification.setStatus(0);
+        verificationMapper.insert(verification);
+
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            user.setVerifyStatus(1);
+            user.setVerifyMethod("ID_LIST");
+            userMapper.updateById(user);
+        }
+
+        return verification.getId();
+    }
+
+    @Override
+    @Transactional
+    public void cancelVerification() {
+        Long userId = StpUtil.getLoginIdAsLong();
+        IdentityVerification verification = verificationMapper.selectOne(
+            new LambdaQueryWrapper<IdentityVerification>()
+                .eq(IdentityVerification::getUserId, userId)
+                .eq(IdentityVerification::getStatus, 0)
+                .orderByDesc(IdentityVerification::getCreatedAt)
+                .last("LIMIT 1")
+        );
+        if (verification == null) {
+            throw new BusinessException("没有待审核的认证申请");
+        }
+
+        verification.setStatus(3);
+        verification.setReviewedAt(java.time.LocalDateTime.now());
+        verificationMapper.updateById(verification);
+
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            user.setVerifyStatus(0);
+            user.setVerifyMethod(null);
+            userMapper.updateById(user);
+        }
+    }
+
+    private void assertStudentIdAvailable(String studentId, Long userId) {
+        String studentIdHash = SecureUtil.sha256(studentId);
+        Long existCount = userMapper.selectCount(
+            new LambdaQueryWrapper<User>()
+                .eq(User::getStudentIdHash, studentIdHash)
+                .ne(User::getId, userId)
+        );
+        if (existCount > 0) {
+            throw new BusinessException(ResultCode.STUDENT_ID_EXISTS);
+        }
+
+        Long pendingCount = verificationMapper.selectCount(
+            new LambdaQueryWrapper<IdentityVerification>()
+                .eq(IdentityVerification::getStudentIdHash, studentIdHash)
+                .eq(IdentityVerification::getStatus, 0)
+                .ne(IdentityVerification::getUserId, userId)
+        );
+        if (pendingCount > 0) {
+            throw new BusinessException("该学号已存在待审核申请");
+        }
     }
 
     private UserInfoVO buildUserInfoVO(User user) {
@@ -587,5 +670,28 @@ public class AuthServiceImpl implements AuthService {
             roleMenu.setMenuId(menu.getId());
             roleMenuMapper.insert(roleMenu);
         }
+    }
+
+    @Override
+    public com.campus.wall.vo.auth.AdminContactVO getAdminContact() {
+        com.campus.wall.vo.auth.AdminContactVO vo = new com.campus.wall.vo.auth.AdminContactVO();
+        // 查找超级管理员角色的用户
+        String adminRoleKey = SecurityUtil.getSuperAdminRoleKey();
+        var adminRole = roleMapper.selectOne(
+            new LambdaQueryWrapper<com.campus.wall.entity.system.SysRole>()
+                .eq(com.campus.wall.entity.system.SysRole::getRoleKey, adminRoleKey)
+        );
+        if (adminRole != null) {
+            // 通过角色ID查找用户
+            List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(adminRole.getId());
+            if (userIds != null && !userIds.isEmpty()) {
+                User admin = userMapper.selectById(userIds.get(0));
+                if (admin != null) {
+                    vo.setEmail(admin.getEmail());
+                    vo.setPhone(admin.getPhone());
+                }
+            }
+        }
+        return vo;
     }
 }

@@ -22,6 +22,12 @@ public class IdentityVerification implements Serializable {
 
     private String imageUrl;
 
+    private String verifyMethod;
+
+    private String studentId;
+
+    private String studentIdHash;
+
     private Integer status;
 
     private Long reviewerId;

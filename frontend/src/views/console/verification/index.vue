@@ -5,7 +5,7 @@
         <h1 class="text-2xl font-bold text-slate-800">身份审核</h1>
         <p class="text-slate-500 mt-1">来自身份认证的申请将展示在此</p>
       </div>
-      <button class="btn btn-sm btn-ghost" @click="loadData">
+      <button class="btn btn-sm btn-ghost" @click="loadData({ reset: true })">
         刷新
       </button>
     </div>
@@ -19,16 +19,17 @@
               <option value="0">待审核</option>
               <option value="1">已通过</option>
               <option value="2">已拒绝</option>
+              <option value="3">已取消</option>
             </select>
           </div>
-          <button class="btn btn-sm btn-ghost" @click="loadData">搜索</button>
+          <button class="btn btn-sm btn-ghost" @click="loadData({ reset: true })">搜索</button>
         </div>
       </div>
     </div>
 
     <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
       <div class="card-body p-0 flex flex-col min-h-0">
-        <div class="flex-1 overflow-auto">
+        <div ref="scrollContainer" class="flex-1 overflow-auto">
           <table class="table">
             <thead>
               <tr>
@@ -70,15 +71,13 @@
               </tr>
             </tbody>
           </table>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
 
-        <div class="flex items-center justify-between p-4 border-t border-base-200">
-          <div class="text-sm text-slate-500">共 {{ total }} 条记录</div>
-          <div class="join">
-            <button class="join-item btn btn-sm" :disabled="query.page <= 1" @click="changePage(query.page - 1)">«</button>
-            <button class="join-item btn btn-sm">第 {{ query.page }} 页</button>
-            <button class="join-item btn btn-sm" :disabled="query.page * query.size >= total" @click="changePage(query.page + 1)">»</button>
-          </div>
+        <div class="flex items-center justify-between p-4 border-t border-base-200 text-sm text-slate-500">
+          <div>已加载 {{ records.length }} / {{ total || '-' }} 条</div>
+          <div v-if="loadingMore">正在加载更多...</div>
+          <div v-else-if="!hasMore && records.length > 0">没有更多了</div>
         </div>
       </div>
     </div>
@@ -92,6 +91,8 @@
             <div><span class="font-semibold">状态：</span>{{ statusText(currentDetail.status) }}</div>
             <div><span class="font-semibold">提交时间：</span>{{ formatDateTime(currentDetail.createdAt) }}</div>
             <div><span class="font-semibold">审核时间：</span>{{ formatDateTime(currentDetail.reviewedAt) }}</div>
+            <div v-if="currentDetail.verifyMethod"><span class="font-semibold">认证方式：</span>{{ formatVerifyMethod(currentDetail.verifyMethod) }}</div>
+            <div v-if="currentDetail.studentId"><span class="font-semibold">学号：</span>{{ currentDetail.studentId }}</div>
             <div v-if="currentDetail.reviewerName"><span class="font-semibold">审核人：</span>{{ currentDetail.reviewerName }}</div>
             <div v-if="currentDetail.rejectReason"><span class="font-semibold">拒绝原因：</span>{{ currentDetail.rejectReason }}</div>
           </div>
@@ -109,9 +110,22 @@
       <div class="modal-box max-w-lg">
         <h3 class="font-bold text-lg mb-4">{{ handleMode === 'approve' ? '通过审核' : '拒绝审核' }}</h3>
         <div class="space-y-4">
-          <div v-if="handleMode === 'approve'" class="form-control">
-            <label class="label"><span class="label-text">学号（可选）</span></label>
-            <input v-model="handleForm.studentId" type="text" class="input input-bordered" />
+          <div v-if="handleMode === 'approve'" class="space-y-4">
+            <div class="form-control">
+              <label class="label"><span class="label-text">认证方式</span></label>
+              <select v-model="handleForm.verifyMethod" class="select select-bordered">
+                <option value="MANUAL">人工审核</option>
+                <option value="EDU_EMAIL">EDU邮箱</option>
+                <option value="ID_LIST">学号白名单</option>
+                <option value="ID_CARD">学生证</option>
+                <option value="OCR">证件OCR</option>
+                <option value="SSO">SSO</option>
+              </select>
+            </div>
+            <div class="form-control">
+              <label class="label"><span class="label-text">学号（可选）</span></label>
+              <input v-model="handleForm.studentId" type="text" class="input input-bordered" />
+            </div>
           </div>
           <div v-else class="form-control">
             <label class="label"><span class="label-text">拒绝原因</span></label>
@@ -131,20 +145,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { getVerificationList, getVerificationDetail, handleVerification, type VerificationVO } from '@/api/system'
 import { resolveFileUrl } from '@/utils/file'
 import { useDialog } from '@/composables/useDialog'
 
 const dialog = useDialog()
 const loading = ref(false)
+const loadingMore = ref(false)
 const submitting = ref(false)
 const records = ref<VerificationVO[]>([])
 const total = ref(0)
+const hasMore = ref(true)
 const currentDetail = ref<VerificationVO | null>(null)
 const detailModal = ref<HTMLDialogElement | null>(null)
 const handleModal = ref<HTMLDialogElement | null>(null)
 const handleMode = ref<'approve' | 'reject'>('approve')
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const query = reactive({
   status: '',
@@ -154,11 +173,19 @@ const query = reactive({
 
 const handleForm = reactive({
   studentId: '',
-  rejectReason: ''
+  rejectReason: '',
+  verifyMethod: 'MANUAL'
 })
 
-const loadData = async () => {
-  loading.value = true
+const loadData = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    query.page = 1
+    records.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const params: any = {
       page: query.page,
@@ -168,30 +195,69 @@ const loadData = async () => {
       params.status = Number(query.status)
     }
     const res: any = await getVerificationList(params)
-    records.value = res?.records || []
+    const newRecords = res?.records || []
     total.value = res?.total || 0
+    records.value = append ? [...records.value, ...newRecords] : newRecords
+    if (total.value) {
+      hasMore.value = records.value.length < total.value
+    } else {
+      hasMore.value = newRecords.length >= query.size
+    }
   } catch (e: any) {
     await dialog.alert(e.message || e.response?.data?.message || '加载失败')
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (page: number) => {
-  query.page = page
-  loadData()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  query.page += 1
+  await loadData({ append: true })
 }
 
 const statusText = (status: number) => {
   if (status === 1) return '已通过'
   if (status === 2) return '已拒绝'
+  if (status === 3) return '已取消'
   return '待审核'
 }
 
 const statusBadge = (status: number) => {
   if (status === 1) return 'badge badge-success badge-sm'
   if (status === 2) return 'badge badge-error badge-sm'
+  if (status === 3) return 'badge badge-ghost badge-sm'
   return 'badge badge-warning badge-sm'
+}
+
+const formatVerifyMethod = (method?: string) => {
+  if (!method) return '-'
+  const normalized = method.toLowerCase()
+  if (normalized === 'edu_email' || normalized === 'email') return '邮箱认证'
+  if (normalized === 'id_list' || normalized === 'student_id') return '学号认证'
+  if (normalized === 'id_card') return '学生证'
+  if (normalized === 'ocr') return '证件OCR'
+  if (normalized === 'sso') return 'SSO'
+  if (normalized === 'manual') return '人工审核'
+  return method
 }
 
 const formatDateTime = (value?: string) => {
@@ -219,6 +285,7 @@ const openHandle = (item: VerificationVO, mode: 'approve' | 'reject') => {
   handleMode.value = mode
   handleForm.studentId = ''
   handleForm.rejectReason = ''
+  handleForm.verifyMethod = item.verifyMethod || 'MANUAL'
   handleModal.value?.showModal()
 }
 
@@ -237,11 +304,12 @@ const submitHandle = async () => {
     await handleVerification(currentDetail.value.id, {
       status: handleMode.value === 'approve' ? 1 : 2,
       studentId: handleMode.value === 'approve' ? handleForm.studentId || undefined : undefined,
-      rejectReason: handleMode.value === 'reject' ? handleForm.rejectReason.trim() : undefined
+      rejectReason: handleMode.value === 'reject' ? handleForm.rejectReason.trim() : undefined,
+      verifyMethod: handleMode.value === 'approve' ? handleForm.verifyMethod : undefined
     })
     await dialog.alert('处理成功')
     closeHandle()
-    loadData()
+    loadData({ reset: true })
   } catch (e: any) {
     await dialog.alert(e.message || e.response?.data?.message || '处理失败')
   } finally {
@@ -250,6 +318,12 @@ const submitHandle = async () => {
 }
 
 onMounted(() => {
-  loadData()
+  loadData({ reset: true })
+  nextTick(() => setupObserver())
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
 })
 </script>

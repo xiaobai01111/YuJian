@@ -909,6 +909,8 @@ export interface VerificationVO {
     username?: string
     nickname?: string
     imageUrl?: string
+    verifyMethod?: string
+    studentId?: string
     status: number
     rejectReason?: string
     reviewerId?: number
@@ -929,6 +931,7 @@ export interface VerificationHandleDTO {
     status: number
     rejectReason?: string
     studentId?: string
+    verifyMethod?: string
 }
 
 export function handleVerification(id: number, data: VerificationHandleDTO) {
@@ -1043,6 +1046,14 @@ export function getEmailDomains() {
 
 export function updateEmailDomains(domains: string[]) {
     return request.put('/api/v1/console/config/email-domains', domains)
+}
+
+export function getStudentIdWhitelist() {
+    return request.get<string[]>('/api/v1/console/config/student-ids')
+}
+
+export function updateStudentIdWhitelist(studentIds: string[]) {
+    return request.put('/api/v1/console/config/student-ids', studentIds)
 }
 
 export interface SmtpConfig {

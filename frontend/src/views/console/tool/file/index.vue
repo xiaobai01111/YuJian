@@ -63,7 +63,7 @@
             </aside>
 
             <div class="flex-1 min-h-0 flex flex-col p-4">
-              <div class="flex-1 overflow-auto">
+              <div ref="scrollContainer" class="flex-1 overflow-auto">
                 <div class="overflow-x-auto">
                   <table class="table table-zebra">
                     <thead>
@@ -135,15 +135,13 @@
                     </tbody>
                   </table>
                 </div>
+                <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
               </div>
 
-              <div class="flex items-center justify-between pt-4">
+              <div class="flex items-center justify-between pt-4 text-sm text-slate-500">
                 <div class="text-xs text-slate-500">已选 {{ selectedIds.length }} 项</div>
-                <div class="join">
-                  <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
-                  <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
-                  <button class="join-item btn btn-sm" :disabled="page >= totalPages" @click="changePage(page + 1)">»</button>
-                </div>
+                <div v-if="loadingMore">正在加载更多...</div>
+                <div v-else-if="!hasMore && files.length > 0">没有更多了</div>
               </div>
             </div>
           </div>
@@ -206,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, nextTick, ref } from 'vue'
 import { usePermissionStore } from '@/stores/permission'
 import { batchDeleteConsoleFiles, deleteConsoleFile, getFileCategories, getFileCleanupConfig, getFileList, runFileCleanup, updateConsoleFileVisibility, updateFileCleanupConfig, uploadConsoleFile, type FileCategoryVO, type FileCleanupConfig, type FileCleanupResult, type FileManageVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
@@ -215,11 +213,15 @@ const categories = ref<FileCategoryVO[]>([])
 const activeCategory = ref('all')
 const files = ref<FileManageVO[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const selectedIds = ref<number[]>([])
 const uploading = ref(false)
 const deleting = ref(false)
@@ -241,7 +243,7 @@ const isAllSelected = computed(() => files.value.length > 0 && files.value.every
 
 const reloadAll = () => {
   fetchCategories()
-  fetchFiles()
+  fetchFiles({ reset: true })
 }
 
 onMounted(() => {
@@ -249,6 +251,12 @@ onMounted(() => {
   if (canCleanup.value) {
     fetchCleanupConfig()
   }
+  nextTick(() => setupObserver())
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
 })
 
 const fetchCategories = async () => {
@@ -261,8 +269,15 @@ const fetchCategories = async () => {
   }
 }
 
-const fetchFiles = async () => {
-  loading.value = true
+const fetchFiles = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    page.value = 1
+    files.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res = await getFileList({
       page: page.value,
@@ -270,15 +285,25 @@ const fetchFiles = async () => {
       category: activeCategory.value,
       keyword: keyword.value.trim() || undefined
     })
-    files.value = res?.records || []
+    const records = res?.records || []
     total.value = res?.total || 0
-    selectedIds.value = selectedIds.value.filter(id => files.value.some(file => file.id === id))
+    files.value = append ? [...files.value, ...records] : records
+    if (total.value) {
+      hasMore.value = files.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
+    if (!append) {
+      selectedIds.value = selectedIds.value.filter(id => files.value.some(file => file.id === id))
+    }
   } catch (error) {
-    files.value = []
-    total.value = 0
-    selectedIds.value = []
+    if (!append) {
+      files.value = []
+      total.value = 0
+      selectedIds.value = []
+    }
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
@@ -297,24 +322,40 @@ const fetchCleanupConfig = async () => {
 
 const selectCategory = (key: string) => {
   activeCategory.value = key
-  page.value = 1
-  fetchFiles()
+  fetchFiles({ reset: true })
 }
 
 const handleSearch = () => {
-  page.value = 1
-  fetchFiles()
+  fetchFiles({ reset: true })
 }
 
 const handleReset = () => {
   keyword.value = ''
-  page.value = 1
-  fetchFiles()
+  fetchFiles({ reset: true })
 }
 
-const changePage = (p: number) => {
-  page.value = p
-  fetchFiles()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  page.value += 1
+  await fetchFiles({ append: true })
 }
 
 const openUpload = () => {
@@ -415,9 +456,9 @@ const handleVisibilityChange = async (file: FileManageVO, visibility: string) =>
   try {
     await updateConsoleFileVisibility(file.id, next)
     file.visibility = next
-    fetchFiles()
+    fetchFiles({ reset: true })
   } catch (error) {
-    fetchFiles()
+    fetchFiles({ reset: true })
   }
 }
 

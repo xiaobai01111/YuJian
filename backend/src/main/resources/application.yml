@@ -117,7 +117,9 @@ app:
   notice:
     sanitize-on-startup: ${NOTICE_SANITIZE_ON_STARTUP:false}
   security:
-    super-admin-role-key: ${SUPER_ADMIN_ROLE_KEY:admin}
+    # 加密密钥（用于SMTP密码等敏感信息加密，生产环境必须配置）
+    crypto-key: ${CAMPUS_CRYPTO_KEY:}
+    super-admin-role-key: ${SUPER_ADMIN_ROLE_KEY:console}
     api-public-permission-key: ${API_PUBLIC_PERMISSION_KEY:public}
     api-login-permission-key: ${API_LOGIN_PERMISSION_KEY:login}
     api-default-mode: ${API_DEFAULT_MODE:login}

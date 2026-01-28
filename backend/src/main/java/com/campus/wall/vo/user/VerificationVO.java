@@ -14,6 +14,8 @@ public class VerificationVO {
     private String username;
     private String nickname;
     private String imageUrl;
+    private String verifyMethod;
+    private String studentId;
     private Integer status;
     private String rejectReason;
     private Long reviewerId;

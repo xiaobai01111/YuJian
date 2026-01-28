@@ -1,6 +1,7 @@
 package com.campus.wall.service.system.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.campus.wall.constant.SysConfigKeys;
 import com.campus.wall.entity.system.SysConfig;
 import com.campus.wall.mapper.system.SysConfigMapper;
 import com.campus.wall.service.system.SysConfigService;
@@ -8,6 +9,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
 
 import org.springframework.mail.SimpleMailMessage;
@@ -29,15 +32,14 @@ public class SysConfigServiceImpl implements SysConfigService {
 
     private final SysConfigMapper sysConfigMapper;
     private final ObjectMapper objectMapper;
-    
-    @org.springframework.beans.factory.annotation.Value("${spring.profiles.active:prod}")
-    private String activeProfile;
+    private final Environment environment;
     
     // P2-2: 短TTL缓存，减少DB查询
     private static final long CACHE_TTL_MS = 60_000; // 60秒缓存
     
     private volatile SmtpConfigCache smtpConfigCache;
     private volatile EmailTemplatesCache emailTemplatesCache;
+    private volatile MailSenderCache mailSenderCache;
     
     private record SmtpConfigCache(String host, int port, String username, String password, String fromName, boolean ssl, long expireAt) {
         boolean isExpired() { return System.currentTimeMillis() > expireAt; }
@@ -46,6 +48,12 @@ public class SysConfigServiceImpl implements SysConfigService {
     private record EmailTemplatesCache(Map<String, Object> templates, long expireAt) {
         boolean isExpired() { return System.currentTimeMillis() > expireAt; }
     }
+
+    private record MailSenderCache(JavaMailSenderImpl sender, String fingerprint, long expireAt) {
+        boolean isExpired() { return System.currentTimeMillis() > expireAt; }
+    }
+
+    private static final int SMTP_TIMEOUT_MS = 30_000;
     
     /**
      * P2-2: 获取缓存的SMTP配置（60秒TTL）
@@ -57,12 +65,12 @@ public class SysConfigServiceImpl implements SysConfigService {
         }
         
         // 一次性读取所有SMTP配置
-        String host = getConfigValue("smtp.host");
-        String portStr = getConfigValue("smtp.port");
-        String username = getConfigValue("smtp.username");
-        String encryptedPassword = getConfigValue("smtp.password");
-        String fromName = getConfigValue("smtp.from_name");
-        boolean ssl = "true".equalsIgnoreCase(getConfigValue("smtp.ssl"));
+        String host = getConfigValue(SysConfigKeys.SMTP_HOST);
+        String portStr = getConfigValue(SysConfigKeys.SMTP_PORT);
+        String username = getConfigValue(SysConfigKeys.SMTP_USERNAME);
+        String encryptedPassword = getConfigValue(SysConfigKeys.SMTP_PASSWORD);
+        String fromName = getConfigValue(SysConfigKeys.SMTP_FROM_NAME);
+        boolean ssl = "true".equalsIgnoreCase(getConfigValue(SysConfigKeys.SMTP_SSL));
         
         String password = null;
         if (encryptedPassword != null && !encryptedPassword.isBlank()) {
@@ -85,6 +93,18 @@ public class SysConfigServiceImpl implements SysConfigService {
         );
         smtpConfigCache = cache;
         return cache;
+    }
+
+    private JavaMailSenderImpl getCachedMailSender(SmtpConfigCache smtp) {
+        String fingerprint = buildSmtpFingerprint(smtp);
+        MailSenderCache cache = mailSenderCache;
+        if (cache != null && !cache.isExpired() && fingerprint.equals(cache.fingerprint())) {
+            return cache.sender();
+        }
+
+        JavaMailSenderImpl sender = buildMailSender(smtp);
+        mailSenderCache = new MailSenderCache(sender, fingerprint, System.currentTimeMillis() + CACHE_TTL_MS);
+        return sender;
     }
     
     /**
@@ -111,14 +131,14 @@ public class SysConfigServiceImpl implements SysConfigService {
 
     @Override
     public List<String> getEmailAllowedDomains() {
-        String value = getConfigValue("email.allowed_domains");
+        String value = getConfigValue(SysConfigKeys.EMAIL_ALLOWED_DOMAINS);
         if (value == null || value.isBlank()) {
             return List.of("edu.cn");
         }
         try {
             return objectMapper.readValue(value, new TypeReference<List<String>>() {});
         } catch (Exception e) {
-            log.warn("Failed to parse email.allowed_domains: {}", value, e);
+            log.warn("Failed to parse {}: {}", SysConfigKeys.EMAIL_ALLOWED_DOMAINS, value, e);
             return List.of("edu.cn");
         }
     }
@@ -128,11 +148,11 @@ public class SysConfigServiceImpl implements SysConfigService {
         try {
             String value = objectMapper.writeValueAsString(domains != null ? domains : new ArrayList<>());
             SysConfig config = sysConfigMapper.selectOne(
-                new LambdaQueryWrapper<SysConfig>().eq(SysConfig::getConfigKey, "email.allowed_domains")
+                new LambdaQueryWrapper<SysConfig>().eq(SysConfig::getConfigKey, SysConfigKeys.EMAIL_ALLOWED_DOMAINS)
             );
             if (config == null) {
                 config = new SysConfig();
-                config.setConfigKey("email.allowed_domains");
+                config.setConfigKey(SysConfigKeys.EMAIL_ALLOWED_DOMAINS);
                 config.setConfigValue(value);
                 config.setConfigType("json");
                 config.setRemark("允许的教育邮箱域名后缀");
@@ -145,35 +165,81 @@ public class SysConfigServiceImpl implements SysConfigService {
                 sysConfigMapper.updateById(config);
             }
         } catch (Exception e) {
-            log.error("Failed to update email.allowed_domains", e);
+            log.error("Failed to update {}", SysConfigKeys.EMAIL_ALLOWED_DOMAINS, e);
+            throw new RuntimeException("更新配置失败");
+        }
+    }
+
+    @Override
+    public List<String> getStudentIdWhitelist() {
+        String value = getConfigValue(SysConfigKeys.STUDENT_ID_WHITELIST);
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(value, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse {}: {}", SysConfigKeys.STUDENT_ID_WHITELIST, value, e);
+            return List.of();
+        }
+    }
+
+    @Override
+    public void updateStudentIdWhitelist(List<String> studentIds) {
+        try {
+            String value = objectMapper.writeValueAsString(studentIds != null ? studentIds : new ArrayList<>());
+            SysConfig config = sysConfigMapper.selectOne(
+                new LambdaQueryWrapper<SysConfig>().eq(SysConfig::getConfigKey, SysConfigKeys.STUDENT_ID_WHITELIST)
+            );
+            if (config == null) {
+                config = new SysConfig();
+                config.setConfigKey(SysConfigKeys.STUDENT_ID_WHITELIST);
+                config.setConfigValue(value);
+                config.setConfigType("json");
+                config.setRemark("学号白名单");
+                config.setCreatedAt(LocalDateTime.now());
+                config.setUpdatedAt(LocalDateTime.now());
+                sysConfigMapper.insert(config);
+            } else {
+                config.setConfigValue(value);
+                config.setUpdatedAt(LocalDateTime.now());
+                sysConfigMapper.updateById(config);
+            }
+        } catch (Exception e) {
+            log.error("Failed to update {}", SysConfigKeys.STUDENT_ID_WHITELIST, e);
             throw new RuntimeException("更新配置失败");
         }
     }
 
     @Override
     public boolean isEmailVerificationEnabled() {
-        String value = getConfigValue("email.verification_enabled");
+        String value = getConfigValue(SysConfigKeys.EMAIL_VERIFICATION_ENABLED);
         return value == null || "true".equalsIgnoreCase(value);
     }
 
     @Override
     public Map<String, Object> getSmtpConfig() {
         Map<String, Object> config = new HashMap<>();
-        config.put("host", getConfigValue("smtp.host"));
-        config.put("port", parseIntOrDefault(getConfigValue("smtp.port"), 465));
-        config.put("username", getConfigValue("smtp.username"));
+        config.put("host", getConfigValue(SysConfigKeys.SMTP_HOST));
+        config.put("port", parseIntOrDefault(getConfigValue(SysConfigKeys.SMTP_PORT), 465));
+        config.put("username", getConfigValue(SysConfigKeys.SMTP_USERNAME));
         config.put("password", ""); // 不返回密码
-        config.put("fromName", getConfigValue("smtp.from_name"));
-        config.put("ssl", "true".equalsIgnoreCase(getConfigValue("smtp.ssl")));
+        config.put("fromName", getConfigValue(SysConfigKeys.SMTP_FROM_NAME));
+        config.put("ssl", "true".equalsIgnoreCase(getConfigValue(SysConfigKeys.SMTP_SSL)));
         return config;
     }
 
     @Override
     public void updateSmtpConfig(Map<String, Object> config) {
         // P2-1: SMTP配置强校验
-        String host = String.valueOf(config.getOrDefault("host", "")).trim();
-        String username = String.valueOf(config.getOrDefault("username", "")).trim();
+        String host = toSafeString(config.get("host"));
+        host = host == null ? "" : host.trim();
+        String username = toSafeString(config.get("username"));
+        username = username == null ? "" : username.trim();
         Object portObj = config.get("port");
+        if (portObj == null) {
+            throw new RuntimeException("SMTP端口必须是有效数字");
+        }
         int port;
         try {
             port = portObj instanceof Number ? ((Number) portObj).intValue() : Integer.parseInt(String.valueOf(portObj));
@@ -197,92 +263,53 @@ public class SysConfigServiceImpl implements SysConfigService {
             throw new RuntimeException("SMTP端口必须在1-65535范围内");
         }
         
-        saveConfig("smtp.host", host, "string", "SMTP服务器地址");
-        saveConfig("smtp.port", String.valueOf(port), "number", "SMTP端口");
-        saveConfig("smtp.username", username, "string", "SMTP用户名");
-        String password = String.valueOf(config.getOrDefault("password", ""));
+        saveConfig(SysConfigKeys.SMTP_HOST, host, "string", "SMTP服务器地址");
+        saveConfig(SysConfigKeys.SMTP_PORT, String.valueOf(port), "number", "SMTP端口");
+        saveConfig(SysConfigKeys.SMTP_USERNAME, username, "string", "SMTP用户名");
+        String password = toSafeString(config.get("password"));
         if (password != null && !password.isBlank()) {
             String encryptedPassword = CryptoUtils.encrypt(password);
-            saveConfig("smtp.password", encryptedPassword, "string", "SMTP密码(加密)");
+            saveConfig(SysConfigKeys.SMTP_PASSWORD, encryptedPassword, "string", "SMTP密码(加密)");
         }
-        String fromName = String.valueOf(config.getOrDefault("fromName", "")).trim();
+        String fromName = toSafeString(config.get("fromName"));
+        fromName = fromName == null ? "" : fromName.trim();
         if (fromName.length() > 100) {
             throw new RuntimeException("发件人名称过长");
         }
-        saveConfig("smtp.from_name", fromName, "string", "发件人名称");
-        saveConfig("smtp.ssl", String.valueOf(config.getOrDefault("ssl", true)), "boolean", "是否启用SSL");
+        saveConfig(SysConfigKeys.SMTP_FROM_NAME, fromName, "string", "发件人名称");
+        Object sslObj = config.containsKey("ssl") ? config.get("ssl") : true;
+        String ssl = toSafeString(sslObj);
+        if (ssl == null || ssl.isBlank()) {
+            ssl = "true";
+        }
+        saveConfig(SysConfigKeys.SMTP_SSL, ssl, "boolean", "是否启用SSL");
         
         // 清除SMTP配置缓存
         smtpConfigCache = null;
+        mailSenderCache = null;
     }
 
     @Override
     public void sendTestEmail(String email) {
-        log.info("发送测试邮件到: {}", email);
-        
-        String host = getConfigValue("smtp.host");
-        String portStr = getConfigValue("smtp.port");
-        String username = getConfigValue("smtp.username");
-        String encryptedPassword = getConfigValue("smtp.password");
-        String password = null;
-        if (encryptedPassword != null && !encryptedPassword.isBlank()) {
-            try {
-                password = CryptoUtils.decrypt(encryptedPassword);
-            } catch (Exception e) {
-                log.warn("Failed to decrypt SMTP password, using raw value", e);
-                password = encryptedPassword;
-            }
-        }
-        String fromName = getConfigValue("smtp.from_name");
-        boolean ssl = "true".equalsIgnoreCase(getConfigValue("smtp.ssl"));
-        
-        if (host == null || host.isBlank() || username == null || username.isBlank()) {
+        log.info("发送测试邮件到: {}", maskEmail(email));
+
+        SmtpConfigCache smtp = getCachedSmtpConfig();
+        if (smtp.host() == null || smtp.host().isBlank() || smtp.username() == null || smtp.username().isBlank()) {
             throw new RuntimeException("请先配置SMTP服务器信息");
         }
         
         try {
-            JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
-            mailSender.setHost(host);
-            mailSender.setPort(parseIntOrDefault(portStr, 465));
-            mailSender.setUsername(username);
-            mailSender.setPassword(password);
-            
-            int port = parseIntOrDefault(portStr, 465);
-            
-            Properties props = mailSender.getJavaMailProperties();
-            props.put("mail.transport.protocol", "smtp");
-            props.put("mail.smtp.auth", "true");
-            props.put("mail.smtp.timeout", "30000");
-            props.put("mail.smtp.connectiontimeout", "30000");
-            props.put("mail.smtp.writetimeout", "30000");
-            // 仅在开发环境启用debug，避免泄露认证信息
-            props.put("mail.debug", "dev".equals(activeProfile) ? "true" : "false");
-            
-            if (ssl && port == 465) {
-                // SSL模式 (端口465)
-                props.put("mail.smtp.ssl.enable", "true");
-                props.put("mail.smtp.ssl.trust", host);
-                props.put("mail.smtp.ssl.checkserveridentity", "true");
-            } else if (port == 587 || !ssl) {
-                // STARTTLS模式 (端口587)
-                props.put("mail.smtp.starttls.enable", "true");
-                props.put("mail.smtp.starttls.required", "true");
-                props.put("mail.smtp.ssl.checkserveridentity", "true");
-            } else {
-                // 其他SSL端口 - 使用主机名信任，不使用trust=*
-                props.put("mail.smtp.ssl.enable", "true");
-                props.put("mail.smtp.ssl.trust", host);
-                props.put("mail.smtp.ssl.checkserveridentity", "true");
-            }
+            JavaMailSenderImpl mailSender = getCachedMailSender(smtp);
             
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromName != null && !fromName.isBlank() ? fromName + " <" + username + ">" : username);
+            String fromName = smtp.fromName();
+            message.setFrom(fromName != null && !fromName.isBlank() ? fromName + " <" + smtp.username() + ">" : smtp.username());
             message.setTo(email);
             message.setSubject("校园墙 - 测试邮件");
             message.setText("这是一封测试邮件，用于验证SMTP配置是否正确。\n\n如果您收到此邮件，说明邮箱配置正确。");
             
             mailSender.send(message);
-            log.info("测试邮件发送成功: {}", email);
+            log.info("测试邮件发送成功: {}", maskEmail(email));
         } catch (Exception e) {
             log.error("发送测试邮件失败", e);
             throw new RuntimeException("发送邮件失败: " + e.getMessage());
@@ -318,16 +345,89 @@ public class SysConfigServiceImpl implements SysConfigService {
         }
     }
 
+    private boolean isDevProfile() {
+        return environment.acceptsProfiles(Profiles.of("dev"));
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return email;
+        }
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 1) {
+            return "***" + email.substring(atIndex);
+        }
+        String prefix = email.substring(0, Math.min(2, atIndex));
+        return prefix + "***" + email.substring(atIndex);
+    }
+
+    private String toSafeString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = String.valueOf(value);
+        if ("null".equalsIgnoreCase(str)) {
+            return null;
+        }
+        return str;
+    }
+
+    private String buildSmtpFingerprint(SmtpConfigCache smtp) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(smtp.host()).append('|')
+            .append(smtp.port()).append('|')
+            .append(smtp.username()).append('|')
+            .append(smtp.password()).append('|')
+            .append(smtp.fromName()).append('|')
+            .append(smtp.ssl());
+        return builder.toString();
+    }
+
+    private JavaMailSenderImpl buildMailSender(SmtpConfigCache smtp) {
+        JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
+        mailSender.setHost(smtp.host());
+        mailSender.setPort(smtp.port());
+        mailSender.setUsername(smtp.username());
+        mailSender.setPassword(smtp.password());
+        mailSender.setDefaultEncoding("UTF-8");
+
+        Properties props = mailSender.getJavaMailProperties();
+        props.put("mail.transport.protocol", "smtp");
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.timeout", String.valueOf(SMTP_TIMEOUT_MS));
+        props.put("mail.smtp.connectiontimeout", String.valueOf(SMTP_TIMEOUT_MS));
+        props.put("mail.smtp.writetimeout", String.valueOf(SMTP_TIMEOUT_MS));
+        props.put("mail.debug", isDevProfile() ? "true" : "false");
+
+        int port = smtp.port();
+        boolean ssl = smtp.ssl();
+        if (ssl && port == 465) {
+            props.put("mail.smtp.ssl.enable", "true");
+            props.put("mail.smtp.ssl.trust", smtp.host());
+            props.put("mail.smtp.ssl.checkserveridentity", "true");
+        } else if (port == 587 || !ssl) {
+            props.put("mail.smtp.starttls.enable", "true");
+            props.put("mail.smtp.starttls.required", "true");
+            props.put("mail.smtp.ssl.checkserveridentity", "true");
+        } else {
+            props.put("mail.smtp.ssl.enable", "true");
+            props.put("mail.smtp.ssl.trust", smtp.host());
+            props.put("mail.smtp.ssl.checkserveridentity", "true");
+        }
+
+        return mailSender;
+    }
+
     @Override
     public Map<String, Object> getEmailTemplates() {
-        String value = getConfigValue("email.templates");
+        String value = getConfigValue(SysConfigKeys.EMAIL_TEMPLATES);
         if (value == null || value.isBlank()) {
             return getDefaultTemplates();
         }
         try {
             return objectMapper.readValue(value, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
-            log.warn("Failed to parse email.templates", e);
+            log.warn("Failed to parse {}", SysConfigKeys.EMAIL_TEMPLATES, e);
             return getDefaultTemplates();
         }
     }
@@ -376,11 +476,11 @@ public class SysConfigServiceImpl implements SysConfigService {
         
         try {
             String value = objectMapper.writeValueAsString(templates);
-            saveConfig("email.templates", value, "json", "邮件模板配置");
+            saveConfig(SysConfigKeys.EMAIL_TEMPLATES, value, "json", "邮件模板配置");
             // 清除模板缓存
             emailTemplatesCache = null;
         } catch (Exception e) {
-            log.error("Failed to update email.templates", e);
+            log.error("Failed to update {}", SysConfigKeys.EMAIL_TEMPLATES, e);
             throw new RuntimeException("更新邮件模板失败");
         }
     }
@@ -454,7 +554,7 @@ public class SysConfigServiceImpl implements SysConfigService {
     @Override
     @SuppressWarnings("unchecked")
     public void sendEmailWithTemplate(String to, String templateName, Map<String, String> variables) {
-        log.info("使用模板 {} 发送邮件到: {}", templateName, to);
+        log.info("使用模板 {} 发送邮件到: {}", templateName, maskEmail(to));
         
         // P2-2: 使用缓存获取SMTP配置，减少DB查询
         SmtpConfigCache smtp = getCachedSmtpConfig();
@@ -499,26 +599,7 @@ public class SysConfigServiceImpl implements SysConfigService {
         }
         
         try {
-            JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
-            mailSender.setHost(smtp.host());
-            mailSender.setPort(smtp.port());
-            mailSender.setUsername(smtp.username());
-            mailSender.setPassword(smtp.password());
-            mailSender.setDefaultEncoding("UTF-8");
-
-            Properties props = mailSender.getJavaMailProperties();
-            props.put("mail.transport.protocol", "smtp");
-            props.put("mail.smtp.auth", "true");
-            props.put("mail.smtp.timeout", "10000");
-            props.put("mail.smtp.connectiontimeout", "10000");
-            
-            if (smtp.ssl()) {
-                props.put("mail.smtp.ssl.enable", "true");
-                props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
-                props.put("mail.smtp.socketFactory.port", String.valueOf(smtp.port()));
-                props.put("mail.smtp.ssl.trust", smtp.host());
-                props.put("mail.smtp.ssl.checkserveridentity", "true");
-            }
+            JavaMailSenderImpl mailSender = getCachedMailSender(smtp);
 
             SimpleMailMessage message = new SimpleMailMessage();
             String fromName = smtp.fromName();
@@ -528,7 +609,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             message.setText(body);
 
             mailSender.send(message);
-            log.info("邮件发送成功: {} -> {}", templateName, to);
+            log.info("邮件发送成功: {} -> {}", templateName, maskEmail(to));
         } catch (Exception e) {
             log.error("发送邮件失败: {}", e.getMessage(), e);
             throw new RuntimeException("发送邮件失败: " + e.getMessage());

@@ -20,7 +20,7 @@
         <div class="card-body p-4">
           <div class="flex flex-wrap gap-4 items-center">
             <div class="form-control">
-              <select v-model="filters.board" class="select select-bordered select-sm w-40" @change="loadPosts">
+              <select v-model="filters.board" class="select select-bordered select-sm w-40" @change="loadPosts({ reset: true })">
                 <option value="">全部板块</option>
                 <option v-for="option in boardOptions" :key="option.key" :value="option.key">
                   {{ option.label }}
@@ -28,7 +28,7 @@
               </select>
             </div>
             <div class="form-control">
-              <select v-model="filters.status" class="select select-bordered select-sm w-32" @change="loadPosts">
+              <select v-model="filters.status" class="select select-bordered select-sm w-32" @change="loadPosts({ reset: true })">
                 <option :value="undefined">全部状态</option>
                 <option :value="0">正常</option>
                 <option :value="1">已解决</option>
@@ -41,10 +41,10 @@
                 type="text"
                 placeholder="搜索关键词..."
                 class="input input-bordered input-sm w-52"
-                @keyup.enter="loadPosts"
+                @keyup.enter="loadPosts({ reset: true })"
               />
             </div>
-            <button class="btn btn-sm btn-ghost" @click="loadPosts">
+            <button class="btn btn-sm btn-ghost" @click="loadPosts({ reset: true })">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -55,9 +55,9 @@
       </div>
 
       <!-- Table -->
-      <div class="card bg-base-100 shadow-sm">
-        <div class="card-body p-0 flex flex-col">
-          <div class="overflow-auto max-h-[calc(100vh-360px)]">
+      <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
+        <div class="card-body p-0 flex flex-col min-h-0">
+          <div ref="scrollContainer" class="flex-1 overflow-auto">
             <div class="overflow-x-auto">
               <table class="table">
               <thead>
@@ -123,35 +123,25 @@
               </table>
             </div>
           </div>
-
-          <!-- Pagination -->
-          <div v-if="total > pageSize" class="flex justify-center p-4 border-t">
-            <div class="join">
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage === 1"
-                @click="changePage(currentPage - 1)"
-              >«</button>
-              <button class="join-item btn btn-sm">第 {{ currentPage }} / {{ Math.ceil(total / pageSize) }} 页</button>
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage * pageSize >= total"
-                @click="changePage(currentPage + 1)"
-              >»</button>
-            </div>
-          </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
+      </div>
+
+      <div class="flex justify-between items-center text-sm text-base-content/60">
+        <div>已加载 {{ posts.length }} / {{ total || '-' }} 条</div>
+        <div v-if="loadingMore">正在加载更多...</div>
+        <div v-else-if="!hasMore && posts.length > 0">没有更多了</div>
       </div>
     </div>
 
     <!-- Publish Modal -->
     <PostPublishModal v-model="showPublish" :use-console-api="true" @success="handlePublishSuccess" />
-    <PostDetailModal v-model="showPostDetail" :postId="selectedPostId" @updated="loadPosts" />
+    <PostDetailModal v-model="showPostDetail" :postId="selectedPostId" @updated="loadPosts({ reset: true })" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { getConsolePostList, resolveConsolePost, deleteConsolePost, type PostVO } from '@/api/post'
 import { BOARD_OPTIONS, getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
@@ -164,9 +154,14 @@ const dialog = useDialog()
 
 const posts = ref<PostVO[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const showPublish = ref(false)
 const showPostDetail = ref(false)
 const selectedPostId = ref<number | null>(null)
@@ -183,8 +178,15 @@ const canAdd = computed(() => userStore.hasPermission('content:post:add'))
 const canDelete = computed(() => userStore.hasPermission('content:post:delete'))
 const canResolve = computed(() => userStore.hasPermission('content:post:resolve'))
 
-const loadPosts = async () => {
-  loading.value = true
+const loadPosts = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    posts.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res: any = await getConsolePostList({
       page: currentPage.value,
@@ -193,18 +195,43 @@ const loadPosts = async () => {
       status: filters.status,
       keyword: filters.keyword.trim() || undefined
     })
-    posts.value = res.records || []
+    const records = res.records || []
     total.value = res.total || 0
+    posts.value = append ? [...posts.value, ...records] : records
+    if (total.value) {
+      hasMore.value = posts.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (error) {
     console.error('Failed to load posts', error)
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadPosts()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await loadPosts({ append: true })
 }
 
 const getStatusText = (status: number) => {
@@ -237,7 +264,7 @@ const goToPublish = () => {
 }
 
 const handlePublishSuccess = () => {
-  loadPosts()
+  loadPosts({ reset: true })
 }
 
 const handleResolve = async (post: PostVO) => {
@@ -246,7 +273,7 @@ const handleResolve = async (post: PostVO) => {
   if (!reason || !reason.trim()) return
   try {
     await resolveConsolePost(post.id, reason.trim())
-    await loadPosts()
+    await loadPosts({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '操作失败')
   }
@@ -258,13 +285,19 @@ const handleDelete = async (post: PostVO) => {
   if (!reason || !reason.trim()) return
   try {
     await deleteConsolePost(post.id, reason.trim())
-    await loadPosts()
+    await loadPosts({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '删除失败')
   }
 }
 
 onMounted(() => {
-  loadPosts()
+  loadPosts({ reset: true })
+  nextTick(() => setupObserver())
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
 })
 </script>

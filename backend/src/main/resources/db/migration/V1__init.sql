@@ -304,7 +304,10 @@ COMMENT ON TABLE sys_user_roles IS '用户-角色关联表';
 CREATE TABLE identity_verifications (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    image_url VARCHAR(500) NOT NULL,
+    image_url VARCHAR(500),
+    verify_method VARCHAR(32),
+    student_id VARCHAR(50),
+    student_id_hash VARCHAR(64),
     status SMALLINT DEFAULT 0,
     reviewer_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     reject_reason VARCHAR(255),
@@ -316,6 +319,7 @@ COMMENT ON TABLE identity_verifications IS '身份审核表';
 
 CREATE INDEX idx_identity_user_id ON identity_verifications(user_id);
 CREATE INDEX idx_identity_status ON identity_verifications(status);
+CREATE INDEX idx_identity_student_hash ON identity_verifications(student_id_hash);
 
 -- =========================
 -- 3) 内容相关表

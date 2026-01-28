@@ -15,8 +15,13 @@ import java.util.Base64;
  * 加密工具类 - 使用 AES-GCM 加密算法
  * 
  * 安全说明：
- * - 生产环境必须通过环境变量 CAMPUS_CRYPTO_KEY 配置加密密钥
+ * - 生产环境必须配置加密密钥（环境变量或配置文件）
  * - 使用默认密钥时会输出警告日志
+ * 
+ * 密钥配置方式（优先级从高到低）：
+ * 1. 环境变量: CAMPUS_CRYPTO_KEY
+ * 2. 配置文件: app.security.crypto-key
+ * 3. 默认密钥（仅开发环境）
  */
 @Slf4j
 public class CryptoUtils {
@@ -31,9 +36,14 @@ public class CryptoUtils {
     public static final String ENV_CRYPTO_KEY = "CAMPUS_CRYPTO_KEY";
     
     /**
-     * 默认密钥（仅用于开发环境，生产环境必须配置环境变量）
+     * 默认密钥（仅用于开发环境，生产环境必须配置）
      */
     private static final String DEFAULT_KEY = "campus-wall-config-key-32bytes!";
+    
+    /**
+     * Spring 注入的密钥（来自配置文件）
+     */
+    private static volatile String injectedKey = null;
     
     /**
      * 是否已警告过使用默认密钥
@@ -41,6 +51,15 @@ public class CryptoUtils {
     private static volatile boolean defaultKeyWarned = false;
 
     private CryptoUtils() {}
+    
+    /**
+     * 由 Spring 初始化时注入配置的密钥
+     */
+    public static void setInjectedKey(String key) {
+        if (key != null && !key.isBlank() && !key.startsWith("${")) {
+            injectedKey = key;
+        }
+    }
 
     /**
      * 加密字符串
@@ -111,17 +130,22 @@ public class CryptoUtils {
     
     /**
      * 获取配置的加密密钥
-     * 优先级：环境变量 > 默认密钥
+     * 优先级：环境变量 > 配置文件 > 默认密钥
      */
     private static String getConfiguredKey() {
+        // 1. 优先读取环境变量
         String envKey = System.getenv(ENV_CRYPTO_KEY);
         if (envKey != null && !envKey.isBlank()) {
             return envKey;
         }
-        // 使用默认密钥时输出警告
+        // 2. 其次读取配置文件（由Spring注入）
+        if (injectedKey != null && !injectedKey.isBlank()) {
+            return injectedKey;
+        }
+        // 3. 使用默认密钥时输出警告
         if (!defaultKeyWarned) {
             defaultKeyWarned = true;
-            log.warn("[安全警告] 正在使用默认加密密钥，生产环境请配置环境变量: {}", ENV_CRYPTO_KEY);
+            log.warn("[安全警告] 正在使用默认加密密钥，生产环境请配置: 环境变量 {} 或 配置文件 app.security.crypto-key", ENV_CRYPTO_KEY);
         }
         return DEFAULT_KEY;
     }
@@ -130,8 +154,16 @@ public class CryptoUtils {
      * 检查是否使用了默认密钥（用于启动时安全检查）
      */
     public static boolean isUsingDefaultKey() {
+        // 检查环境变量
         String envKey = System.getenv(ENV_CRYPTO_KEY);
-        return envKey == null || envKey.isBlank();
+        if (envKey != null && !envKey.isBlank()) {
+            return false;
+        }
+        // 检查配置文件注入的密钥
+        if (injectedKey != null && !injectedKey.isBlank()) {
+            return false;
+        }
+        return true;
     }
 
     private static byte[] generateIv() {

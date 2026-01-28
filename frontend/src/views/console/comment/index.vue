@@ -15,7 +15,7 @@
           >
             批量删除
           </button>
-          <button class="btn btn-ghost btn-sm" @click="loadComments">
+          <button class="btn btn-ghost btn-sm" @click="loadComments({ reset: true })">
             刷新
           </button>
         </div>
@@ -30,11 +30,11 @@
                 type="text"
                 placeholder="帖子ID"
                 class="input input-bordered input-sm w-32"
-                @keyup.enter="loadComments"
+                @keyup.enter="loadComments({ reset: true })"
               />
             </div>
             <div class="form-control">
-              <select v-model="filters.status" class="select select-bordered select-sm w-32" @change="loadComments">
+              <select v-model="filters.status" class="select select-bordered select-sm w-32" @change="loadComments({ reset: true })">
                 <option :value="undefined">全部状态</option>
                 <option :value="0">正常</option>
                 <option :value="1">已删除</option>
@@ -46,19 +46,19 @@
                 type="text"
                 placeholder="搜索内容..."
                 class="input input-bordered input-sm w-52"
-                @keyup.enter="loadComments"
+                @keyup.enter="loadComments({ reset: true })"
               />
             </div>
-            <button class="btn btn-sm btn-ghost" @click="loadComments">
+            <button class="btn btn-sm btn-ghost" @click="loadComments({ reset: true })">
               搜索
             </button>
           </div>
         </div>
       </div>
 
-      <div class="card bg-base-100 shadow-sm">
-        <div class="card-body p-0 flex flex-col">
-          <div class="overflow-auto max-h-[calc(100vh-360px)]">
+      <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
+        <div class="card-body p-0 flex flex-col min-h-0">
+          <div ref="scrollContainer" class="flex-1 overflow-auto">
             <div class="overflow-x-auto">
               <table class="table">
                 <thead>
@@ -135,30 +135,21 @@
               </table>
             </div>
           </div>
-
-          <div v-if="total > pageSize" class="flex justify-center p-4 border-t">
-            <div class="join">
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage === 1"
-                @click="changePage(currentPage - 1)"
-              >«</button>
-              <button class="join-item btn btn-sm">第 {{ currentPage }} / {{ Math.ceil(total / pageSize) }} 页</button>
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage * pageSize >= total"
-                @click="changePage(currentPage + 1)"
-              >»</button>
-            </div>
-          </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
+      </div>
+
+      <div class="flex justify-between items-center text-sm text-base-content/60">
+        <div>已加载 {{ comments.length }} / {{ total || '-' }} 条</div>
+        <div v-if="loadingMore">正在加载更多...</div>
+        <div v-else-if="!hasMore && comments.length > 0">没有更多了</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { batchDeleteConsoleComments, deleteConsoleComment, getConsoleComments, updateConsoleComment, type CommentConsoleVO } from '@/api/comment'
 import { useUserStore } from '@/stores/user'
@@ -170,9 +161,14 @@ const dialog = useDialog()
 
 const comments = ref<CommentConsoleVO[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const selectedIds = ref<number[]>([])
 
 const filters = reactive({
@@ -201,8 +197,15 @@ const parsePostId = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-const loadComments = async () => {
-  loading.value = true
+const loadComments = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    comments.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res: any = await getConsoleComments({
       page: currentPage.value,
@@ -211,19 +214,46 @@ const loadComments = async () => {
       status: filters.status,
       keyword: filters.keyword.trim() || undefined
     })
-    comments.value = res.records || []
+    const records = res.records || []
     total.value = res.total || 0
-    selectedIds.value = []
+    comments.value = append ? [...comments.value, ...records] : records
+    if (total.value) {
+      hasMore.value = comments.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
+    if (!append) {
+      selectedIds.value = []
+    }
   } catch (error) {
     console.error('Failed to load comments', error)
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadComments()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await loadComments({ append: true })
 }
 
 const toggleAll = () => {
@@ -267,7 +297,7 @@ const handleEdit = async (comment: CommentConsoleVO) => {
   if (reason === null) return
   try {
     await updateConsoleComment(comment.id, { content: content.trim() }, reason || undefined)
-    await loadComments()
+    await loadComments({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '修改失败')
   }
@@ -279,7 +309,7 @@ const handleDelete = async (comment: CommentConsoleVO) => {
   if (reason === null) return
   try {
     await deleteConsoleComment(comment.id, reason || undefined)
-    await loadComments()
+    await loadComments({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '删除失败')
   }
@@ -295,7 +325,7 @@ const handleBatchDelete = async () => {
   if (reason === null) return
   try {
     await batchDeleteConsoleComments(selectedIds.value, reason || undefined)
-    await loadComments()
+    await loadComments({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '批量删除失败')
   }
@@ -306,6 +336,12 @@ const goToPost = (postId: number) => {
 }
 
 onMounted(() => {
-  loadComments()
+  loadComments({ reset: true })
+  nextTick(() => setupObserver())
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
 })
 </script>

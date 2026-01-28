@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -18,6 +20,7 @@ public class SecurityStartupValidator implements ApplicationRunner {
     private final ObjectProvider<MinioConfig> minioConfigProvider;
     private final SecurityProperties securityProperties;
     private final com.campus.wall.service.system.PermissionService permissionService;
+    private final Environment environment;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -26,6 +29,7 @@ public class SecurityStartupValidator implements ApplicationRunner {
         } else {
             validateSigningSecret();
             validateMinioSecrets();
+            validateCryptoKey();
         }
         validateApiPermissions();
     }
@@ -50,6 +54,20 @@ public class SecurityStartupValidator implements ApplicationRunner {
         if (!StringUtils.hasText(minioConfig.getAccessKey()) || !StringUtils.hasText(minioConfig.getSecretKey())) {
             throw new IllegalStateException("MinIO accessKey/secretKey is required.");
         }
+    }
+
+    private void validateCryptoKey() {
+        if (com.campus.wall.util.CryptoUtils.isUsingDefaultKey()) {
+            if (isDevProfile()) {
+                log.warn("[安全警告] 正在使用默认加密密钥，生产环境请配置环境变量: CAMPUS_CRYPTO_KEY");
+            } else {
+                throw new IllegalStateException("Crypto key is using default value; configure CAMPUS_CRYPTO_KEY.");
+            }
+        }
+    }
+    
+    private boolean isDevProfile() {
+        return environment.acceptsProfiles(Profiles.of("dev"));
     }
 
     private void validateApiPermissions() {

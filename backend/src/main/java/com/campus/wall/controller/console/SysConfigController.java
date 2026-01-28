@@ -34,6 +34,21 @@ public class SysConfigController {
         return R.ok();
     }
 
+    @Operation(summary = "获取学号白名单")
+    @GetMapping("/student-ids")
+    @SaCheckPermission("system:config:list")
+    public R<List<String>> getStudentIdWhitelist() {
+        return R.ok(sysConfigService.getStudentIdWhitelist());
+    }
+
+    @Operation(summary = "更新学号白名单")
+    @PutMapping("/student-ids")
+    @SaCheckPermission("system:config:edit")
+    public R<Void> updateStudentIdWhitelist(@RequestBody List<String> studentIds) {
+        sysConfigService.updateStudentIdWhitelist(studentIds);
+        return R.ok();
+    }
+
     @Operation(summary = "获取SMTP配置")
     @GetMapping("/smtp")
     @SaCheckPermission("system:config:list")

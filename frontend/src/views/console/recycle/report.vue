@@ -7,7 +7,7 @@
           <p class="text-gray-500 mt-1">查看已删除举报并执行恢复或彻底删除</p>
         </div>
         <div class="flex items-center gap-2">
-          <button class="btn btn-ghost btn-sm" @click="loadReports">刷新</button>
+          <button class="btn btn-ghost btn-sm" @click="loadReports({ reset: true })">刷新</button>
         </div>
       </div>
 
@@ -15,20 +15,20 @@
         <div class="card-body p-4">
           <div class="flex flex-wrap gap-4 items-center">
             <div class="form-control">
-              <select v-model="filters.status" class="select select-bordered select-sm w-32" @change="loadReports">
+              <select v-model="filters.status" class="select select-bordered select-sm w-32" @change="loadReports({ reset: true })">
                 <option :value="undefined">全部状态</option>
                 <option :value="0">待处理</option>
                 <option :value="1">已处理</option>
               </select>
             </div>
-            <button class="btn btn-sm btn-ghost" @click="loadReports">搜索</button>
+            <button class="btn btn-sm btn-ghost" @click="loadReports({ reset: true })">搜索</button>
           </div>
         </div>
       </div>
 
       <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
         <div class="card-body p-0 flex flex-col min-h-0">
-          <div class="flex-1 overflow-auto">
+          <div ref="scrollContainer" class="flex-1 overflow-auto">
             <div class="overflow-x-auto">
               <table class="table">
                 <thead>
@@ -85,30 +85,21 @@
               </table>
             </div>
           </div>
-
-          <div v-if="total > pageSize" class="flex justify-center p-4 border-t">
-            <div class="join">
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage === 1"
-                @click="changePage(currentPage - 1)"
-              >«</button>
-              <button class="join-item btn btn-sm">第 {{ currentPage }} / {{ totalPages }} 页</button>
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage >= totalPages"
-                @click="changePage(currentPage + 1)"
-              >»</button>
-            </div>
-          </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
+      </div>
+
+      <div class="flex items-center justify-between text-sm text-base-content/60">
+        <div>已加载 {{ reports.length }} / {{ total || '-' }} 条</div>
+        <div v-if="loadingMore">正在加载更多...</div>
+        <div v-else-if="!hasMore && reports.length > 0">没有更多了</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
 import { getRecycleReports, purgeRecycleReport, restoreRecycleReport, type ReportVO } from '@/api/recycle'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
@@ -118,9 +109,14 @@ const dialog = useDialog()
 
 const reports = ref<ReportVO[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const filters = reactive({
   status: undefined as number | undefined
@@ -128,28 +124,58 @@ const filters = reactive({
 
 const canRestore = computed(() => userStore.hasPermission('content:recycle:report:restore'))
 const canPurge = computed(() => userStore.hasPermission('content:recycle:report:purge'))
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
-
-const loadReports = async () => {
-  loading.value = true
+const loadReports = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    reports.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res: any = await getRecycleReports({
       page: currentPage.value,
       size: pageSize.value,
       status: filters.status
     })
-    reports.value = res.records || []
+    const records = res.records || []
     total.value = res.total || 0
+    reports.value = append ? [...reports.value, ...records] : records
+    if (total.value) {
+      hasMore.value = reports.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (error) {
     console.error('Failed to load recycle reports', error)
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadReports()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await loadReports({ append: true })
 }
 
 const formatDateTime = (value?: string) => {
@@ -182,7 +208,7 @@ const handleRestore = async (report: ReportVO) => {
   if (reason === null) return
   try {
     await restoreRecycleReport(report.id, reason || undefined)
-    await loadReports()
+    await loadReports({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '恢复失败')
   }
@@ -194,13 +220,19 @@ const handlePurge = async (report: ReportVO) => {
   if (reason === null) return
   try {
     await purgeRecycleReport(report.id, reason || undefined)
-    await loadReports()
+    await loadReports({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '删除失败')
   }
 }
 
 onMounted(() => {
-  loadReports()
+  loadReports({ reset: true })
+  nextTick(() => setupObserver())
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
 })
 </script>

@@ -10,6 +10,7 @@
       <a class="tab" :class="{ 'tab-active': activeTab === 'smtp' }" @click="activeTab = 'smtp'">邮箱配置</a>
       <a class="tab" :class="{ 'tab-active': activeTab === 'templates' }" @click="activeTab = 'templates'">邮件模板</a>
       <a class="tab" :class="{ 'tab-active': activeTab === 'domains' }" @click="activeTab = 'domains'">域名白名单</a>
+      <a class="tab" :class="{ 'tab-active': activeTab === 'studentIds' }" @click="activeTab = 'studentIds'">学号白名单</a>
     </div>
 
     <!-- SMTP Config Tab -->
@@ -162,6 +163,55 @@
       </div>
     </div>
 
+    <!-- Student ID Whitelist Tab -->
+    <div v-show="activeTab === 'studentIds'" class="flex-1 overflow-auto space-y-4">
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="card-title text-lg">学号白名单</h2>
+            <div class="flex gap-2">
+              <button class="btn btn-sm btn-outline" @click="showStudentBatchModal = true">批量添加</button>
+              <button class="btn btn-sm btn-error btn-outline" @click="batchDeleteStudentIds" :disabled="selectedStudentIds.length === 0">
+                批量删除 ({{ selectedStudentIds.length }})
+              </button>
+              <button class="btn btn-sm btn-primary" @click="saveStudentIds" :disabled="savingStudentIds">
+                <span v-if="savingStudentIds" class="loading loading-spinner loading-xs"></span>
+                保存
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" class="checkbox checkbox-sm" v-model="selectAllStudentIds" /></th>
+                  <th>学号</th>
+                  <th class="w-20">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(studentId, index) in studentIds" :key="index">
+                  <td><input type="checkbox" class="checkbox checkbox-sm" :value="index" v-model="selectedStudentIds" /></td>
+                  <td>
+                    <input v-model="studentIds[index]" type="text" class="input input-bordered input-sm w-full max-w-xs" placeholder="2024000001" />
+                  </td>
+                  <td>
+                    <button class="btn btn-ghost btn-xs text-error" @click="removeStudentId(index)">删除</button>
+                  </td>
+                </tr>
+                <tr v-if="studentIds.length === 0">
+                  <td colspan="3" class="text-center text-slate-400">暂无学号配置</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <button class="btn btn-outline btn-sm w-fit mt-2" @click="addStudentId">+ 添加学号</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Batch Add Modal -->
     <dialog :class="{ 'modal modal-open': showBatchModal, 'modal': !showBatchModal }">
       <div class="modal-box">
@@ -175,16 +225,29 @@
       </div>
       <form method="dialog" class="modal-backdrop" @click="showBatchModal = false"></form>
     </dialog>
+
+    <dialog :class="{ 'modal modal-open': showStudentBatchModal, 'modal': !showStudentBatchModal }">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">批量添加学号</h3>
+        <p class="text-sm text-slate-500 mb-2">每行一个学号</p>
+        <textarea v-model="studentBatchInput" class="textarea textarea-bordered w-full h-40" placeholder="2024000001&#10;2024000002"></textarea>
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="showStudentBatchModal = false">取消</button>
+          <button class="btn btn-primary" @click="batchAddStudentIds">添加</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop" @click="showStudentBatchModal = false"></form>
+    </dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getEmailDomains, updateEmailDomains, getSmtpConfig, updateSmtpConfig, sendTestSmtpEmail, getEmailTemplates, updateEmailTemplates } from '@/api/system'
+import { getEmailDomains, updateEmailDomains, getSmtpConfig, updateSmtpConfig, sendTestSmtpEmail, getEmailTemplates, updateEmailTemplates, getStudentIdWhitelist, updateStudentIdWhitelist } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
 const dialog = useDialog()
-const activeTab = ref<'smtp' | 'templates' | 'domains'>('smtp')
+const activeTab = ref<'smtp' | 'templates' | 'domains' | 'studentIds'>('smtp')
 
 // Email templates
 const savingTemplates = ref(false)
@@ -252,6 +315,18 @@ const domains = ref<string[]>([])
 const selectedDomains = ref<number[]>([])
 const showBatchModal = ref(false)
 const batchInput = ref('')
+const studentIds = ref<string[]>([])
+const selectedStudentIds = ref<number[]>([])
+const showStudentBatchModal = ref(false)
+const studentBatchInput = ref('')
+const savingStudentIds = ref(false)
+
+const selectAllStudentIds = computed({
+  get: () => selectedStudentIds.value.length === studentIds.value.length && studentIds.value.length > 0,
+  set: (val: boolean) => {
+    selectedStudentIds.value = val ? studentIds.value.map((_, i) => i) : []
+  }
+})
 
 const selectAll = computed({
   get: () => selectedDomains.value.length === domains.value.length && domains.value.length > 0,
@@ -283,6 +358,16 @@ const loadDomains = async () => {
     domains.value = ['edu.cn']
   } finally {
     loading.value = false
+  }
+}
+
+const loadStudentIds = async () => {
+  try {
+    const res: any = await getStudentIdWhitelist()
+    studentIds.value = Array.isArray(res) ? res : []
+  } catch (e: any) {
+    console.error('Failed to load student ids', e)
+    studentIds.value = []
   }
 }
 
@@ -335,6 +420,43 @@ const saveDomains = async () => {
     await dialog.alert(e.message || e.response?.data?.message || '保存失败')
   } finally {
     saving.value = false
+  }
+}
+
+const addStudentId = () => {
+  studentIds.value.push('')
+}
+
+const removeStudentId = (index: number) => {
+  studentIds.value.splice(index, 1)
+  selectedStudentIds.value = selectedStudentIds.value.filter(i => i !== index).map(i => i > index ? i - 1 : i)
+}
+
+const batchAddStudentIds = () => {
+  const list = studentBatchInput.value.split('\n').map(item => item.trim()).filter(item => item)
+  studentIds.value.push(...list)
+  studentBatchInput.value = ''
+  showStudentBatchModal.value = false
+}
+
+const batchDeleteStudentIds = () => {
+  const toDelete = new Set(selectedStudentIds.value)
+  studentIds.value = studentIds.value.filter((_, i) => !toDelete.has(i))
+  selectedStudentIds.value = []
+}
+
+const saveStudentIds = async () => {
+  const valid = studentIds.value.map(item => item.trim()).filter(item => item)
+  savingStudentIds.value = true
+  try {
+    await updateStudentIdWhitelist(valid)
+    studentIds.value = valid
+    selectedStudentIds.value = []
+    await dialog.alert('保存成功')
+  } catch (e: any) {
+    await dialog.alert(e.message || e.response?.data?.message || '保存失败')
+  } finally {
+    savingStudentIds.value = false
   }
 }
 
@@ -391,6 +513,7 @@ const saveTemplates = async () => {
 
 onMounted(() => {
   loadDomains()
+  loadStudentIds()
   loadSmtpConfig()
   loadTemplates()
 })

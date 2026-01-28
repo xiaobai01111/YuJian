@@ -7,7 +7,7 @@
           <p class="text-gray-500 mt-1">查看已删除帖子并执行恢复或彻底删除</p>
         </div>
         <div class="flex items-center gap-2">
-          <button class="btn btn-ghost btn-sm" @click="loadPosts">刷新</button>
+          <button class="btn btn-ghost btn-sm" @click="loadPosts({ reset: true })">刷新</button>
         </div>
       </div>
 
@@ -15,7 +15,7 @@
         <div class="card-body p-4">
           <div class="flex flex-wrap gap-4 items-center">
             <div class="form-control">
-              <select v-model="filters.board" class="select select-bordered select-sm w-40" @change="loadPosts">
+              <select v-model="filters.board" class="select select-bordered select-sm w-40" @change="loadPosts({ reset: true })">
                 <option value="">全部板块</option>
                 <option v-for="option in boardOptions" :key="option.key" :value="option.key">
                   {{ option.label }}
@@ -28,17 +28,17 @@
                 type="text"
                 placeholder="搜索关键词..."
                 class="input input-bordered input-sm w-52"
-                @keyup.enter="loadPosts"
+                @keyup.enter="loadPosts({ reset: true })"
               />
             </div>
-            <button class="btn btn-sm btn-ghost" @click="loadPosts">搜索</button>
+            <button class="btn btn-sm btn-ghost" @click="loadPosts({ reset: true })">搜索</button>
           </div>
         </div>
       </div>
 
       <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
         <div class="card-body p-0 flex flex-col min-h-0">
-          <div class="flex-1 overflow-auto">
+          <div ref="scrollContainer" class="flex-1 overflow-auto">
             <div class="overflow-x-auto">
               <table class="table">
                 <thead>
@@ -97,30 +97,21 @@
               </table>
             </div>
           </div>
-
-          <div v-if="total > pageSize" class="flex justify-center p-4 border-t">
-            <div class="join">
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage === 1"
-                @click="changePage(currentPage - 1)"
-              >«</button>
-              <button class="join-item btn btn-sm">第 {{ currentPage }} / {{ totalPages }} 页</button>
-              <button
-                class="join-item btn btn-sm"
-                :disabled="currentPage >= totalPages"
-                @click="changePage(currentPage + 1)"
-              >»</button>
-            </div>
-          </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
+      </div>
+
+      <div class="flex items-center justify-between text-sm text-base-content/60">
+        <div>已加载 {{ posts.length }} / {{ total || '-' }} 条</div>
+        <div v-if="loadingMore">正在加载更多...</div>
+        <div v-else-if="!hasMore && posts.length > 0">没有更多了</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
 import { getRecyclePosts, purgeRecyclePost, restoreRecyclePost, type PostVO } from '@/api/recycle'
 import { BOARD_OPTIONS, getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
@@ -131,9 +122,14 @@ const dialog = useDialog()
 
 const posts = ref<PostVO[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const filters = reactive({
   board: '',
@@ -144,10 +140,15 @@ const boardOptions = BOARD_OPTIONS
 
 const canRestore = computed(() => userStore.hasPermission('content:recycle:post:restore'))
 const canPurge = computed(() => userStore.hasPermission('content:recycle:post:purge'))
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
-
-const loadPosts = async () => {
-  loading.value = true
+const loadPosts = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    currentPage.value = 1
+    posts.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const res: any = await getRecyclePosts({
       page: currentPage.value,
@@ -155,18 +156,43 @@ const loadPosts = async () => {
       board: filters.board || undefined,
       keyword: filters.keyword.trim() || undefined
     })
-    posts.value = res.records || []
+    const records = res.records || []
     total.value = res.total || 0
+    posts.value = append ? [...posts.value, ...records] : records
+    if (total.value) {
+      hasMore.value = posts.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (error) {
     console.error('Failed to load recycle posts', error)
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadPosts()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  currentPage.value += 1
+  await loadPosts({ append: true })
 }
 
 const formatDateTime = (value?: string) => {
@@ -193,7 +219,7 @@ const handleRestore = async (post: PostVO) => {
   if (reason === null) return
   try {
     await restoreRecyclePost(post.id, reason || undefined)
-    await loadPosts()
+    await loadPosts({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '恢复失败')
   }
@@ -205,13 +231,19 @@ const handlePurge = async (post: PostVO) => {
   if (reason === null) return
   try {
     await purgeRecyclePost(post.id, reason || undefined)
-    await loadPosts()
+    await loadPosts({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || '删除失败')
   }
 }
 
 onMounted(() => {
-  loadPosts()
+  loadPosts({ reset: true })
+  nextTick(() => setupObserver())
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
 })
 </script>

@@ -13,9 +13,11 @@ import com.campus.wall.dto.user.UserBatchAssignDTO;
 import com.campus.wall.dto.user.UserProfileUpdateDTO;
 import com.campus.wall.entity.system.SysUserRole;
 import com.campus.wall.entity.user.User;
+import com.campus.wall.entity.user.IdentityVerification;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.entity.system.SysRole;
 import com.campus.wall.service.system.PermissionService;
 import com.campus.wall.service.user.UserService;
@@ -52,6 +54,7 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleMapper sysRoleMapper;
+    private final IdentityVerificationMapper verificationMapper;
     private final com.campus.wall.service.system.OperLogService operLogService;
     private final PermissionService permissionService;
 
@@ -92,6 +95,19 @@ public class UserServiceImpl implements UserService {
             new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, userId)
         );
         vo.setRoleIds(userRoles.stream().map(SysUserRole::getRoleId).collect(Collectors.toList()));
+
+        if (user.getVerifyStatus() != null && user.getVerifyStatus() == 0) {
+            IdentityVerification rejected = verificationMapper.selectOne(
+                new LambdaQueryWrapper<IdentityVerification>()
+                    .eq(IdentityVerification::getUserId, userId)
+                    .eq(IdentityVerification::getStatus, 2)
+                    .orderByDesc(IdentityVerification::getReviewedAt)
+                    .last("LIMIT 1")
+            );
+            if (rejected != null) {
+                vo.setVerifyRejectReason(rejected.getRejectReason());
+            }
+        }
 
         return vo;
     }

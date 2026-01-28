@@ -19,6 +19,7 @@ public class UserDetailVO {
     private String eduEmail;
     private Integer verifyStatus;
     private String verifyMethod;
+    private String verifyRejectReason;
     private Integer status;
     private Integer creditScore;
     private Integer sex;

@@ -54,4 +54,19 @@ public interface AuthService {
      * 提交学生证进行人工审核
      */
     Long submitIdCard(com.campus.wall.dto.auth.SubmitIdCardDTO dto);
+
+    /**
+     * 提交学号认证申请
+     */
+    Long submitStudentId(com.campus.wall.dto.auth.SubmitStudentIdDTO dto);
+
+    /**
+     * 取消当前待审核认证
+     */
+    void cancelVerification();
+
+    /**
+     * 获取管理员联系方式（公开接口）
+     */
+    com.campus.wall.vo.auth.AdminContactVO getAdminContact();
 }

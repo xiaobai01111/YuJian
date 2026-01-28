@@ -12,10 +12,12 @@ import com.campus.wall.mapper.system.SysAuthRuleMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.service.system.AuthRuleService;
+import com.campus.wall.service.system.SysConfigService;
 import com.campus.wall.vo.system.AuthRuleVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -27,6 +29,7 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     private final SysAuthRuleMapper authRuleMapper;
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
+    private final SysConfigService sysConfigService;
 
     @Override
     public PageResult<AuthRuleVO> queryRules(int page, int size, String triggerType, String verifyMethod, Boolean enabled) {
@@ -93,11 +96,7 @@ public class AuthRuleServiceImpl implements AuthRuleService {
             return;
         }
 
-        Set<Long> existingRoleIds = roleMapper.selectAllRolesByUserId(user.getId()).stream()
-                .map(SysRole::getId)
-                .collect(Collectors.toSet());
-
-        Set<Long> toAddRoles = new HashSet<>();
+        Set<Long> toAssignRoles = new HashSet<>();
 
         for (SysAuthRule rule : rules) {
             if (!match(rule, user)) {
@@ -105,14 +104,23 @@ public class AuthRuleServiceImpl implements AuthRuleService {
             }
             if (rule.getRoleIds() != null) {
                 for (Long roleId : rule.getRoleIds()) {
-                    if (roleId != null && !existingRoleIds.contains(roleId)) {
-                        toAddRoles.add(roleId);
+                    if (roleId != null) {
+                        toAssignRoles.add(roleId);
                     }
                 }
             }
         }
 
-        for (Long roleId : toAddRoles) {
+        if (toAssignRoles.isEmpty()) {
+            return;
+        }
+
+        // 强制单角色：先删除用户所有现有角色，再分配新角色
+        userRoleMapper.delete(
+            new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, user.getId())
+        );
+
+        for (Long roleId : toAssignRoles) {
             SysUserRole userRole = new SysUserRole();
             userRole.setUserId(user.getId());
             userRole.setRoleId(roleId);
@@ -134,12 +142,27 @@ public class AuthRuleServiceImpl implements AuthRuleService {
             String email = user.getEduEmail() != null ? user.getEduEmail() : user.getEmail();
             String domain = extractDomain(email);
             if (domain == null) return false;
-            return matchAny(domain, matchValue);
+            String candidates = matchValue;
+            if (!StringUtils.hasText(candidates)) {
+                candidates = String.join(",", sysConfigService.getEmailAllowedDomains());
+            }
+            return matchAny(domain, candidates);
         }
         if ("STUDENT_ID_PREFIX".equalsIgnoreCase(matchType)) {
             String studentId = user.getStudentId();
             if (studentId == null) return false;
             return matchAnyPrefix(studentId, matchValue);
+        }
+        if ("STUDENT_ID_RANGE".equalsIgnoreCase(matchType)) {
+            String studentId = user.getStudentId();
+            if (studentId == null) return false;
+            return matchRange(studentId, matchValue);
+        }
+        if ("STUDENT_ID_DICT".equalsIgnoreCase(matchType)) {
+            String studentId = user.getStudentId();
+            if (studentId == null) return false;
+            List<String> list = sysConfigService.getStudentIdWhitelist();
+            return list.stream().anyMatch(item -> studentId.equals(item));
         }
 
         return false;
@@ -164,6 +187,34 @@ public class AuthRuleServiceImpl implements AuthRuleService {
             }
         }
         return false;
+    }
+
+    private boolean matchRange(String value, String range) {
+        if (!StringUtils.hasText(range)) {
+            return false;
+        }
+        String[] parts = range.split("-");
+        if (parts.length != 2) {
+            return false;
+        }
+        String start = parts[0].trim();
+        String end = parts[1].trim();
+        if (start.isEmpty() || end.isEmpty()) {
+            return false;
+        }
+
+        if (value.matches("\\d+") && start.matches("\\d+") && end.matches("\\d+")) {
+            try {
+                long v = Long.parseLong(value);
+                long s = Long.parseLong(start);
+                long e = Long.parseLong(end);
+                return v >= s && v <= e;
+            } catch (NumberFormatException ignored) {
+                return false;
+            }
+        }
+
+        return value.compareTo(start) >= 0 && value.compareTo(end) <= 0;
     }
 
     private String extractDomain(String email) {

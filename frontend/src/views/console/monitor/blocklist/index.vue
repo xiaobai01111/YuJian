@@ -42,7 +42,7 @@
         <button class="btn btn-sm btn-ghost" @click="handleReset">重置</button>
         </div>
 
-        <div class="flex-1 overflow-auto">
+        <div ref="scrollContainer" class="flex-1 overflow-auto">
           <div class="overflow-x-auto">
             <table class="table table-zebra">
               <thead>
@@ -99,14 +99,13 @@
               </tbody>
             </table>
           </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
 
-        <div class="flex justify-end pt-4">
-          <div class="join">
-            <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
-            <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
-            <button class="join-item btn btn-sm" :disabled="page >= totalPages" @click="changePage(page + 1)">»</button>
-          </div>
+        <div class="flex justify-between pt-4 text-sm text-base-content/60">
+          <div>已加载 {{ blocklist.length }} / {{ total || '-' }} 条</div>
+          <div v-if="loadingMore">正在加载更多...</div>
+          <div v-else-if="!hasMore && blocklist.length > 0">没有更多了</div>
         </div>
       </div>
     </div>
@@ -226,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
 import {
   createBlocklist,
   deleteBlocklist,
@@ -246,11 +245,15 @@ const targetTypeOptions = [
 ]
 
 const loading = ref(false)
+const loadingMore = ref(false)
 const blocklist = ref<BlocklistVO[]>([])
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const queryParams = reactive({
   targetType: '',
   status: '',
@@ -283,11 +286,24 @@ const dialog = useDialog()
 const isEdit = computed(() => form.id !== null)
 
 onMounted(() => {
-  fetchData()
+  fetchData({ reset: true })
+  nextTick(() => setupObserver())
 })
 
-const fetchData = async () => {
-  loading.value = true
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const fetchData = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    page.value = 1
+    blocklist.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const params: any = {
       page: page.value,
@@ -298,33 +314,58 @@ const fetchData = async () => {
     if (queryParams.keyword) params.keyword = queryParams.keyword
 
     const res = await getBlocklist(params)
-    blocklist.value = res?.records || []
+    const records = res?.records || []
     total.value = res?.total || 0
+    blocklist.value = append ? [...blocklist.value, ...records] : records
+    if (total.value) {
+      hasMore.value = blocklist.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (error: any) {
-    blocklist.value = []
-    total.value = 0
+    if (!append) {
+      blocklist.value = []
+      total.value = 0
+    }
     await dialog.alert(error?.message || error?.response?.data?.message || '获取阻止名单失败')
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (p: number) => {
-  page.value = p
-  fetchData()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  page.value += 1
+  await fetchData({ append: true })
 }
 
 const handleSearch = () => {
-  page.value = 1
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const handleReset = () => {
   queryParams.targetType = ''
   queryParams.status = ''
   queryParams.keyword = ''
-  page.value = 1
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const openCreateModal = () => {
@@ -385,7 +426,7 @@ const handleSave = async () => {
       await createBlocklist(payload)
     }
     closeModal()
-    fetchData()
+    fetchData({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || error?.response?.data?.message || '保存失败')
   } finally {
@@ -413,7 +454,7 @@ const handleBatchImport = async () => {
       values
     })
     batchResult.value = res
-    fetchData()
+    fetchData({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || error?.response?.data?.message || '批量导入失败')
   } finally {
@@ -425,7 +466,7 @@ const handleDelete = async (item: BlocklistVO) => {
   if (!await dialog.confirm(`确定要删除 ${item.targetValue} 吗？`)) return
   try {
     await deleteBlocklist(item.id)
-    fetchData()
+    fetchData({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
   }

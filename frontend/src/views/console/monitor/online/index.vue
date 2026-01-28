@@ -4,7 +4,7 @@
       <div class="card-body flex flex-col min-h-0">
         <div class="flex justify-between items-center mb-4">
         <h2 class="card-title">在线用户</h2>
-        <button class="btn btn-sm btn-ghost" @click="fetchData">刷新</button>
+        <button class="btn btn-sm btn-ghost" @click="fetchData({ reset: true })">刷新</button>
         </div>
 
         <div class="flex flex-wrap gap-3 mb-4">
@@ -14,7 +14,7 @@
           <button class="btn btn-sm btn-ghost" @click="handleReset">重置</button>
         </div>
 
-        <div class="flex-1 overflow-auto">
+        <div ref="scrollContainer" class="flex-1 overflow-auto">
           <div class="overflow-x-auto">
             <table class="table table-zebra">
               <thead>
@@ -61,14 +61,13 @@
               </tbody>
             </table>
           </div>
+          <div ref="loadMoreTrigger" class="h-6" aria-hidden="true"></div>
         </div>
 
-        <div class="flex justify-end pt-4">
-          <div class="join">
-            <button class="join-item btn btn-sm" :disabled="page <= 1" @click="changePage(page - 1)">«</button>
-            <button class="join-item btn btn-sm">Page {{ page }} / {{ totalPages }}</button>
-            <button class="join-item btn btn-sm" :disabled="page >= totalPages" @click="changePage(page + 1)">»</button>
-          </div>
+        <div class="flex justify-between pt-4 text-sm text-base-content/60">
+          <div>已加载 {{ userList.length }} / {{ total || '-' }} 条</div>
+          <div v-if="loadingMore">正在加载更多...</div>
+          <div v-else-if="!hasMore && userList.length > 0">没有更多了</div>
         </div>
       </div>
     </div>
@@ -76,16 +75,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
 import { getOnlineUserList, kickoutOnlineUser, type OnlineUserVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
+const loadingMore = ref(false)
 const userList = ref<OnlineUserVO[]>([])
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const hasMore = ref(true)
+const scrollContainer = ref<HTMLElement | null>(null)
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 const queryParams = reactive({
   keyword: '',
   ipaddr: ''
@@ -93,11 +96,24 @@ const queryParams = reactive({
 const dialog = useDialog()
 
 onMounted(() => {
-  fetchData()
+  fetchData({ reset: true })
+  nextTick(() => setupObserver())
 })
 
-const fetchData = async () => {
-  loading.value = true
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+const fetchData = async ({ append = false, reset = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append && loading.value) return
+  if (reset) {
+    page.value = 1
+    userList.value = []
+    hasMore.value = true
+  }
+  append ? (loadingMore.value = true) : (loading.value = true)
   try {
     const params: any = {
       page: page.value,
@@ -107,39 +123,64 @@ const fetchData = async () => {
     if (queryParams.ipaddr) params.ipaddr = queryParams.ipaddr
 
     const res = await getOnlineUserList(params)
-    userList.value = res?.records || []
+    const records = res?.records || []
     total.value = res?.total || 0
+    userList.value = append ? [...userList.value, ...records] : records
+    if (total.value) {
+      hasMore.value = userList.value.length < total.value
+    } else {
+      hasMore.value = records.length >= pageSize.value
+    }
   } catch (error: any) {
-    userList.value = []
-    total.value = 0
+    if (!append) {
+      userList.value = []
+      total.value = 0
+    }
     await dialog.alert(error?.message || error?.response?.data?.message || '获取在线用户失败')
   } finally {
-    loading.value = false
+    append ? (loadingMore.value = false) : (loading.value = false)
   }
 }
 
-const changePage = (p: number) => {
-  page.value = p
-  fetchData()
+const setupObserver = () => {
+  if (!scrollContainer.value || !loadMoreTrigger.value) return
+  observer?.disconnect()
+  observer = new IntersectionObserver(
+    entries => {
+      if (entries[0]?.isIntersecting) {
+        void loadMore()
+      }
+    },
+    {
+      root: scrollContainer.value,
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+  observer.observe(loadMoreTrigger.value)
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loading.value || loadingMore.value) return
+  page.value += 1
+  await fetchData({ append: true })
 }
 
 const handleSearch = () => {
-  page.value = 1
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const handleReset = () => {
   queryParams.keyword = ''
   queryParams.ipaddr = ''
-  page.value = 1
-  fetchData()
+  fetchData({ reset: true })
 }
 
 const handleKickout = async (user: OnlineUserVO) => {
   if (!await dialog.confirm(`确定要强制下线用户 ${user.username || user.userId} 吗？`)) return
   try {
     await kickoutOnlineUser(user.token)
-    fetchData()
+    fetchData({ reset: true })
   } catch (error: any) {
     await dialog.alert(error?.message || error?.response?.data?.message || '强制下线失败')
   }
