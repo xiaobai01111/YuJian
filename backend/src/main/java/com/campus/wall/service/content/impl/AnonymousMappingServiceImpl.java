@@ -27,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 匿名映射服务实现
  * 使用 AES-GCM 加密算法
- * 
  * 匿名映射持久化到数据库，确保重启后一致性
  * 注意：生产环境应接入 KMS（如阿里云 KMS、AWS KMS）
  */

@@ -21,14 +21,14 @@ public class SysConfigController {
 
     @Operation(summary = "获取允许的邮箱域名")
     @GetMapping("/email-domains")
-    @SaCheckPermission("system:config:list")
+    @SaCheckPermission("system:config:email-domains:view")
     public R<List<String>> getEmailDomains() {
         return R.ok(sysConfigService.getEmailAllowedDomains());
     }
 
     @Operation(summary = "更新允许的邮箱域名")
     @PutMapping("/email-domains")
-    @SaCheckPermission("system:config:edit")
+    @SaCheckPermission("system:config:email-domains:edit")
     public R<Void> updateEmailDomains(@RequestBody List<String> domains) {
         sysConfigService.updateEmailAllowedDomains(domains);
         return R.ok();
@@ -51,14 +51,14 @@ public class SysConfigController {
 
     @Operation(summary = "获取SMTP配置")
     @GetMapping("/smtp")
-    @SaCheckPermission("system:config:list")
+    @SaCheckPermission("system:config:smtp:view")
     public R<Map<String, Object>> getSmtpConfig() {
         return R.ok(sysConfigService.getSmtpConfig());
     }
 
     @Operation(summary = "更新SMTP配置")
     @PutMapping("/smtp")
-    @SaCheckPermission("system:config:edit")
+    @SaCheckPermission("system:config:smtp:edit")
     public R<Void> updateSmtpConfig(@RequestBody Map<String, Object> config) {
         sysConfigService.updateSmtpConfig(config);
         return R.ok();
@@ -66,7 +66,7 @@ public class SysConfigController {
 
     @Operation(summary = "发送测试邮件")
     @PostMapping("/smtp/test")
-    @SaCheckPermission("system:config:edit")
+    @SaCheckPermission("system:config:smtp:test")
     public R<Void> sendTestEmail(@RequestBody Map<String, String> body) {
         sysConfigService.sendTestEmail(body.get("email"));
         return R.ok();
@@ -74,14 +74,14 @@ public class SysConfigController {
 
     @Operation(summary = "获取邮件模板")
     @GetMapping("/email-templates")
-    @SaCheckPermission("system:config:list")
+    @SaCheckPermission("system:config:email-templates:view")
     public R<Map<String, Object>> getEmailTemplates() {
         return R.ok(sysConfigService.getEmailTemplates());
     }
 
     @Operation(summary = "更新邮件模板")
     @PutMapping("/email-templates")
-    @SaCheckPermission("system:config:edit")
+    @SaCheckPermission("system:config:email-templates:edit")
     public R<Void> updateEmailTemplates(@RequestBody Map<String, Object> templates) {
         sysConfigService.updateEmailTemplates(templates);
         return R.ok();

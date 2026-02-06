@@ -129,7 +129,7 @@ class UserPostPropertyTest {
 
         // 验证结果不包含已删除帖子
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).id).isEqualTo(1L);
+        assertThat(results.getFirst().id).isEqualTo(1L);
 
         // 清理
         allPosts.clear();
@@ -151,7 +151,7 @@ class UserPostPropertyTest {
 
         // 验证匿名帖子不暴露作者
         assertThat(results).hasSize(1);
-        Post result = results.get(0);
+        Post result = results.getFirst();
         // 在实际实现中，转换为 VO 时 author 应为 null
         assertThat(result.isAnonymous).isTrue();
 

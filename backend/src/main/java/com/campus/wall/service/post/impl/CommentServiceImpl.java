@@ -32,6 +32,7 @@ import com.campus.wall.vo.post.CommentConsoleVO;
 import com.campus.wall.vo.user.UserVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -60,10 +61,12 @@ public class CommentServiceImpl implements CommentService {
     private final RateLimitService rateLimitService;
     private final DataScopeService dataScopeService;
     private final OperLogService operLogService;
+    private final StringRedisTemplate redisTemplate;
 
     // 评论状态：0正常 1已删除
     private static final int STATUS_NORMAL = 0;
     private static final int STATUS_DELETED = 1;
+    private static final String POST_LOCK_KEY_PREFIX = "post:lock:";
 
     // 树洞板块
     private static final String BOARD_TREE_HOLE = BoardUtil.BOARD_TREE_HOLE;
@@ -83,6 +86,9 @@ public class CommentServiceImpl implements CommentService {
         Post post = postMapper.selectById(dto.getPostId());
         if (post == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey(dto.getPostId())))) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "帖子已锁定，无法评论");
         }
 
         // 敏感词检测
@@ -129,6 +135,10 @@ public class CommentServiceImpl implements CommentService {
 
         log.info("用户 {} 在帖子 {} 发表评论: {}", userId, dto.getPostId(), comment.getId());
         return comment.getId();
+    }
+
+    private String lockKey(Long postId) {
+        return POST_LOCK_KEY_PREFIX + postId;
     }
 
     @Override

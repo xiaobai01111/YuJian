@@ -31,10 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -241,7 +238,7 @@ public class StatisticsController {
         Map<Long, User> userMap = recentPosts.isEmpty() ? Map.of() : userMapper.selectBatchIds(
                 recentPosts.stream()
                         .map(Post::getUserId)
-                        .filter(id -> id != null)
+                        .filter(Objects::nonNull)
                         .distinct()
                         .collect(Collectors.toList())
         ).stream().collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
@@ -322,7 +319,7 @@ public class StatisticsController {
         Map<Long, User> reporterMap = reports.isEmpty() ? Map.of() : userMapper.selectBatchIds(
                 reports.stream()
                         .map(Report::getReporterId)
-                        .filter(id -> id != null)
+                        .filter(Objects::nonNull)
                         .distinct()
                         .collect(Collectors.toList())
         ).stream().collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
@@ -365,7 +362,7 @@ public class StatisticsController {
         Map<Long, User> verifyUserMap = verifications.isEmpty() ? Map.of() : userMapper.selectBatchIds(
                 verifications.stream()
                         .map(IdentityVerification::getUserId)
-                        .filter(id -> id != null)
+                        .filter(Objects::nonNull)
                         .distinct()
                         .collect(Collectors.toList())
         ).stream().collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));

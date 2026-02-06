@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 /**
  * 内容安全审核服务实现
- * 
  * 注意：生产环境应接入阿里云/腾讯云内容安全API
  * 当前为模拟实现
  */

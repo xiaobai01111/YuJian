@@ -33,6 +33,9 @@
                 <option :value="0">正常</option>
                 <option :value="1">已解决</option>
                 <option :value="2">已删除</option>
+                <option :value="3">待审核</option>
+                <option :value="4">已下架</option>
+                <option :value="5">已售出</option>
               </select>
             </div>
             <div class="form-control">
@@ -104,13 +107,58 @@
                   </td>
                   <td>{{ formatDateTime(post.createdAt) }}</td>
                   <td>
-                    <div class="flex gap-1">
+                    <div class="flex flex-wrap gap-1">
                       <button class="btn btn-ghost btn-xs" @click="goToDetail(post.id)">查看</button>
                       <button
-                        v-if="canResolve && post.status === 0"
+                        v-if="canResolve && post.status === 0 && isResolvePost(post)"
                         class="btn btn-success btn-xs"
                         @click="handleResolve(post)"
                       >已解决</button>
+                      <button
+                        v-if="canSold && post.status === 0 && isMarketPost(post)"
+                        class="btn btn-warning btn-xs"
+                        @click="handleSold(post)"
+                      >已售出</button>
+                      <button
+                        v-if="canReject && post.status === 0 && !post.authorIsAdmin"
+                        class="btn btn-outline btn-xs"
+                        @click="handleReject(post)"
+                      >驳回</button>
+                      <button
+                        v-if="canPin && !post.showOnHome"
+                        class="btn btn-info btn-xs"
+                        @click="handlePin(post)"
+                      >置顶</button>
+                      <button
+                        v-if="canPin && post.showOnHome"
+                        class="btn btn-ghost btn-xs"
+                        @click="handleUnpin(post)"
+                      >取消置顶</button>
+                      <button
+                        v-if="canOffline && post.status !== 4 && post.status !== 2"
+                        class="btn btn-ghost btn-xs"
+                        @click="handleOffline(post)"
+                      >下架</button>
+                      <button
+                        v-if="canOnline && post.status === 4"
+                        class="btn btn-ghost btn-xs"
+                        @click="handleOnline(post)"
+                      >上架</button>
+                      <button
+                        v-if="canLock && !post.isLocked"
+                        class="btn btn-ghost btn-xs"
+                        @click="handleLock(post)"
+                      >锁定</button>
+                      <button
+                        v-if="canUnlock && post.isLocked"
+                        class="btn btn-ghost btn-xs"
+                        @click="handleUnlock(post)"
+                      >解锁</button>
+                      <button
+                        v-if="canCommentList"
+                        class="btn btn-ghost btn-xs"
+                        @click="goToComments(post.id)"
+                      >评论</button>
                       <button
                         v-if="canDelete"
                         class="btn btn-error btn-xs"
@@ -142,7 +190,21 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { getConsolePostList, resolveConsolePost, deleteConsolePost, type PostVO } from '@/api/post'
+import { useRouter } from 'vue-router'
+import {
+  getConsolePostList,
+  resolveConsolePost,
+  deleteConsolePost,
+  soldConsolePost,
+  rejectConsolePost,
+  pinConsolePost,
+  unpinConsolePost,
+  offlineConsolePost,
+  onlineConsolePost,
+  lockConsolePost,
+  unlockConsolePost,
+  type PostVO
+} from '@/api/post'
 import { BOARD_OPTIONS, getBoardLabel, getPostBoards } from '@/utils/boards'
 import { useUserStore } from '@/stores/user'
 import PostPublishModal from '@/components/post/PostPublishModal.vue'
@@ -151,6 +213,7 @@ import { useDialog } from '@/composables/useDialog'
 
 const userStore = useUserStore()
 const dialog = useDialog()
+const router = useRouter()
 
 const posts = ref<PostVO[]>([])
 const loading = ref(false)
@@ -172,11 +235,37 @@ const filters = reactive({
   keyword: ''
 })
 
-const boardOptions = BOARD_OPTIONS
+const canViewBoard = (key: string) => {
+  return userStore.hasPermission(`content:channel:${key}:view`) || userStore.hasPermission(`content:channel:${key}:manage`)
+}
+
+const boardOptions = computed(() => {
+  if (userStore.userInfo?.permissions?.includes('*')) {
+    return BOARD_OPTIONS
+  }
+  return BOARD_OPTIONS.filter(option => canViewBoard(option.key))
+})
+
+const resolveBoards = ['help', 'treehole', 'lost-found']
+const isMarketPost = (post: PostVO) => {
+  return getPostBoards(post).includes('market')
+}
+const isResolvePost = (post: PostVO) => {
+  const boards = getPostBoards(post)
+  return !boards.includes('market') && resolveBoards.some(board => boards.includes(board))
+}
 
 const canAdd = computed(() => userStore.hasPermission('content:post:add'))
 const canDelete = computed(() => userStore.hasPermission('content:post:delete'))
 const canResolve = computed(() => userStore.hasPermission('content:post:resolve'))
+const canSold = computed(() => userStore.hasPermission('content:post:sold'))
+const canReject = computed(() => userStore.hasPermission('content:post:reject'))
+const canPin = computed(() => userStore.hasPermission('content:post:pin'))
+const canOffline = computed(() => userStore.hasPermission('content:post:offline'))
+const canOnline = computed(() => userStore.hasPermission('content:post:online'))
+const canLock = computed(() => userStore.hasPermission('content:post:lock'))
+const canUnlock = computed(() => userStore.hasPermission('content:post:unlock'))
+const canCommentList = computed(() => userStore.hasPermission('content:comment:list'))
 
 const loadPosts = async ({ append = false, reset = false } = {}) => {
   if (append && (loadingMore.value || loading.value)) return
@@ -238,6 +327,9 @@ const getStatusText = (status: number) => {
   if (status === 0) return '正常'
   if (status === 1) return '已解决'
   if (status === 2) return '已删除'
+  if (status === 3) return '待审核'
+  if (status === 4) return '已下架'
+  if (status === 5) return '已售出'
   return '未知'
 }
 
@@ -245,6 +337,9 @@ const getStatusClass = (status: number) => {
   if (status === 0) return 'badge badge-success badge-sm'
   if (status === 1) return 'badge badge-warning badge-sm'
   if (status === 2) return 'badge badge-error badge-sm'
+  if (status === 3) return 'badge badge-info badge-sm'
+  if (status === 4) return 'badge badge-neutral badge-sm'
+  if (status === 5) return 'badge badge-accent badge-sm'
   return 'badge badge-ghost badge-sm'
 }
 
@@ -263,16 +358,122 @@ const goToPublish = () => {
   showPublish.value = true
 }
 
+const goToComments = (postId: number) => {
+  router.push({
+    path: '/console/content/comment',
+    query: { postId: String(postId) }
+  })
+}
+
 const handlePublishSuccess = () => {
   loadPosts({ reset: true })
 }
 
+const promptReasonOptional = async () => {
+  const reason = await dialog.prompt('请输入操作原因（可选）', { required: false, multiline: true })
+  if (reason === null) return null
+  const trimmed = reason.trim()
+  return trimmed ? trimmed : undefined
+}
+
 const handleResolve = async (post: PostVO) => {
   if (!await dialog.confirm(`确认将帖子「${post.title}」标记为已解决？`)) return
-  const reason = await dialog.prompt('请输入操作原因（必填）', { required: true, multiline: true })
-  if (!reason || !reason.trim()) return
+  const reason = await promptReasonOptional()
+  if (reason === null) return
   try {
-    await resolveConsolePost(post.id, reason.trim())
+    await resolveConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handleSold = async (post: PostVO) => {
+  if (!await dialog.confirm(`确认将帖子「${post.title}」标记为已售出？`)) return
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await soldConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handleReject = async (post: PostVO) => {
+  if (!await dialog.confirm(`确认驳回帖子「${post.title}」？`)) return
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await rejectConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handlePin = async (post: PostVO) => {
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await pinConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handleUnpin = async (post: PostVO) => {
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await unpinConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handleOffline = async (post: PostVO) => {
+  if (!await dialog.confirm(`确认下架帖子「${post.title}」？`)) return
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await offlineConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handleOnline = async (post: PostVO) => {
+  if (!await dialog.confirm(`确认上架帖子「${post.title}」？`)) return
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await onlineConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handleLock = async (post: PostVO) => {
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await lockConsolePost(post.id, reason)
+    await loadPosts({ reset: true })
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
+  }
+}
+
+const handleUnlock = async (post: PostVO) => {
+  const reason = await promptReasonOptional()
+  if (reason === null) return
+  try {
+    await unlockConsolePost(post.id, reason)
     await loadPosts({ reset: true })
   } catch (error: unknown) {
     await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
@@ -281,10 +482,10 @@ const handleResolve = async (post: PostVO) => {
 
 const handleDelete = async (post: PostVO) => {
   if (!await dialog.confirm(`确认删除帖子「${post.title}」？`)) return
-  const reason = await dialog.prompt('请输入操作原因（必填）', { required: true, multiline: true })
-  if (!reason || !reason.trim()) return
+  const reason = await promptReasonOptional()
+  if (reason === null) return
   try {
-    await deleteConsolePost(post.id, reason.trim())
+    await deleteConsolePost(post.id, reason)
     await loadPosts({ reset: true })
   } catch (error: unknown) {
     await dialog.alert((error as ApiErrorLike)?.message || '删除失败')

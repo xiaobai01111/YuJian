@@ -1013,12 +1013,28 @@ export function queryAuthRules(params: { page?: number; size?: number; triggerTy
     return request.get<PageResult<AuthRuleVO>>('/api/v1/system/auth-rules', { params })
 }
 
+export function getAuthRuleDetail(id: number) {
+    return request.get<AuthRuleVO>(`/api/v1/system/auth-rules/${id}`)
+}
+
 export function createAuthRule(data: AuthRuleDTO) {
     return request.post<number>('/api/v1/system/auth-rules', data)
 }
 
 export function updateAuthRule(id: number, data: AuthRuleDTO) {
     return request.put<void>(`/api/v1/system/auth-rules/${id}`, data)
+}
+
+export function updateAuthRuleStatus(id: number, enabled: boolean) {
+    return request.patch<void>(`/api/v1/system/auth-rules/${id}/status`, { enabled })
+}
+
+export function updateAuthRulePriority(id: number, priority: number) {
+    return request.patch<void>(`/api/v1/system/auth-rules/${id}/priority`, { priority })
+}
+
+export function cloneAuthRule(id: number) {
+    return request.post<number>(`/api/v1/system/auth-rules/${id}/clone`)
 }
 
 export function deleteAuthRule(id: number) {

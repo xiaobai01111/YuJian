@@ -27,6 +27,8 @@ public class PostVO {
     private Integer status;
     @Schema(description = "是否同步到首页展示")
     private Boolean showOnHome;
+    @Schema(description = "是否已锁定评论")
+    private Boolean isLocked;
     private Integer likeCount;
     private Integer commentCount;
     private Integer viewCount;
@@ -34,6 +36,8 @@ public class PostVO {
 
     @Schema(description = "作者信息（匿名时为null）")
     private UserVO author;
+    @Schema(description = "作者是否为管理员")
+    private Boolean authorIsAdmin;
 
     @Schema(description = "当前用户是否已点赞")
     private Boolean isLiked;

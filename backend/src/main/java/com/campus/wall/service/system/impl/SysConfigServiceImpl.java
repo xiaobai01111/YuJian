@@ -9,6 +9,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
@@ -277,7 +278,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             throw new RuntimeException("发件人名称过长");
         }
         saveConfig(SysConfigKeys.SMTP_FROM_NAME, fromName, "string", "发件人名称");
-        Object sslObj = config.containsKey("ssl") ? config.get("ssl") : true;
+        Object sslObj = config.getOrDefault("ssl", true);
         String ssl = toSafeString(sslObj);
         if (ssl == null || ssl.isBlank()) {
             ssl = "true";
@@ -547,31 +548,14 @@ public class SysConfigServiceImpl implements SysConfigService {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void sendEmailWithTemplate(String to, String templateName, Map<String, String> variables) {
         log.info("使用模板 {} 发送邮件到: {}", templateName, maskEmail(to));
         
         // P2-2: 使用缓存获取SMTP配置，减少DB查询
         SmtpConfigCache smtp = getCachedSmtpConfig();
-        
-        if (smtp.host() == null || smtp.host().isBlank() || smtp.username() == null || smtp.username().isBlank()) {
-            throw new RuntimeException("请先配置SMTP服务器信息");
-        }
-        
-        // P2-2: 使用缓存获取模板
-        Map<String, Object> templates = getCachedEmailTemplates();
-        Object templateObj = templates.get(templateName);
-        if (templateObj == null) {
-            throw new RuntimeException("邮件模板不存在: " + templateName);
-        }
-        
-        Map<String, String> template;
-        try {
-            template = (Map<String, String>) templateObj;
-        } catch (ClassCastException e) {
-            throw new RuntimeException("邮件模板格式错误: " + templateName);
-        }
-        
+
+        Map<String, String> template = getStringStringMap(templateName, smtp);
+
         String subject = template.get("subject");
         String body = template.get("body");
         
@@ -609,5 +593,30 @@ public class SysConfigServiceImpl implements SysConfigService {
             log.error("发送邮件失败: {}", e.getMessage(), e);
             throw new RuntimeException("发送邮件失败: " + e.getMessage());
         }
+    }
+
+    private @NonNull Map<String, String> getStringStringMap(String templateName, SmtpConfigCache smtp) {
+        if (smtp.host() == null || smtp.host().isBlank() || smtp.username() == null || smtp.username().isBlank()) {
+            throw new RuntimeException("请先配置SMTP服务器信息");
+        }
+
+        // P2-2: 使用缓存获取模板
+        Map<String, Object> templates = getCachedEmailTemplates();
+        Object templateObj = templates.get(templateName);
+        if (templateObj == null) {
+            throw new RuntimeException("邮件模板不存在: " + templateName);
+        }
+
+        if (templateObj instanceof Map<?, ?> rawMap) {
+            Map<String, String> template = new HashMap<>();
+            for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                if (!(entry.getKey() instanceof String key) || !(entry.getValue() instanceof String value)) {
+                    throw new RuntimeException("邮件模板格式错误: " + templateName);
+                }
+                template.put(key, value);
+            }
+            return template;
+        }
+        throw new RuntimeException("邮件模板格式错误: " + templateName);
     }
 }

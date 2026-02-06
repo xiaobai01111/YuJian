@@ -231,6 +231,7 @@ public class SensitiveWordController {
             // 记录操作日志
             operLogService.log("敏感词", id, "修改级别", 
                 "敏感词[" + word.getWord() + "]级别从" + oldLevel + "改为" + level);
+            sensitiveWordService.reloadSensitiveWords();
         }
         return R.ok(toVO(word));
     }

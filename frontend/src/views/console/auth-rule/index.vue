@@ -55,7 +55,8 @@
 
       <!-- Table -->
       <div class="card bg-base-100 shadow-sm flex-1 min-h-0">
-        <div class="card-body p-0 flex flex-col min-h-0">
+        <div v-if="!canList" class="card-body p-6 text-slate-500 text-center">无权限查看认证规则</div>
+        <div v-else class="card-body p-0 flex flex-col min-h-0">
           <div ref="scrollContainer" class="flex-1 overflow-auto">
             <div class="overflow-x-auto">
               <table class="table">
@@ -69,7 +70,7 @@
                   <th class="w-40">角色</th>
                   <th class="w-20">状态</th>
                   <th class="w-16">优先级</th>
-                  <th class="w-32">操作</th>
+                  <th class="w-48">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -98,14 +99,26 @@
                     </div>
                   </td>
                   <td>
-                    <span :class="rule.enabled ? 'badge badge-success badge-sm' : 'badge badge-ghost badge-sm'">
-                      {{ rule.enabled ? '启用' : '停用' }}
-                    </span>
+                    <div class="flex items-center gap-2">
+                      <span :class="rule.enabled ? 'badge badge-success badge-sm' : 'badge badge-ghost badge-sm'">
+                        {{ rule.enabled ? '启用' : '停用' }}
+                      </span>
+                      <button v-if="canStatus" class="btn btn-xs btn-ghost" @click="handleToggleStatus(rule)">
+                        {{ rule.enabled ? '停用' : '启用' }}
+                      </button>
+                    </div>
                   </td>
-                  <td>{{ rule.priority ?? 100 }}</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span>{{ rule.priority ?? 100 }}</span>
+                      <button v-if="canSort" class="btn btn-xs btn-ghost" @click="handlePriority(rule)">调整</button>
+                    </div>
+                  </td>
                   <td>
                     <div class="flex gap-2">
+                      <button v-if="canView" class="btn btn-xs btn-ghost" @click="openDetail(rule)">详情</button>
                       <button v-if="canEdit" class="btn btn-xs btn-ghost" @click="openEditModal(rule)">编辑</button>
+                      <button v-if="canClone" class="btn btn-xs btn-ghost" @click="handleClone(rule)">复制</button>
                       <button v-if="canDelete" class="btn btn-xs btn-ghost text-error" @click="handleDelete(rule)">删除</button>
                     </div>
                   </td>
@@ -273,17 +286,56 @@
       </div>
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
+
+    <!-- Detail Modal -->
+    <dialog ref="detailModal" class="modal">
+      <div class="modal-box max-w-2xl">
+        <h3 class="font-bold text-lg mb-4">规则详情</h3>
+        <div v-if="currentDetail" class="space-y-3 text-sm">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><span class="font-semibold">规则名称：</span>{{ currentDetail.name }}</div>
+            <div><span class="font-semibold">状态：</span>{{ currentDetail.enabled ? '启用' : '停用' }}</div>
+            <div><span class="font-semibold">触发类型：</span>{{ triggerText(currentDetail.triggerType) }}</div>
+            <div><span class="font-semibold">认证方式：</span>{{ methodText(currentDetail.verifyMethod) }}</div>
+            <div><span class="font-semibold">优先级：</span>{{ currentDetail.priority ?? 100 }}</div>
+            <div><span class="font-semibold">备注：</span>{{ currentDetail.remark || '-' }}</div>
+          </div>
+          <div>
+            <span class="font-semibold">匹配：</span>{{ matchText(currentDetail.matchType, currentDetail.matchValue) }}
+          </div>
+          <div>
+            <span class="font-semibold">角色：</span>
+            <span v-if="currentDetail.roleNames && currentDetail.roleNames.length">
+              {{ currentDetail.roleNames.join('、') }}
+            </span>
+            <span v-else>-</span>
+          </div>
+          <div class="text-xs text-slate-500">
+            创建时间：{{ currentDetail.createdAt ? new Date(currentDetail.createdAt).toLocaleString() : '-' }}
+            ｜更新时间：{{ currentDetail.updatedAt ? new Date(currentDetail.updatedAt).toLocaleString() : '-' }}
+          </div>
+        </div>
+        <div class="modal-action">
+          <button class="btn" @click="closeDetail">关闭</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 import {
   queryAuthRules,
+  getAuthRuleDetail,
   createAuthRule,
   updateAuthRule,
+  updateAuthRuleStatus,
+  updateAuthRulePriority,
+  cloneAuthRule,
   deleteAuthRule,
   getRoleList,
   getEmailDomains,
@@ -296,9 +348,14 @@ import {
 const userStore = useUserStore()
 const dialog = useDialog()
 
+const canList = computed(() => userStore.hasPermission('system:auth-rule:list'))
+const canView = computed(() => userStore.hasPermission('system:auth-rule:view'))
 const canAdd = computed(() => userStore.hasPermission('system:auth-rule:add'))
 const canEdit = computed(() => userStore.hasPermission('system:auth-rule:edit'))
 const canDelete = computed(() => userStore.hasPermission('system:auth-rule:delete'))
+const canStatus = computed(() => userStore.hasPermission('system:auth-rule:status'))
+const canSort = computed(() => userStore.hasPermission('system:auth-rule:sort'))
+const canClone = computed(() => userStore.hasPermission('system:auth-rule:clone'))
 
 const rules = ref<AuthRuleVO[]>([])
 const loading = ref(false)
@@ -326,9 +383,11 @@ const studentRangeEnd = ref('')
 
 const formModal = ref<HTMLDialogElement | null>(null)
 const deleteModal = ref<HTMLDialogElement | null>(null)
+const detailModal = ref<HTMLDialogElement | null>(null)
 const isEdit = ref(false)
 const editId = ref<number | null>(null)
 const deleteTarget = ref<AuthRuleVO | null>(null)
+const currentDetail = ref<AuthRuleVO | null>(null)
 
 const form = reactive<AuthRuleDTO>({
   name: '',
@@ -353,7 +412,9 @@ const selectedRoleId = computed({
 })
 
 onMounted(() => {
-  loadRules({ reset: true })
+  if (canList.value) {
+    loadRules({ reset: true })
+  }
   loadOptions()
   nextTick(() => setupObserver())
 })
@@ -363,7 +424,24 @@ onUnmounted(() => {
   observer = null
 })
 
+watch(canList, val => {
+  if (val && rules.value.length === 0) {
+    void loadRules({ reset: true })
+  }
+  if (!val) {
+    rules.value = []
+    total.value = 0
+    hasMore.value = false
+  }
+})
+
 const loadRules = async ({ append = false, reset = false } = {}) => {
+  if (!canList.value) {
+    rules.value = []
+    total.value = 0
+    hasMore.value = false
+    return
+  }
   if (append && (loadingMore.value || loading.value)) return
   if (!append && loading.value) return
   if (reset) {
@@ -492,6 +570,23 @@ const openEditModal = (rule: AuthRuleVO) => {
   formModal.value?.showModal()
 }
 
+const openDetail = async (rule: AuthRuleVO) => {
+  if (!canView.value) {
+    await dialog.alert('无权限查看规则详情')
+    return
+  }
+  try {
+    currentDetail.value = await getAuthRuleDetail(rule.id)
+  } catch {
+    currentDetail.value = rule
+  }
+  detailModal.value?.showModal()
+}
+
+const closeDetail = () => {
+  detailModal.value?.close()
+}
+
 const closeModal = () => {
   formModal.value?.close()
 }
@@ -546,6 +641,58 @@ const handleSave = async () => {
 const handleDelete = (rule: AuthRuleVO) => {
   deleteTarget.value = rule
   deleteModal.value?.showModal()
+}
+
+const handleToggleStatus = async (rule: AuthRuleVO) => {
+  if (!canStatus.value) {
+    await dialog.alert('无权限修改规则状态')
+    return
+  }
+  const nextEnabled = !rule.enabled
+  try {
+    await updateAuthRuleStatus(rule.id, nextEnabled)
+    rule.enabled = nextEnabled
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '操作失败')
+  }
+}
+
+const handlePriority = async (rule: AuthRuleVO) => {
+  if (!canSort.value) {
+    await dialog.alert('无权限调整优先级')
+    return
+  }
+  const value = await dialog.prompt('请输入优先级（数字越小越靠前）', {
+    title: '调整优先级',
+    placeholder: String(rule.priority ?? 100),
+    defaultValue: String(rule.priority ?? 100),
+    required: true
+  })
+  if (value == null) return
+  const priority = Number(value)
+  if (Number.isNaN(priority)) {
+    await dialog.alert('请输入有效数字')
+    return
+  }
+  try {
+    await updateAuthRulePriority(rule.id, priority)
+    rule.priority = priority
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '操作失败')
+  }
+}
+
+const handleClone = async (rule: AuthRuleVO) => {
+  if (!canClone.value) {
+    await dialog.alert('无权限复制规则')
+    return
+  }
+  try {
+    await cloneAuthRule(rule.id)
+    await loadRules({ reset: true })
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '复制失败')
+  }
 }
 
 const closeDelete = () => {

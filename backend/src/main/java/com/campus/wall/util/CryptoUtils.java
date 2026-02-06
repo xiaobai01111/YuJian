@@ -13,11 +13,9 @@ import java.util.Base64;
 
 /**
  * 加密工具类 - 使用 AES-GCM 加密算法
- * 
  * 安全说明：
  * - 生产环境必须配置加密密钥（环境变量或配置文件）
  * - 使用默认密钥时会输出警告日志
- * 
  * 密钥配置方式（优先级从高到低）：
  * 1. 环境变量: CAMPUS_CRYPTO_KEY
  * 2. 配置文件: app.security.crypto-key

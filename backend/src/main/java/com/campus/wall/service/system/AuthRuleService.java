@@ -9,11 +9,19 @@ public interface AuthRuleService {
 
     PageResult<AuthRuleVO> queryRules(int page, int size, String triggerType, String verifyMethod, Boolean enabled);
 
+    AuthRuleVO getRuleById(Long id);
+
     Long createRule(AuthRuleDTO dto);
 
     void updateRule(Long id, AuthRuleDTO dto);
 
     void deleteRule(Long id);
+
+    void updateStatus(Long id, Boolean enabled);
+
+    void updatePriority(Long id, Integer priority);
+
+    Long cloneRule(Long id);
 
     void applyRules(User user, String triggerType, String verifyMethod);
 }

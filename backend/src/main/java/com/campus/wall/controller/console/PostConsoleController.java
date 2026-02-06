@@ -73,4 +73,60 @@ public class PostConsoleController {
         postService.markAsSoldByAdmin(id, reason);
         return R.ok();
     }
+
+    @Operation(summary = "控制台驳回帖子")
+    @PutMapping("/{id}/reject")
+    public R<Void> reject(@PathVariable Long id,
+                          @RequestParam(value = "reason", required = false) String reason) {
+        postService.rejectPostByAdmin(id, reason);
+        return R.ok();
+    }
+
+    @Operation(summary = "控制台置顶帖子")
+    @PutMapping("/{id}/pin")
+    public R<Void> pin(@PathVariable Long id,
+                       @RequestParam(value = "reason", required = false) String reason) {
+        postService.pinPostByAdmin(id, reason);
+        return R.ok();
+    }
+
+    @Operation(summary = "控制台取消置顶帖子")
+    @PutMapping("/{id}/unpin")
+    public R<Void> unpin(@PathVariable Long id,
+                         @RequestParam(value = "reason", required = false) String reason) {
+        postService.unpinPostByAdmin(id, reason);
+        return R.ok();
+    }
+
+    @Operation(summary = "控制台下架帖子")
+    @PutMapping("/{id}/offline")
+    public R<Void> offline(@PathVariable Long id,
+                           @RequestParam(value = "reason", required = false) String reason) {
+        postService.offlinePostByAdmin(id, reason);
+        return R.ok();
+    }
+
+    @Operation(summary = "控制台上架帖子")
+    @PutMapping("/{id}/online")
+    public R<Void> online(@PathVariable Long id,
+                          @RequestParam(value = "reason", required = false) String reason) {
+        postService.onlinePostByAdmin(id, reason);
+        return R.ok();
+    }
+
+    @Operation(summary = "控制台锁定帖子")
+    @PutMapping("/{id}/lock")
+    public R<Void> lock(@PathVariable Long id,
+                        @RequestParam(value = "reason", required = false) String reason) {
+        postService.lockPostByAdmin(id, reason);
+        return R.ok();
+    }
+
+    @Operation(summary = "控制台解锁帖子")
+    @PutMapping("/{id}/unlock")
+    public R<Void> unlock(@PathVariable Long id,
+                          @RequestParam(value = "reason", required = false) String reason) {
+        postService.unlockPostByAdmin(id, reason);
+        return R.ok();
+    }
 }

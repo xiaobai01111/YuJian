@@ -346,7 +346,7 @@ public class ReportServiceImpl implements ReportService {
                     .map(PostBoard::getBoard)
                     .collect(Collectors.toList());
             if (!boards.isEmpty()) {
-                postVO.setBoard(boards.get(0));
+                postVO.setBoard(boards.getFirst());
                 postVO.setBoards(boards);
             } else {
                 postVO.setBoard(post.getBoard());

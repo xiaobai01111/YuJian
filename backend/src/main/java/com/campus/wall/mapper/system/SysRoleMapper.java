@@ -50,4 +50,20 @@ public interface SysRoleMapper extends BaseMapper<SysRole> {
 
     @Select("SELECT * FROM sys_roles WHERE role_key = #{roleKey} LIMIT 1")
     SysRole selectByRoleKey(@Param("roleKey") String roleKey);
+
+    @Select("""
+        <script>
+        SELECT DISTINCT ur.user_id
+        FROM sys_user_roles ur
+        INNER JOIN sys_roles r ON r.id = ur.role_id
+        WHERE r.role_key = #{roleKey}
+          <if test="userIds != null and userIds.size() > 0">
+            AND ur.user_id IN
+            <foreach collection="userIds" item="id" open="(" separator="," close=")">
+              #{id}
+            </foreach>
+          </if>
+        </script>
+        """)
+    List<Long> selectUserIdsByRoleKey(@Param("roleKey") String roleKey, @Param("userIds") List<Long> userIds);
 }

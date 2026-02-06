@@ -4,6 +4,8 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.system.AuthRuleDTO;
+import com.campus.wall.dto.system.AuthRulePriorityDTO;
+import com.campus.wall.dto.system.AuthRuleStatusDTO;
 import com.campus.wall.service.system.AuthRuleService;
 import com.campus.wall.vo.system.AuthRuleVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,12 +41,42 @@ public class AuthRuleController {
         return R.ok(authRuleService.createRule(dto));
     }
 
+    @Operation(summary = "获取认证规则详情")
+    @SaCheckLogin
+    @GetMapping("/{id}")
+    public R<AuthRuleVO> detail(@PathVariable Long id) {
+        return R.ok(authRuleService.getRuleById(id));
+    }
+
     @Operation(summary = "更新认证规则")
     @SaCheckLogin
     @PutMapping("/{id}")
     public R<Void> update(@PathVariable Long id, @RequestBody @Valid AuthRuleDTO dto) {
         authRuleService.updateRule(id, dto);
         return R.ok();
+    }
+
+    @Operation(summary = "更新认证规则状态")
+    @SaCheckLogin
+    @PatchMapping("/{id}/status")
+    public R<Void> updateStatus(@PathVariable Long id, @RequestBody @Valid AuthRuleStatusDTO dto) {
+        authRuleService.updateStatus(id, dto.getEnabled());
+        return R.ok();
+    }
+
+    @Operation(summary = "更新认证规则优先级")
+    @SaCheckLogin
+    @PatchMapping("/{id}/priority")
+    public R<Void> updatePriority(@PathVariable Long id, @RequestBody @Valid AuthRulePriorityDTO dto) {
+        authRuleService.updatePriority(id, dto.getPriority());
+        return R.ok();
+    }
+
+    @Operation(summary = "复制认证规则")
+    @SaCheckLogin
+    @PostMapping("/{id}/clone")
+    public R<Long> cloneRule(@PathVariable Long id) {
+        return R.ok(authRuleService.cloneRule(id));
     }
 
     @Operation(summary = "删除认证规则")

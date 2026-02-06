@@ -267,16 +267,7 @@ public class FileServiceImpl implements FileService {
         return new CleanupOptions(markOrphanHours, retainDays, deleteLimit);
     }
 
-    private static class CleanupOptions {
-        private final int markOrphanHours;
-        private final int retainDays;
-        private final int deleteLimit;
-
-        private CleanupOptions(int markOrphanHours, int retainDays, int deleteLimit) {
-            this.markOrphanHours = markOrphanHours;
-            this.retainDays = retainDays;
-            this.deleteLimit = deleteLimit;
-        }
+    private record CleanupOptions(int markOrphanHours, int retainDays, int deleteLimit) {
     }
 
     private void validateFile(MultipartFile file, String targetType) {

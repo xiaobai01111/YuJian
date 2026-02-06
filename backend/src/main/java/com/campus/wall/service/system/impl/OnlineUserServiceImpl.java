@@ -92,7 +92,7 @@ public class OnlineUserServiceImpl implements OnlineUserService {
             return null;
         }
 
-        Long userId = null;
+        Long userId;
         try {
             userId = Long.valueOf(loginId.toString());
         } catch (NumberFormatException ignored) {
@@ -108,7 +108,7 @@ public class OnlineUserServiceImpl implements OnlineUserService {
 
         // 如果 token session 中缺少必要信息，从数据库获取用户
         boolean needFetchUser = !StringUtils.hasText(username) || !StringUtils.hasText(nickname) || !StringUtils.hasText(loginTime);
-        User user = null;
+        User user;
         if (needFetchUser) {
             user = userMapper.selectById(userId);
             if (user == null) {

@@ -150,12 +150,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { batchDeleteConsoleComments, deleteConsoleComment, getConsoleComments, updateConsoleComment, type CommentConsoleVO } from '@/api/comment'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const dialog = useDialog()
 
@@ -336,6 +337,10 @@ const goToPost = (postId: number) => {
 }
 
 onMounted(() => {
+  const queryPostId = route.query.postId
+  if (typeof queryPostId === 'string' && queryPostId.trim()) {
+    filters.postId = queryPostId.trim()
+  }
   loadComments({ reset: true })
   nextTick(() => setupObserver())
 })

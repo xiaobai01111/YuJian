@@ -51,6 +51,15 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     }
 
     @Override
+    public AuthRuleVO getRuleById(Long id) {
+        SysAuthRule rule = authRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new RuntimeException("规则不存在");
+        }
+        return toVO(rule);
+    }
+
+    @Override
     public Long createRule(AuthRuleDTO dto) {
         SysAuthRule rule = new SysAuthRule();
         copy(dto, rule);
@@ -72,6 +81,49 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     @Override
     public void deleteRule(Long id) {
         authRuleMapper.deleteById(id);
+    }
+
+    @Override
+    public void updateStatus(Long id, Boolean enabled) {
+        SysAuthRule rule = authRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new RuntimeException("规则不存在");
+        }
+        rule.setEnabled(enabled != null ? enabled : Boolean.TRUE);
+        authRuleMapper.updateById(rule);
+    }
+
+    @Override
+    public void updatePriority(Long id, Integer priority) {
+        if (priority == null) {
+            throw new RuntimeException("优先级不能为空");
+        }
+        SysAuthRule rule = authRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new RuntimeException("规则不存在");
+        }
+        rule.setPriority(priority);
+        authRuleMapper.updateById(rule);
+    }
+
+    @Override
+    public Long cloneRule(Long id) {
+        SysAuthRule rule = authRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new RuntimeException("规则不存在");
+        }
+        SysAuthRule copy = new SysAuthRule();
+        copy.setName(buildCloneName(rule.getName()));
+        copy.setEnabled(rule.getEnabled());
+        copy.setTriggerType(rule.getTriggerType());
+        copy.setVerifyMethod(rule.getVerifyMethod());
+        copy.setMatchType(rule.getMatchType());
+        copy.setMatchValue(rule.getMatchValue());
+        copy.setRoleIds(rule.getRoleIds() != null ? new ArrayList<>(rule.getRoleIds()) : null);
+        copy.setPriority(rule.getPriority());
+        copy.setRemark(rule.getRemark());
+        authRuleMapper.insert(copy);
+        return copy.getId();
     }
 
     @Override
@@ -162,7 +214,7 @@ public class AuthRuleServiceImpl implements AuthRuleService {
             String studentId = user.getStudentId();
             if (studentId == null) return false;
             List<String> list = sysConfigService.getStudentIdWhitelist();
-            return list.stream().anyMatch(item -> studentId.equals(item));
+            return list.stream().anyMatch(studentId::equals);
         }
 
         return false;
@@ -259,5 +311,10 @@ public class AuthRuleServiceImpl implements AuthRuleService {
         }
 
         return vo;
+    }
+
+    private String buildCloneName(String name) {
+        String base = StringUtils.hasText(name) ? name.trim() : "规则";
+        return base + " - 副本";
     }
 }

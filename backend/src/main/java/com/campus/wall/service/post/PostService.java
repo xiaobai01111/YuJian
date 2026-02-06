@@ -125,6 +125,29 @@ public interface PostService {
     void markAsSoldByAdmin(Long postId, String reason);
 
     /**
+     * 控制台驳回帖子
+     */
+    void rejectPostByAdmin(Long postId, String reason);
+
+    /**
+     * 控制台置顶/取消置顶
+     */
+    void pinPostByAdmin(Long postId, String reason);
+    void unpinPostByAdmin(Long postId, String reason);
+
+    /**
+     * 控制台上下架
+     */
+    void offlinePostByAdmin(Long postId, String reason);
+    void onlinePostByAdmin(Long postId, String reason);
+
+    /**
+     * 控制台锁定/解锁帖子
+     */
+    void lockPostByAdmin(Long postId, String reason);
+    void unlockPostByAdmin(Long postId, String reason);
+
+    /**
      * 全文搜索帖子
      */
     PageResult<PostVO> searchPosts(String keyword, int page, int size);

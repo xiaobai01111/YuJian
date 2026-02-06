@@ -17,10 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -100,7 +97,7 @@ public class PostgresSearchService implements SearchService {
         PostVO vo = new PostVO();
         vo.setId(post.getId());
         if (boards != null && !boards.isEmpty()) {
-            vo.setBoard(boards.get(0));
+            vo.setBoard(boards.getFirst());
             vo.setBoards(boards);
         } else {
             vo.setBoard(post.getBoard());
@@ -163,7 +160,7 @@ public class PostgresSearchService implements SearchService {
         }
         List<Long> userIds = posts.stream()
                 .map(Post::getUserId)
-                .filter(id -> id != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
         if (userIds.isEmpty()) {

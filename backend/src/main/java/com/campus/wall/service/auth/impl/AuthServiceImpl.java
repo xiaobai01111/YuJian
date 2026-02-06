@@ -184,7 +184,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 检查部门状态（取第一个部门进行校验）
-        var dept = deptMapper.selectById(userDeptIds.get(0));
+        var dept = deptMapper.selectById(userDeptIds.getFirst());
         if (dept == null) {
             String msg = "账号部门不存在，请联系管理员";
             recordLoginLog(user.getId(), user.getUsername(), 1, msg);
@@ -685,7 +685,7 @@ public class AuthServiceImpl implements AuthService {
             // 通过角色ID查找用户
             List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(adminRole.getId());
             if (userIds != null && !userIds.isEmpty()) {
-                User admin = userMapper.selectById(userIds.get(0));
+                User admin = userMapper.selectById(userIds.getFirst());
                 if (admin != null) {
                     vo.setEmail(admin.getEmail());
                     vo.setPhone(admin.getPhone());

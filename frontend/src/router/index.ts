@@ -110,12 +110,6 @@ const router = createRouter({
             component: () => import('@/views/home/index.vue')
         },
         {
-            path: '/console/no-permission',
-            name: 'ConsoleNoPermission',
-            component: () => import('@/views/console/no-permission/index.vue'),
-            meta: { layout: 'div' }
-        },
-        {
             path: '/403',
             name: 'Forbidden',
             component: () => import('@/views/console/no-permission/index.vue'),
@@ -196,10 +190,10 @@ router.beforeEach(async (to, _from, next) => {
             next({ ...to, replace: true })
          } else {
              // 检查后台权限
-             if (to.path.startsWith('/console') && to.path !== '/console/no-permission') {
+             if (to.path.startsWith('/console')) {
                  // 检查用户是否有任何后台菜单权限
                  if (!permissionStore.hasConsoleMenus) {
-                     next('/console/no-permission')
+                     next('/403')
                      return
                  }
                  // 检查具体路由权限（排除基础路由 dashboard 和 profile）

@@ -332,7 +332,7 @@ public class UserServiceImpl implements UserService {
                 affected++;
             }
 
-            lastId = users.get(users.size() - 1).getId();
+            lastId = users.getLast().getId();
         }
 
         operLogService.log(operatorId, null, "user", null, "batch_assign", 

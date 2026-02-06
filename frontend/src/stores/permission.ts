@@ -71,18 +71,16 @@ export const usePermissionStore = defineStore('permission', () => {
                 })
                 hasConsoleMenus.value = true
             } else {
-                // 如果后端没有返回路由，使用默认路由
+                // 后端无路由，使用默认路由（实际路由已在 router/index.ts 静态定义）
                 routes.value = getDefaultRoutes()
-                addDefaultRoutes(router)
                 hasConsoleMenus.value = false
             }
             
             dynamicRoutesAdded.value = true
         } catch (error) {
             console.error('Failed to fetch routes:', error)
-            // 出错时使用默认路由
+            // 出错时使用默认路由（实际路由已在 router/index.ts 静态定义）
             routes.value = getDefaultRoutes()
-            addDefaultRoutes(router)
             hasConsoleMenus.value = false
             dynamicRoutesAdded.value = true
         }
@@ -136,27 +134,6 @@ export const usePermissionStore = defineStore('permission', () => {
         if (!path) return 'Unknown'
         const parts = path.split('/').filter(Boolean)
         return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('')
-    }
-
-    // 添加默认路由
-    function addDefaultRoutes(router: Router) {
-        const defaultRoutes: RouteRecordRaw[] = [
-            {
-                path: 'dashboard',
-                name: 'ConsoleDashboard',
-                component: () => import('@/views/console/dashboard/index.vue'),
-                meta: { title: '仪表盘', icon: 'dashboard' }
-            },
-            {
-                path: 'profile',
-                name: 'ConsoleProfile',
-                component: () => import('@/views/console/profile/index.vue'),
-                meta: { title: '个人中心', icon: 'user' }
-            }
-        ]
-        defaultRoutes.forEach(route => {
-            router.addRoute('Console', route)
-        })
     }
 
     // 转换后端路由格式（用于菜单渲染）

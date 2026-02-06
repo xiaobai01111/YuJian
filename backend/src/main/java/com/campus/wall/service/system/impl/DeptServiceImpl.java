@@ -782,14 +782,16 @@ public class DeptServiceImpl implements DeptService {
             return null;
         }
         String str = String.valueOf(value).trim();
-        if (str.isEmpty()) {
-            return null;
-        }
-        if ("正常".equals(str) || "启用".equals(str) || "0".equals(str)) {
-            return 0;
-        }
-        if ("停用".equals(str) || "禁用".equals(str) || "1".equals(str)) {
-            return 1;
+        switch (str) {
+            case "" -> {
+                return null;
+            }
+            case "正常", "启用", "0" -> {
+                return 0;
+            }
+            case "停用", "禁用", "1" -> {
+                return 1;
+            }
         }
         try {
             return Integer.parseInt(str);
@@ -831,19 +833,13 @@ public class DeptServiceImpl implements DeptService {
         if (dataScope == null) {
             return "-";
         }
-        switch (dataScope) {
-            case SecurityConstants.DATA_SCOPE_ALL:
-                return "全部数据权限";
-            case SecurityConstants.DATA_SCOPE_CUSTOM:
-                return "自定义数据权限";
-            case SecurityConstants.DATA_SCOPE_DEPT:
-                return "本部门数据权限";
-            case SecurityConstants.DATA_SCOPE_DEPT_AND_CHILD:
-                return "本部门及以下数据权限";
-            case SecurityConstants.DATA_SCOPE_SELF:
-                return "仅本人数据权限";
-            default:
-                return String.valueOf(dataScope);
-        }
+        return switch (dataScope) {
+            case SecurityConstants.DATA_SCOPE_ALL -> "全部数据权限";
+            case SecurityConstants.DATA_SCOPE_CUSTOM -> "自定义数据权限";
+            case SecurityConstants.DATA_SCOPE_DEPT -> "本部门数据权限";
+            case SecurityConstants.DATA_SCOPE_DEPT_AND_CHILD -> "本部门及以下数据权限";
+            case SecurityConstants.DATA_SCOPE_SELF -> "仅本人数据权限";
+            default -> String.valueOf(dataScope);
+        };
     }
 }

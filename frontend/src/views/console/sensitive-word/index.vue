@@ -43,7 +43,7 @@
             添加
           </button>
           
-          <button v-if="canAdd" class="btn btn-sm btn-secondary" @click="showBatchModal = true">
+          <button v-if="canBatchAdd" class="btn btn-sm btn-secondary" @click="showBatchModal = true">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
@@ -51,7 +51,7 @@
           </button>
 
           <button 
-            v-if="canDelete"
+            v-if="canBatchDelete"
             class="btn btn-sm btn-error" 
             :disabled="selectedIds.length === 0"
             @click="handleBatchDelete"
@@ -85,6 +85,7 @@
                     type="checkbox" 
                     class="checkbox checkbox-sm"
                     :checked="isAllSelected"
+                    :disabled="!canBatchDelete"
                     @change="toggleSelectAll"
                   />
                 </th>
@@ -109,6 +110,7 @@
                     type="checkbox" 
                     class="checkbox checkbox-sm"
                     :checked="selectedIds.includes(word.id)"
+                    :disabled="!canBatchDelete"
                     @change="toggleSelect(word.id)"
                   />
                 </td>
@@ -195,7 +197,7 @@
 
         <div class="modal-action">
           <button class="btn btn-ghost" @click="closeBatchModal">关闭</button>
-          <button class="btn btn-primary" :disabled="batchLoading" @click="handleBatchImport">
+          <button class="btn btn-primary" :disabled="batchLoading || !canBatchAdd" @click="handleBatchImport">
             <span v-if="batchLoading" class="loading loading-spinner loading-sm"></span>
             导入
           </button>
@@ -256,6 +258,8 @@ const userStore = useUserStore()
 const dialog = useDialog()
 const canAdd = computed(() => userStore.hasPermission('system:sensitive-word:add'))
 const canDelete = computed(() => userStore.hasPermission('system:sensitive-word:delete'))
+const canBatchAdd = computed(() => userStore.hasPermission('system:sensitive-word:batch:add'))
+const canBatchDelete = computed(() => userStore.hasPermission('system:sensitive-word:batch:delete'))
 
 interface SensitiveWordVO {
   id: number
@@ -391,6 +395,7 @@ async function loadMore() {
 }
 
 function toggleSelectAll() {
+  if (!canBatchDelete.value) return
   if (isAllSelected.value) {
     selectedIds.value = []
   } else {
@@ -399,6 +404,7 @@ function toggleSelectAll() {
 }
 
 function toggleSelect(id: number) {
+  if (!canBatchDelete.value) return
   const idx = selectedIds.value.indexOf(id)
   if (idx >= 0) {
     selectedIds.value.splice(idx, 1)
@@ -429,6 +435,10 @@ async function handleAdd() {
 }
 
 async function handleBatchImport() {
+  if (!canBatchAdd.value) {
+    await dialog.alert('无权限批量导入敏感词')
+    return
+  }
   const lines = batchForm.value.text.split('\n').map(l => l.trim()).filter(l => l)
   if (lines.length === 0) {
     await dialog.alert('请输入敏感词')
@@ -476,6 +486,10 @@ async function confirmDelete() {
 }
 
 function handleBatchDelete() {
+  if (!canBatchDelete.value) {
+    void dialog.alert('无权限批量删除敏感词')
+    return
+  }
   if (selectedIds.value.length === 0) return
   showBatchDeleteModal.value = true
 }

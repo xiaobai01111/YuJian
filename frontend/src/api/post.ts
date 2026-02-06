@@ -23,6 +23,8 @@ export interface PostVO {
     lostTime?: string
     status: number
     showOnHome?: boolean
+    isLocked?: boolean
+    authorIsAdmin?: boolean
     likeCount: number
     commentCount: number
     viewCount: number
@@ -141,6 +143,34 @@ export function resolveConsolePost(id: number, reason?: string) {
 
 export function soldConsolePost(id: number, reason?: string) {
     return request.put<void>(`/api/v1/console/posts/${id}/sold`, null, { params: reason ? { reason } : {} })
+}
+
+export function rejectConsolePost(id: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/posts/${id}/reject`, null, { params: reason ? { reason } : {} })
+}
+
+export function pinConsolePost(id: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/posts/${id}/pin`, null, { params: reason ? { reason } : {} })
+}
+
+export function unpinConsolePost(id: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/posts/${id}/unpin`, null, { params: reason ? { reason } : {} })
+}
+
+export function offlineConsolePost(id: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/posts/${id}/offline`, null, { params: reason ? { reason } : {} })
+}
+
+export function onlineConsolePost(id: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/posts/${id}/online`, null, { params: reason ? { reason } : {} })
+}
+
+export function lockConsolePost(id: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/posts/${id}/lock`, null, { params: reason ? { reason } : {} })
+}
+
+export function unlockConsolePost(id: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/posts/${id}/unlock`, null, { params: reason ? { reason } : {} })
 }
 
 // 帖子状态常量

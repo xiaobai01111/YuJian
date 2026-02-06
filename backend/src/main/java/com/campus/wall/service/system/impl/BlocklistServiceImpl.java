@@ -261,13 +261,6 @@ public class BlocklistServiceImpl implements BlocklistService {
         return expireAt != null && expireAt.isBefore(LocalDateTime.now());
     }
 
-    private static class ParsedLine {
-        private final String value;
-        private final String reason;
-
-        private ParsedLine(String value, String reason) {
-            this.value = value;
-            this.reason = reason;
-        }
+    private record ParsedLine(String value, String reason) {
     }
 }

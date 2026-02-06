@@ -22,6 +22,7 @@ import com.campus.wall.mapper.post.LikeMapper;
 import com.campus.wall.mapper.post.PostBoardMapper;
 import com.campus.wall.mapper.post.PostMapper;
 import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.service.content.SensitiveWordService;
 import com.campus.wall.service.file.FileService;
 import com.campus.wall.service.post.PostService;
@@ -45,6 +46,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -64,6 +66,7 @@ public class PostServiceImpl implements PostService {
     private final BookmarkMapper bookmarkMapper;
     private final PostBoardMapper postBoardMapper;
     private final UserMapper userMapper;
+    private final SysRoleMapper sysRoleMapper;
     private final FileService fileService;
     private final SensitiveWordService sensitiveWordService;
     private final com.campus.wall.service.user.CreditService creditService;
@@ -78,27 +81,43 @@ public class PostServiceImpl implements PostService {
     private static final int STATUS_DELETED = 2;
     @SuppressWarnings("unused")
     private static final int STATUS_PENDING_AUDIT = 3;
-    @SuppressWarnings("unused")
     private static final int STATUS_ARCHIVED = 4;
     private static final int STATUS_SOLD = 5;
     // 前端可见的状态列表
     private static final List<Integer> VISIBLE_STATUSES = List.of(STATUS_NORMAL, STATUS_RESOLVED, STATUS_SOLD);
     private static final String VIEW_KEY_PREFIX = "post:view:";
+    private static final String POST_LOCK_KEY_PREFIX = "post:lock:";
 
     // 板块常量
+    private static final String BOARD_CONFESSIONS = BoardUtil.BOARD_CONFESSIONS;
     private static final String BOARD_TREE_HOLE = BoardUtil.BOARD_TREE_HOLE;
+    private static final String BOARD_HELP = BoardUtil.BOARD_HELP;
     private static final String BOARD_MARKET = BoardUtil.BOARD_MARKET;
+    private static final String BOARD_LOST_FOUND = BoardUtil.BOARD_LOST_FOUND;
+    private static final List<String> ALL_BOARDS = List.of(
+            BOARD_CONFESSIONS,
+            BOARD_TREE_HOLE,
+            BOARD_HELP,
+            BOARD_MARKET,
+            BOARD_LOST_FOUND
+    );
+    private static final Map<String, String> BOARD_VIEW_PERMISSIONS = Map.of(
+            BOARD_CONFESSIONS, "content:channel:confessions:view",
+            BOARD_TREE_HOLE, "content:channel:treehole:view",
+            BOARD_HELP, "content:channel:help:view",
+            BOARD_MARKET, "content:channel:market:view",
+            BOARD_LOST_FOUND, "content:channel:lost-found:view"
+    );
+    private static final Map<String, String> BOARD_MANAGE_PERMISSIONS = Map.of(
+            BOARD_CONFESSIONS, "content:channel:confessions:manage",
+            BOARD_TREE_HOLE, "content:channel:treehole:manage",
+            BOARD_HELP, "content:channel:help:manage",
+            BOARD_MARKET, "content:channel:market:manage",
+            BOARD_LOST_FOUND, "content:channel:lost-found:manage"
+    );
 
-    private static class PostUserContext {
-        private final Map<Long, User> userMap;
-        private final Set<Long> likedPostIds;
-        private final Set<Long> bookmarkedPostIds;
-
-        private PostUserContext(Map<Long, User> userMap, Set<Long> likedPostIds, Set<Long> bookmarkedPostIds) {
-            this.userMap = userMap;
-            this.likedPostIds = likedPostIds;
-            this.bookmarkedPostIds = bookmarkedPostIds;
-        }
+    private record PostUserContext(Map<Long, User> userMap, Set<Long> likedPostIds, Set<Long> bookmarkedPostIds,
+                                   Set<Long> adminUserIds) {
     }
 
     @Override
@@ -159,7 +178,7 @@ public class PostServiceImpl implements PostService {
         // 创建帖子
         Post post = new Post();
         post.setUserId(userId);
-        post.setBoard(boards.get(0));
+        post.setBoard(boards.getFirst());
         post.setTitle(dto.getTitle());
         post.setContent(dto.getContent());
         post.setIsAnonymous(isAnonymous);
@@ -192,6 +211,17 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional
     public Long createPostByAdmin(PostCreateDTO dto) {
+        List<String> boards = BoardUtil.normalizeBoardKeys(dto.getBoards());
+        if (boards.isEmpty()) {
+            String singleBoard = BoardUtil.normalizeBoardKey(dto.getBoard());
+            if (singleBoard != null) {
+                boards = List.of(singleBoard);
+            }
+        }
+        if (boards.isEmpty()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "板块不能为空或无效");
+        }
+        assertCanManageBoards(boards);
         return createPost(dto);
     }
 
@@ -243,13 +273,14 @@ public class PostServiceImpl implements PostService {
             if (boards.isEmpty()) {
                 throw new BusinessException(ResultCode.BAD_REQUEST, "板块不能为空或无效");
             }
+            assertCanManageBoards(boards);
             if (boards.contains(BOARD_MARKET) && !creditService.canPostInMarket(userId)) {
                 throw new BusinessException(ResultCode.FORBIDDEN, "信用分不足，无法在市集发帖（需要60分以上）");
             }
             if (boards.contains(BOARD_TREE_HOLE)) {
                 post.setIsAnonymous(true);
             }
-            post.setBoard(boards.get(0));
+            post.setBoard(boards.getFirst());
             replacePostBoards(postId, boards);
         }
 
@@ -313,7 +344,7 @@ public class PostServiceImpl implements PostService {
             if (boards.contains(BOARD_TREE_HOLE)) {
                 post.setIsAnonymous(true);
             }
-            post.setBoard(boards.get(0));
+            post.setBoard(boards.getFirst());
             replacePostBoards(postId, boards);
         }
 
@@ -381,6 +412,7 @@ public class PostServiceImpl implements PostService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "帖子未处于删除状态");
         }
         postMapper.deleteById(postId);
+        redisTemplate.delete(lockKey(postId));
         log.info("控制台彻底删除帖子: {}", postId);
     }
 
@@ -432,6 +464,7 @@ public class PostServiceImpl implements PostService {
         }
         if (applyDataScope) {
             applyPostDataScope(wrapper);
+            applyPostChannelScope(wrapper, query.getBoard());
         }
 
         Page<Post> result = postMapper.selectPage(page, wrapper);
@@ -518,6 +551,36 @@ public class PostServiceImpl implements PostService {
         wrapper.in(Post::getUserId, allowedUserIds);
     }
 
+    private void applyPostChannelScope(LambdaQueryWrapper<Post> wrapper, String boardFilter) {
+        Set<String> allowedBoards = resolveAllowedBoardsForView();
+        if (allowedBoards.isEmpty()) {
+            wrapper.eq(Post::getId, -1L);
+            return;
+        }
+        if (allowedBoards.size() == ALL_BOARDS.size()) {
+            return;
+        }
+
+        if (StringUtils.hasText(boardFilter)) {
+            String normalized = BoardUtil.normalizeBoardKey(boardFilter);
+            if (normalized == null || !allowedBoards.contains(normalized)) {
+                wrapper.eq(Post::getId, -1L);
+            }
+            return;
+        }
+
+        List<Long> postIds = postBoardMapper.selectList(
+                new LambdaQueryWrapper<PostBoard>()
+                        .select(PostBoard::getPostId)
+                        .in(PostBoard::getBoard, allowedBoards)
+        ).stream().map(PostBoard::getPostId).distinct().collect(Collectors.toList());
+        if (postIds.isEmpty()) {
+            wrapper.eq(Post::getId, -1L);
+            return;
+        }
+        wrapper.in(Post::getId, postIds);
+    }
+
     private void assertCanManagePost(Post post, String reason, String action) {
         Long operatorId = StpUtil.getLoginIdAsLong();
         if (post == null) {
@@ -526,10 +589,103 @@ public class PostServiceImpl implements PostService {
         if (!dataScopeService.canAccessUser(operatorId, post.getUserId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该帖子");
         }
-        if (!Objects.equals(operatorId, post.getUserId()) && !StringUtils.hasText(reason)) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
+        if (!canManagePostBoards(post)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该板块的帖子");
         }
         operLogService.log(operatorId, null, "post", post.getId(), action, reason, null, null, null);
+    }
+
+    private boolean canManagePostBoards(Post post) {
+        if (SecurityUtil.isSuperAdmin()) {
+            return true;
+        }
+        Set<String> allowedBoards = resolveAllowedBoardsForManage();
+        if (allowedBoards.isEmpty()) {
+            return false;
+        }
+        List<String> boards = resolvePostBoards(post);
+        if (boards.isEmpty()) {
+            return false;
+        }
+        for (String board : boards) {
+            if (allowedBoards.contains(board)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> resolvePostBoards(Post post) {
+        List<String> boards = loadBoards(post.getId());
+        if (boards.isEmpty()) {
+            String single = BoardUtil.normalizeBoardKey(post.getBoard());
+            if (single != null) {
+                return List.of(single);
+            }
+            if (StringUtils.hasText(post.getBoard())) {
+                return List.of(post.getBoard().trim());
+            }
+            return List.of();
+        }
+        return BoardUtil.normalizeBoardKeys(boards);
+    }
+
+    private void assertPostBoardAllowed(Post post, List<String> allowedBoards, String message) {
+        List<String> boards = resolvePostBoards(post);
+        if (boards.isEmpty()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "帖子板块无效");
+        }
+        for (String board : boards) {
+            if (allowedBoards.contains(board)) {
+                return;
+            }
+        }
+        throw new BusinessException(ResultCode.BAD_REQUEST, message);
+    }
+
+    private void assertCanManageBoards(List<String> boards) {
+        if (SecurityUtil.isSuperAdmin()) {
+            return;
+        }
+        Set<String> allowedBoards = resolveAllowedBoardsForManage();
+        if (allowedBoards.isEmpty()) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该板块的帖子");
+        }
+        for (String board : boards) {
+            if (!allowedBoards.contains(board)) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该板块的帖子");
+            }
+        }
+    }
+
+    private Set<String> resolveAllowedBoardsForView() {
+        if (SecurityUtil.isSuperAdmin()) {
+            return new LinkedHashSet<>(ALL_BOARDS);
+        }
+        LinkedHashSet<String> allowed = new LinkedHashSet<>();
+        for (String board : ALL_BOARDS) {
+            String viewPerm = BOARD_VIEW_PERMISSIONS.get(board);
+            String managePerm = BOARD_MANAGE_PERMISSIONS.get(board);
+            if ((viewPerm != null && SecurityUtil.hasPermission(viewPerm))
+                    || (managePerm != null && SecurityUtil.hasPermission(managePerm))) {
+                allowed.add(board);
+            }
+        }
+        return allowed;
+    }
+
+    private Set<String> resolveAllowedBoardsForManage() {
+        if (SecurityUtil.isSuperAdmin()) {
+            return new LinkedHashSet<>(ALL_BOARDS);
+        }
+        LinkedHashSet<String> allowed = new LinkedHashSet<>();
+        for (String board : ALL_BOARDS) {
+            String managePerm = BOARD_MANAGE_PERMISSIONS.get(board);
+            if (managePerm != null && SecurityUtil.hasPermission(managePerm)) {
+                allowed.add(board);
+            }
+        }
+        return allowed;
     }
 
     @Override
@@ -719,6 +875,7 @@ public class PostServiceImpl implements PostService {
         if (!post.getUserId().equals(userId)) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权操作此帖子");
         }
+        assertPostBoardAllowed(post, List.of(BOARD_HELP, BOARD_TREE_HOLE, BOARD_LOST_FOUND), "当前板块不支持标记为已解决");
 
         post.setStatus(STATUS_RESOLVED);
         postMapper.updateById(post);
@@ -731,6 +888,7 @@ public class PostServiceImpl implements PostService {
     public void markAsResolvedByAdmin(Long postId, String reason) {
         Post post = getPostOrThrow(postId);
         assertCanManagePost(post, reason, "resolve");
+        assertPostBoardAllowed(post, List.of(BOARD_HELP, BOARD_TREE_HOLE, BOARD_LOST_FOUND), "当前板块不支持标记为已解决");
         if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法标记");
         }
@@ -767,12 +925,113 @@ public class PostServiceImpl implements PostService {
     public void markAsSoldByAdmin(Long postId, String reason) {
         Post post = getPostOrThrow(postId);
         assertCanManagePost(post, reason, "sold");
+        assertPostBoardAllowed(post, List.of(BOARD_MARKET), "只有市集帖子可以标记为已售出");
         if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法标记");
         }
         post.setStatus(STATUS_SOLD);
         postMapper.updateById(post);
         log.info("控制台标记帖子 {} 为已售出", postId);
+    }
+
+    @Override
+    @Transactional
+    public void rejectPostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "reject");
+        if (isAdminUser(post.getUserId(), null)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "管理员发布的帖子无需驳回");
+        }
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法驳回");
+        }
+        post.setStatus(STATUS_ARCHIVED);
+        post.setShowOnHome(false);
+        postMapper.updateById(post);
+        log.info("控制台驳回帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void pinPostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "pin");
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法置顶");
+        }
+        post.setShowOnHome(true);
+        postMapper.updateById(post);
+        log.info("控制台置顶帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void unpinPostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "unpin");
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法取消置顶");
+        }
+        post.setShowOnHome(false);
+        postMapper.updateById(post);
+        log.info("控制台取消置顶帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void offlinePostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "offline");
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法下架");
+        }
+        if (post.getStatus() != null && post.getStatus() == STATUS_ARCHIVED) {
+            return;
+        }
+        post.setStatus(STATUS_ARCHIVED);
+        post.setShowOnHome(false);
+        postMapper.updateById(post);
+        log.info("控制台下架帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void onlinePostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "online");
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法上架");
+        }
+        if (post.getStatus() == null || post.getStatus() != STATUS_ARCHIVED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "帖子未处于下架状态");
+        }
+        post.setStatus(STATUS_NORMAL);
+        postMapper.updateById(post);
+        log.info("控制台上架帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void lockPostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "lock");
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法锁定");
+        }
+        redisTemplate.opsForValue().set(lockKey(postId), "1");
+        log.info("控制台锁定帖子: {}", postId);
+    }
+
+    @Override
+    @Transactional
+    public void unlockPostByAdmin(Long postId, String reason) {
+        Post post = getPostOrThrow(postId);
+        assertCanManagePost(post, reason, "unlock");
+        if (post.getStatus() != null && post.getStatus() == STATUS_DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已删除的帖子无法解锁");
+        }
+        redisTemplate.delete(lockKey(postId));
+        log.info("控制台解锁帖子: {}", postId);
     }
 
     @Override
@@ -808,9 +1067,10 @@ public class PostServiceImpl implements PostService {
     private PostVO toPostVO(Post post, boolean includeFiles, List<String> boards, PostUserContext context, boolean revealAnonymous) {
         PostVO vo = new PostVO();
         BeanUtils.copyProperties(post, vo);
+        vo.setIsLocked(isPostLocked(post.getId()));
         if (boards != null && !boards.isEmpty()) {
             vo.setBoards(boards);
-            vo.setBoard(boards.get(0));
+            vo.setBoard(boards.getFirst());
         } else {
             vo.setBoards(List.of());
         }
@@ -837,6 +1097,7 @@ public class PostServiceImpl implements PostService {
                 vo.setAuthor(userVO);
             }
         }
+        vo.setAuthorIsAdmin(isAdminUser(post.getUserId(), context));
 
         // 处理当前用户状态
         if (context != null) {
@@ -872,9 +1133,21 @@ public class PostServiceImpl implements PostService {
         return vo;
     }
 
+    private boolean isPostLocked(Long postId) {
+        if (postId == null) {
+            return false;
+        }
+        Boolean locked = redisTemplate.hasKey(lockKey(postId));
+        return Boolean.TRUE.equals(locked);
+    }
+
+    private String lockKey(Long postId) {
+        return POST_LOCK_KEY_PREFIX + postId;
+    }
+
     private PostUserContext buildPostUserContext(List<Post> posts) {
         if (posts == null || posts.isEmpty()) {
-            return new PostUserContext(Collections.emptyMap(), Collections.emptySet(), Collections.emptySet());
+            return new PostUserContext(Collections.emptyMap(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
         }
 
         Map<Long, User> userMap = new HashMap<>();
@@ -888,6 +1161,13 @@ public class PostServiceImpl implements PostService {
                 if (user != null) {
                     userMap.put(user.getId(), user);
                 }
+            }
+        }
+        Set<Long> adminUserIds = Collections.emptySet();
+        if (!userIds.isEmpty()) {
+            List<Long> adminIds = sysRoleMapper.selectUserIdsByRoleKey(SecurityUtil.getSuperAdminRoleKey(), new ArrayList<>(userIds));
+            if (adminIds != null && !adminIds.isEmpty()) {
+                adminUserIds = adminIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
             }
         }
 
@@ -922,7 +1202,18 @@ public class PostServiceImpl implements PostService {
             }
         }
 
-        return new PostUserContext(userMap, likedPostIds, bookmarkedPostIds);
+        return new PostUserContext(userMap, likedPostIds, bookmarkedPostIds, adminUserIds);
+    }
+
+    private boolean isAdminUser(Long userId, PostUserContext context) {
+        if (userId == null) {
+            return false;
+        }
+        if (context != null && context.adminUserIds != null) {
+            return context.adminUserIds.contains(userId);
+        }
+        List<String> roleKeys = sysRoleMapper.selectRoleKeysByUserId(userId);
+        return roleKeys != null && roleKeys.contains(SecurityUtil.getSuperAdminRoleKey());
     }
 
     private void savePostBoards(Long postId, List<String> boards) {

@@ -7,18 +7,21 @@
 
     <!-- Tabs -->
     <div class="tabs tabs-boxed w-fit">
-      <a class="tab" :class="{ 'tab-active': activeTab === 'smtp' }" @click="activeTab = 'smtp'">邮箱配置</a>
-      <a class="tab" :class="{ 'tab-active': activeTab === 'templates' }" @click="activeTab = 'templates'">邮件模板</a>
-      <a class="tab" :class="{ 'tab-active': activeTab === 'domains' }" @click="activeTab = 'domains'">域名白名单</a>
+      <a v-if="showSmtpTab" class="tab" :class="{ 'tab-active': activeTab === 'smtp' }" @click="activeTab = 'smtp'">邮箱配置</a>
+      <a v-if="showTemplatesTab" class="tab" :class="{ 'tab-active': activeTab === 'templates' }" @click="activeTab = 'templates'">邮件模板</a>
+      <a v-if="showDomainsTab" class="tab" :class="{ 'tab-active': activeTab === 'domains' }" @click="activeTab = 'domains'">域名白名单</a>
     </div>
 
     <!-- SMTP Config Tab -->
     <div v-show="activeTab === 'smtp'" class="flex-1 overflow-auto">
-      <div class="card bg-base-100 shadow-sm">
+      <div v-if="!canSmtpRead" class="card bg-base-100 shadow-sm">
+        <div class="card-body p-6 text-slate-500 text-center">无权限查看SMTP配置</div>
+      </div>
+      <div v-else class="card bg-base-100 shadow-sm">
         <div class="card-body">
           <div class="flex items-center justify-between mb-4">
             <h2 class="card-title text-lg">SMTP 邮箱配置</h2>
-            <button class="btn btn-sm btn-primary" @click="saveSmtpConfig" :disabled="savingSmtp">
+            <button class="btn btn-sm btn-primary" @click="saveSmtpConfig" :disabled="savingSmtp || !canSmtpEdit">
               <span v-if="savingSmtp" class="loading loading-spinner loading-xs"></span>
               保存配置
             </button>
@@ -28,28 +31,28 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="form-control">
               <label class="label"><span class="label-text">SMTP 服务器</span></label>
-              <input v-model="smtpConfig.host" type="text" class="input input-bordered" placeholder="smtp.example.com" />
+              <input v-model="smtpConfig.host" type="text" class="input input-bordered" placeholder="smtp.example.com" :disabled="!canSmtpEdit" />
             </div>
             <div class="form-control">
               <label class="label"><span class="label-text">端口</span></label>
-              <input v-model="smtpConfig.port" type="number" class="input input-bordered" placeholder="465" />
+              <input v-model="smtpConfig.port" type="number" class="input input-bordered" placeholder="465" :disabled="!canSmtpEdit" />
             </div>
             <div class="form-control">
               <label class="label"><span class="label-text">发件邮箱</span></label>
-              <input v-model="smtpConfig.username" type="email" class="input input-bordered" placeholder="noreply@example.com" />
+              <input v-model="smtpConfig.username" type="email" class="input input-bordered" placeholder="noreply@example.com" :disabled="!canSmtpEdit" />
             </div>
             <div class="form-control">
               <label class="label"><span class="label-text">邮箱密码/授权码</span></label>
-              <input v-model="smtpConfig.password" type="password" class="input input-bordered" placeholder="••••••••" />
+              <input v-model="smtpConfig.password" type="password" class="input input-bordered" placeholder="••••••••" :disabled="!canSmtpEdit" />
             </div>
             <div class="form-control">
               <label class="label"><span class="label-text">发件人名称</span></label>
-              <input v-model="smtpConfig.fromName" type="text" class="input input-bordered" placeholder="校园墙" />
+              <input v-model="smtpConfig.fromName" type="text" class="input input-bordered" placeholder="校园墙" :disabled="!canSmtpEdit" />
             </div>
             <div class="form-control">
               <label class="label"><span class="label-text">安全连接</span></label>
               <label class="label cursor-pointer justify-start gap-3 h-12 border border-base-300 rounded-lg px-4">
-                <input v-model="smtpConfig.ssl" type="checkbox" class="checkbox checkbox-primary" />
+                <input v-model="smtpConfig.ssl" type="checkbox" class="checkbox checkbox-primary" :disabled="!canSmtpEdit" />
                 <span class="label-text">启用 SSL/TLS</span>
               </label>
             </div>
@@ -57,8 +60,8 @@
 
           <div class="divider"></div>
           <div class="flex items-center gap-2">
-            <input v-model="testEmail" type="email" class="input input-bordered input-sm flex-1 max-w-xs" placeholder="测试邮箱地址" />
-            <button class="btn btn-sm btn-outline" @click="sendTestEmail" :disabled="sendingTest">
+            <input v-model="testEmail" type="email" class="input input-bordered input-sm flex-1 max-w-xs" placeholder="测试邮箱地址" :disabled="!canSmtpTest" />
+            <button class="btn btn-sm btn-outline" @click="sendTestEmail" :disabled="sendingTest || !canSmtpTest">
               <span v-if="sendingTest" class="loading loading-spinner loading-xs"></span>
               发送测试邮件
             </button>
@@ -69,11 +72,14 @@
 
     <!-- Templates Tab -->
     <div v-show="activeTab === 'templates'" class="flex-1 overflow-auto space-y-4">
-      <div class="card bg-base-100 shadow-sm">
+      <div v-if="!canTemplatesRead" class="card bg-base-100 shadow-sm">
+        <div class="card-body p-6 text-slate-500 text-center">无权限查看邮件模板</div>
+      </div>
+      <div v-else class="card bg-base-100 shadow-sm">
         <div class="card-body">
           <div class="flex items-center justify-between mb-4">
             <h2 class="card-title text-lg">邮件模板配置</h2>
-            <button class="btn btn-sm btn-primary" @click="saveTemplates" :disabled="savingTemplates">
+            <button class="btn btn-sm btn-primary" @click="saveTemplates" :disabled="savingTemplates || !canTemplatesEdit">
               <span v-if="savingTemplates" class="loading loading-spinner loading-xs"></span>
               保存模板
             </button>
@@ -101,11 +107,11 @@
             <div class="collapse-content" v-if="templates[config.key]">
               <div class="form-control mb-3">
                 <label class="label"><span class="label-text">邮件标题</span></label>
-                <input v-model="templates[config.key].subject" type="text" class="input input-bordered" />
+                <input v-model="templates[config.key].subject" type="text" class="input input-bordered" :disabled="!canTemplatesEdit" />
               </div>
               <div class="form-control">
                 <label class="label"><span class="label-text">邮件内容</span></label>
-                <textarea v-model="templates[config.key].body" class="textarea textarea-bordered h-32"></textarea>
+                <textarea v-model="templates[config.key].body" class="textarea textarea-bordered h-32" :disabled="!canTemplatesEdit"></textarea>
               </div>
             </div>
           </div>
@@ -115,16 +121,19 @@
 
     <!-- Domains Tab -->
     <div v-show="activeTab === 'domains'" class="flex-1 overflow-auto space-y-4">
-      <div class="card bg-base-100 shadow-sm">
+      <div v-if="!canDomainsRead" class="card bg-base-100 shadow-sm">
+        <div class="card-body p-6 text-slate-500 text-center">无权限查看邮箱域名白名单</div>
+      </div>
+      <div v-else class="card bg-base-100 shadow-sm">
         <div class="card-body">
           <div class="flex items-center justify-between mb-4">
             <h2 class="card-title text-lg">允许的邮箱域名</h2>
             <div class="flex gap-2">
-              <button class="btn btn-sm btn-outline" @click="showBatchModal = true">批量添加</button>
-              <button class="btn btn-sm btn-error btn-outline" @click="batchDelete" :disabled="selectedDomains.length === 0">
+              <button class="btn btn-sm btn-outline" @click="showBatchModal = true" :disabled="!canDomainsEdit">批量添加</button>
+              <button class="btn btn-sm btn-error btn-outline" @click="batchDelete" :disabled="!canDomainsEdit || selectedDomains.length === 0">
                 批量删除 ({{ selectedDomains.length }})
               </button>
-              <button class="btn btn-sm btn-primary" @click="saveDomains" :disabled="saving">
+              <button class="btn btn-sm btn-primary" @click="saveDomains" :disabled="saving || !canDomainsEdit">
                 <span v-if="saving" class="loading loading-spinner loading-xs"></span>
                 保存
               </button>
@@ -135,19 +144,19 @@
             <table class="table table-sm">
               <thead>
                 <tr>
-                  <th><input type="checkbox" class="checkbox checkbox-sm" v-model="selectAll" /></th>
+                  <th><input type="checkbox" class="checkbox checkbox-sm" v-model="selectAll" :disabled="!canDomainsEdit" /></th>
                   <th>域名</th>
                   <th class="w-20">操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(_, index) in domains" :key="index">
-                  <td><input type="checkbox" class="checkbox checkbox-sm" :value="index" v-model="selectedDomains" /></td>
+                  <td><input type="checkbox" class="checkbox checkbox-sm" :value="index" v-model="selectedDomains" :disabled="!canDomainsEdit" /></td>
                   <td>
-                    <input v-model="domains[index]" type="text" class="input input-bordered input-sm w-full max-w-xs" placeholder="edu.cn" />
+                    <input v-model="domains[index]" type="text" class="input input-bordered input-sm w-full max-w-xs" placeholder="edu.cn" :disabled="!canDomainsEdit" />
                   </td>
                   <td>
-                    <button class="btn btn-ghost btn-xs text-error" @click="removeDomain(index)">删除</button>
+                    <button class="btn btn-ghost btn-xs text-error" @click="removeDomain(index)" :disabled="!canDomainsEdit">删除</button>
                   </td>
                 </tr>
                 <tr v-if="domains.length === 0">
@@ -157,7 +166,7 @@
             </table>
           </div>
           
-          <button class="btn btn-outline btn-sm w-fit mt-2" @click="addDomain">+ 添加域名</button>
+          <button class="btn btn-outline btn-sm w-fit mt-2" @click="addDomain" :disabled="!canDomainsEdit">+ 添加域名</button>
         </div>
       </div>
     </div>
@@ -170,7 +179,7 @@
         <textarea v-model="batchInput" class="textarea textarea-bordered w-full h-40" placeholder="edu.cn&#10;edu.com&#10;ac.cn"></textarea>
         <div class="modal-action">
           <button class="btn btn-ghost" @click="showBatchModal = false">取消</button>
-          <button class="btn btn-primary" @click="batchAdd">添加</button>
+          <button class="btn btn-primary" @click="batchAdd" :disabled="!canDomainsEdit">添加</button>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop" @click="showBatchModal = false"></form>
@@ -179,12 +188,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { getEmailDomains, updateEmailDomains, getSmtpConfig, updateSmtpConfig, sendTestSmtpEmail, getEmailTemplates, updateEmailTemplates } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
+import { useUserStore } from '@/stores/user'
 
 const dialog = useDialog()
+const userStore = useUserStore()
 const activeTab = ref<'smtp' | 'templates' | 'domains'>('smtp')
+
+const canDomainsView = computed(() => userStore.hasPermission('system:config:email-domains:view'))
+const canDomainsEdit = computed(() => userStore.hasPermission('system:config:email-domains:edit'))
+const canSmtpView = computed(() => userStore.hasPermission('system:config:smtp:view'))
+const canSmtpEdit = computed(() => userStore.hasPermission('system:config:smtp:edit'))
+const canSmtpTest = computed(() => userStore.hasPermission('system:config:smtp:test'))
+const canTemplatesView = computed(() => userStore.hasPermission('system:config:email-templates:view'))
+const canTemplatesEdit = computed(() => userStore.hasPermission('system:config:email-templates:edit'))
+
+const canDomainsRead = computed(() => canDomainsView.value || canDomainsEdit.value)
+const canSmtpRead = computed(() => canSmtpView.value || canSmtpEdit.value || canSmtpTest.value)
+const canTemplatesRead = computed(() => canTemplatesView.value || canTemplatesEdit.value)
+
+const showDomainsTab = computed(() => canDomainsRead.value)
+const showSmtpTab = computed(() => canSmtpRead.value)
+const showTemplatesTab = computed(() => canTemplatesRead.value)
 
 // Email templates
 const savingTemplates = ref(false)
@@ -271,9 +298,28 @@ const batchInput = ref('')
 const selectAll = computed({
   get: () => selectedDomains.value.length === domains.value.length && domains.value.length > 0,
   set: (val: boolean) => {
+    if (!canDomainsEdit.value) return
     selectedDomains.value = val ? domains.value.map((_, i) => i) : []
   }
 })
+
+const ensureActiveTab = () => {
+  if (showSmtpTab.value) {
+    if (!showTemplatesTab.value && !showDomainsTab.value && activeTab.value !== 'smtp') {
+      activeTab.value = 'smtp'
+    }
+    return
+  }
+  if (showTemplatesTab.value) {
+    activeTab.value = 'templates'
+    return
+  }
+  if (showDomainsTab.value) {
+    activeTab.value = 'domains'
+  }
+}
+
+watch([showSmtpTab, showTemplatesTab, showDomainsTab], () => ensureActiveTab(), { immediate: true })
 
 // SMTP config
 const savingSmtp = ref(false)
@@ -289,6 +335,11 @@ const smtpConfig = ref({
 })
 
 const loadDomains = async () => {
+  if (!canDomainsRead.value) {
+    domains.value = []
+    selectedDomains.value = []
+    return
+  }
   loading.value = true
   try {
     const res = await getEmailDomains()
@@ -302,6 +353,9 @@ const loadDomains = async () => {
 }
 
 const loadSmtpConfig = async () => {
+  if (!canSmtpRead.value) {
+    return
+  }
   try {
     const res = await getSmtpConfig()
     if (res) {
@@ -313,15 +367,27 @@ const loadSmtpConfig = async () => {
 }
 
 const addDomain = () => {
+  if (!canDomainsEdit.value) {
+    void dialog.alert('无权限编辑域名白名单')
+    return
+  }
   domains.value.push('')
 }
 
 const removeDomain = (index: number) => {
+  if (!canDomainsEdit.value) {
+    void dialog.alert('无权限编辑域名白名单')
+    return
+  }
   domains.value.splice(index, 1)
   selectedDomains.value = selectedDomains.value.filter(i => i !== index).map(i => i > index ? i - 1 : i)
 }
 
 const batchAdd = () => {
+  if (!canDomainsEdit.value) {
+    void dialog.alert('无权限编辑域名白名单')
+    return
+  }
   const newDomains = batchInput.value.split('\n').map(d => d.trim()).filter(d => d)
   domains.value.push(...newDomains)
   batchInput.value = ''
@@ -329,12 +395,20 @@ const batchAdd = () => {
 }
 
 const batchDelete = () => {
+  if (!canDomainsEdit.value) {
+    void dialog.alert('无权限编辑域名白名单')
+    return
+  }
   const toDelete = new Set(selectedDomains.value)
   domains.value = domains.value.filter((_, i) => !toDelete.has(i))
   selectedDomains.value = []
 }
 
 const saveDomains = async () => {
+  if (!canDomainsEdit.value) {
+    await dialog.alert('无权限编辑域名白名单')
+    return
+  }
   const validDomains = domains.value.filter(d => d.trim())
   if (validDomains.length === 0) {
     await dialog.alert('请至少添加一个域名')
@@ -354,6 +428,10 @@ const saveDomains = async () => {
 }
 
 const saveSmtpConfig = async () => {
+  if (!canSmtpEdit.value) {
+    await dialog.alert('无权限编辑SMTP配置')
+    return
+  }
   savingSmtp.value = true
   try {
     await updateSmtpConfig(smtpConfig.value)
@@ -366,6 +444,10 @@ const saveSmtpConfig = async () => {
 }
 
 const sendTestEmail = async () => {
+  if (!canSmtpTest.value) {
+    await dialog.alert('无权限发送测试邮件')
+    return
+  }
   if (!testEmail.value) {
     await dialog.alert('请输入测试邮箱地址')
     return
@@ -382,6 +464,9 @@ const sendTestEmail = async () => {
 }
 
 const loadTemplates = async () => {
+  if (!canTemplatesRead.value) {
+    return
+  }
   try {
     const res = await getEmailTemplates()
     if (res) {
@@ -393,6 +478,10 @@ const loadTemplates = async () => {
 }
 
 const saveTemplates = async () => {
+  if (!canTemplatesEdit.value) {
+    await dialog.alert('无权限编辑邮件模板')
+    return
+  }
   savingTemplates.value = true
   try {
     await updateEmailTemplates(templates.value)
@@ -405,8 +494,29 @@ const saveTemplates = async () => {
 }
 
 onMounted(() => {
-  loadDomains()
-  loadSmtpConfig()
-  loadTemplates()
+  if (canDomainsRead.value) loadDomains()
+  if (canSmtpRead.value) loadSmtpConfig()
+  if (canTemplatesRead.value) loadTemplates()
+})
+
+watch(canDomainsRead, val => {
+  if (val) {
+    loadDomains()
+  } else {
+    domains.value = []
+    selectedDomains.value = []
+  }
+})
+
+watch(canSmtpRead, val => {
+  if (val) {
+    loadSmtpConfig()
+  }
+})
+
+watch(canTemplatesRead, val => {
+  if (val) {
+    loadTemplates()
+  }
 })
 </script>

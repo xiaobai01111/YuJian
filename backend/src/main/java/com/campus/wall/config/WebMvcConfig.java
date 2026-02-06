@@ -27,7 +27,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         if (!basePath.isAbsolute()) {
             basePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(basePath);
         }
-        String location = "file:" + basePath.normalize().toString() + "/";
+        String location = "file:" + basePath.normalize() + "/";
         String urlPrefix = storageProperties.getLocalUrlPrefix();
         String pattern = urlPrefix.endsWith("/") ? urlPrefix + "**" : urlPrefix + "/**";
         registry.addResourceHandler(pattern).addResourceLocations(location);

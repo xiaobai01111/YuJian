@@ -24,9 +24,7 @@ class TracePropertyTest {
     void traceIdConsistentAcrossRequestAndResponse(@ForAll("traceIdInputs") Optional<String> incoming) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
-        if (incoming.isPresent()) {
-            request.addHeader(TraceFilter.TRACE_HEADER, incoming.get());
-        }
+        incoming.ifPresent(s -> request.addHeader(TraceFilter.TRACE_HEADER, s));
 
         AtomicReference<String> traceInChain = new AtomicReference<>();
         FilterChain chain = (req, res) -> traceInChain.set(MDC.get(TraceFilter.TRACE_MDC_KEY));

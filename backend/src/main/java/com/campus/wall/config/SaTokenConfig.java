@@ -87,7 +87,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
         }
 
         var registration = registry.addMapping("/**")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("Authorization", "X-Trace-Id")
                 .maxAge(3600);

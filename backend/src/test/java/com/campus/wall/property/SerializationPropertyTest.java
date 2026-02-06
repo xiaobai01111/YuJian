@@ -17,7 +17,6 @@ import java.time.LocalDateTime;
 
 /**
  * 属性测试：序列化往返一致性
- * 
  * **Feature: campus-wall, Property 11: 序列化往返一致性**
  * *对于任意* 系统数据对象，JSON 序列化后反序列化应得到等效对象
  * **Validates: Requirements 9.3, 9.4**

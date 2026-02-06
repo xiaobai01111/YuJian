@@ -103,18 +103,22 @@ public class RequestLogAspect {
     }
 
     private Object summarizeResult(Object result) {
-        if (result == null) {
-            return null;
-        }
-        if (result instanceof R<?> r) {
-            Map<String, Object> summary = new LinkedHashMap<>();
-            summary.put("code", r.getCode());
-            summary.put("message", truncate(r.getMessage()));
-            summary.put("success", r.isSuccess());
-            return summary;
-        }
-        if (result instanceof Collection<?> collection) {
-            return "Collection(size=" + collection.size() + ")";
+        switch (result) {
+            case null -> {
+                return null;
+            }
+            case R<?> r -> {
+                Map<String, Object> summary = new LinkedHashMap<>();
+                summary.put("code", r.getCode());
+                summary.put("message", truncate(r.getMessage()));
+                summary.put("success", r.isSuccess());
+                return summary;
+            }
+            case Collection<?> collection -> {
+                return "Collection(size=" + collection.size() + ")";
+            }
+            default -> {
+            }
         }
         if (result.getClass().isArray()) {
             return "Array(length=" + java.lang.reflect.Array.getLength(result) + ")";
