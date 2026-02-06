@@ -360,8 +360,8 @@ const updateBasicInfo = async () => {
     })
     await fetchUserInfo()
     await dialog.alert('保存成功')
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '保存失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '保存失败')
   } finally {
     savingBasic.value = false
   }
@@ -391,8 +391,8 @@ const updatePasswordAction = async () => {
     pwdForm.oldPassword = ''
     pwdForm.newPassword = ''
     pwdForm.confirmPassword = ''
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '密码修改失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '密码修改失败')
   } finally {
     savingPwd.value = false
   }
@@ -459,8 +459,8 @@ const submitEmailVerify = async () => {
     await verifyEmail(eduEmailInput.value)
     emailCodeSent.value = true
     await dialog.alert('验证邮件已发送，请查收邮箱并点击链接完成认证。')
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '发送失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '发送失败')
   } finally {
     verifying.value = false
   }
@@ -475,8 +475,8 @@ const submitEmailConfirm = async () => {
     emailCode.value = ''
     emailCodeSent.value = false
     await fetchUserInfo()
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '认证失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '认证失败')
   } finally {
     verifying.value = false
   }
@@ -491,8 +491,8 @@ const submitIdCardVerify = async () => {
     await dialog.alert('提交成功，请等待审核。')
     await fetchUserInfo()
     idCardFile.value = null
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '提交失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '提交失败')
   } finally {
     verifying.value = false
   }
@@ -509,8 +509,8 @@ const submitStudentIdVerify = async () => {
     await dialog.alert('提交成功，请等待审核。')
     studentIdInput.value = ''
     await fetchUserInfo()
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '提交失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '提交失败')
   } finally {
     verifying.value = false
   }
@@ -524,8 +524,8 @@ const cancelVerifyRequest = async () => {
     await cancelVerification()
     await dialog.alert('已取消认证申请')
     await fetchUserInfo()
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '取消失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '取消失败')
   } finally {
     cancelingVerify.value = false
   }

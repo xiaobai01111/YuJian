@@ -48,6 +48,7 @@ CREATE TABLE sys_menus (
     path VARCHAR(200),
     component VARCHAR(255),
     perms VARCHAR(100),
+    group_code VARCHAR(32),
     icon VARCHAR(50),
     type SMALLINT DEFAULT 1,
     visible BOOLEAN DEFAULT TRUE,
@@ -60,7 +61,9 @@ CREATE TABLE sys_menus (
 COMMENT ON TABLE sys_menus IS '菜单权限表';
 COMMENT ON COLUMN sys_menus.type IS '类型：0-目录，1-菜单，2-按钮';
 COMMENT ON COLUMN sys_menus.perms IS '权限标识';
+COMMENT ON COLUMN sys_menus.group_code IS '菜单分组编码：WORKBENCH/SYSTEM/CONTENT/ASSET/MONITOR/CAMPUS/AUDIT/GENERAL';
 COMMENT ON COLUMN sys_menus.status IS '状态：0-正常，1-停用';
+CREATE INDEX idx_sys_menus_group_code ON sys_menus(group_code);
 
 CREATE TABLE campus_heroes (
     id BIGSERIAL PRIMARY KEY,

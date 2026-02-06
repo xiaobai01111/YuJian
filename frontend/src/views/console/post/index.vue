@@ -188,7 +188,7 @@ const loadPosts = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const res: any = await getConsolePostList({
+    const res = await getConsolePostList({
       page: currentPage.value,
       size: pageSize.value,
       board: filters.board || undefined,
@@ -274,8 +274,8 @@ const handleResolve = async (post: PostVO) => {
   try {
     await resolveConsolePost(post.id, reason.trim())
     await loadPosts({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '操作失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '操作失败')
   }
 }
 
@@ -286,8 +286,8 @@ const handleDelete = async (post: PostVO) => {
   try {
     await deleteConsolePost(post.id, reason.trim())
     await loadPosts({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '删除失败')
   }
 }
 

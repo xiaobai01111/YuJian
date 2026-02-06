@@ -361,8 +361,8 @@ const handleSave = async () => {
   }
   closeModal()
   loadNotices({ reset: true })
-  } catch (e: any) {
-    await dialog.alert(e.response?.data?.msg || '保存失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.response?.data?.msg || (e as ApiErrorLike)?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -373,8 +373,8 @@ const handlePublish = async (notice: NoticeVO) => {
   try {
     await publishNotice(notice.id)
     loadNotices({ reset: true })
-  } catch (e: any) {
-    await dialog.alert(e.response?.data?.msg || '发布失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.response?.data?.msg || (e as ApiErrorLike)?.message || '发布失败')
   }
 }
 
@@ -383,8 +383,8 @@ const handleOffline = async (notice: NoticeVO) => {
   try {
     await offlineNotice(notice.id)
     loadNotices({ reset: true })
-  } catch (e: any) {
-    await dialog.alert(e.response?.data?.msg || '下线失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.response?.data?.msg || (e as ApiErrorLike)?.message || '下线失败')
   }
 }
 
@@ -393,8 +393,8 @@ const handleDelete = async (notice: NoticeVO) => {
   try {
     await deleteNotice(notice.id)
     loadNotices({ reset: true })
-  } catch (e: any) {
-    await dialog.alert(e.response?.data?.msg || '删除失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.response?.data?.msg || (e as ApiErrorLike)?.message || '删除失败')
   }
 }
 

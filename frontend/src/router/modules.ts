@@ -8,7 +8,7 @@
 const modules = import.meta.glob('../views/console/**/*.vue')
 
 // 构建组件映射表：将相对路径转换为数据库格式的路径
-export const consoleComponentMap: Record<string, () => Promise<any>> = Object.fromEntries(
+export const consoleComponentMap: Record<string, () => Promise<unknown>> = Object.fromEntries(
   Object.entries(modules).map(([path, component]) => [
     // 将 '../views/console/user/index.vue' 转换为 'views/console/user/index.vue'
     path.replace('../', ''),
@@ -21,7 +21,7 @@ export const consoleComponentMap: Record<string, () => Promise<any>> = Object.fr
  * @param componentPath 数据库中的 component 字段值
  * @returns 组件懒加载函数，未找到则返回 404 页面
  */
-export function resolveComponent(componentPath: string | undefined): () => Promise<any> {
+export function resolveComponent(componentPath: string | undefined): () => Promise<unknown> {
   if (!componentPath) {
     return () => import('@/views/console/dashboard/index.vue')
   }

@@ -289,8 +289,8 @@ const handleSendEmailCode = async () => {
         emailCodeTimer = null
       }
     }, 1000)
-  } catch (error: any) {
-    await dialog.alert(error?.message || '验证码发送失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '验证码发送失败')
   } finally {
     emailCodeSending.value = false
   }
@@ -308,8 +308,8 @@ const handleLogin = async () => {
     loginForm.username = ''
     loginForm.password = ''
     window.location.reload() // Or router refresh
-  } catch (error: any) {
-    errorMsg.value = error.message || '登录失败，请检查用户名和密码'
+  } catch (error: unknown) {
+    errorMsg.value = (error as ApiErrorLike)?.message || '登录失败，请检查用户名和密码'
   } finally {
     loading.value = false
   }
@@ -343,8 +343,8 @@ const handleRegister = async () => {
     errorMsg.value = '' // Clear error
     // Maybe show success message toast?
     await dialog.alert('注册成功，请登录')
-  } catch (error: any) {
-    errorMsg.value = error.message || '注册失败'
+  } catch (error: unknown) {
+    errorMsg.value = (error as ApiErrorLike)?.message || '注册失败'
   } finally {
     loading.value = false
   }

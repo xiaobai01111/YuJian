@@ -250,10 +250,10 @@ const fetchDetail = async () => {
   
   loading.value = true
   try {
-    const res: any = await getPostDetail(id)
+    const res = await getPostDetail(id)
     post.value = res
     try {
-      const viewed: any = await recordPostView(id)
+      const viewed = await recordPostView(id)
       if (viewed && post.value) {
         post.value.viewCount = (post.value.viewCount || 0) + 1
       }
@@ -277,7 +277,7 @@ const loadComments = async (reset = false) => {
   commentLoading.value = true
   commentError.value = ''
   try {
-    const res: any = await getPostCommentsPage(post.value.id, {
+    const res = await getPostCommentsPage(post.value.id, {
       page: commentPage.value,
       size: commentSize
     })
@@ -288,8 +288,8 @@ const loadComments = async (reset = false) => {
     } else {
       comments.value = comments.value.concat(records)
     }
-  } catch (e: any) {
-    commentError.value = e?.message || '评论加载失败'
+  } catch (e: unknown) {
+    commentError.value = (e as ApiErrorLike)?.message || '评论加载失败'
   } finally {
     commentLoading.value = false
   }
@@ -324,8 +324,8 @@ const submitComment = async () => {
     if (post.value) {
       post.value.commentCount = (post.value.commentCount || 0) + 1
     }
-  } catch (e: any) {
-    await dialog.alert(e?.message || '评论失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || '评论失败')
   }
 }
 

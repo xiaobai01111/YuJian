@@ -191,7 +191,7 @@ const allSelected = computed(() => {
 const loadReports = async () => {
   loading.value = true
   try {
-    const res: any = await getConsoleReports({
+    const res = await getConsoleReports({
       page: currentPage.value,
       size: pageSize.value,
       status: filters.status
@@ -260,8 +260,8 @@ const handleSubmit = async (report: ReportVO) => {
   try {
     await handleConsoleReport(report.id, { result: result.trim(), remark: remark || undefined })
     await loadReports()
-  } catch (error: any) {
-    await dialog.alert(error?.message || '处理失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '处理失败')
   }
 }
 
@@ -271,8 +271,8 @@ const handleDecision = async (report: ReportVO, decision: string) => {
   try {
     await handleConsoleReport(report.id, { result: decision, remark: remark || undefined })
     await loadReports()
-  } catch (error: any) {
-    await dialog.alert(error?.message || '处理失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '处理失败')
   }
 }
 
@@ -283,8 +283,8 @@ const handleBatchDecision = async (decision: string) => {
   try {
     await batchHandleConsoleReports(selectedIds.value, decision, remark || undefined)
     await loadReports()
-  } catch (error: any) {
-    await dialog.alert(error?.message || '批量处理失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '批量处理失败')
   }
 }
 
@@ -295,8 +295,8 @@ const handleDelete = async (report: ReportVO) => {
   try {
     await deleteConsoleReport(report.id, reason || undefined)
     await loadReports()
-  } catch (error: any) {
-    await dialog.alert(error?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '删除失败')
   }
 }
 

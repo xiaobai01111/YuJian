@@ -3,6 +3,8 @@ package com.campus.wall.controller.system;
 import com.campus.wall.common.R;
 import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.dto.system.DeptDeleteDTO;
+import com.campus.wall.dto.system.DeptMoveDTO;
+import com.campus.wall.dto.system.DeptSortDTO;
 import com.campus.wall.entity.system.SysDept;
 import com.campus.wall.service.system.DeptService;
 import com.campus.wall.vo.system.DeptTreeVO;
@@ -11,7 +13,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -151,6 +155,39 @@ public class DeptController {
         }
         deptService.updateStatus(id, dept.getStatus());
         return R.ok();
+    }
+
+    @Operation(summary = "调整部门层级")
+    @PutMapping("/{id}/move")
+    public R<Void> move(@PathVariable Long id, @RequestBody DeptMoveDTO dto) {
+        deptService.move(id, dto.getParentId(), dto.getSortOrder());
+        return R.ok();
+    }
+
+    @Operation(summary = "调整部门排序")
+    @PutMapping("/{id}/sort")
+    public R<Void> sort(@PathVariable Long id, @RequestBody DeptSortDTO dto) {
+        deptService.updateSort(id, dto.getSortOrder());
+        return R.ok();
+    }
+
+    @Operation(summary = "导出部门列表", description = "导出部门列表到Excel")
+    @GetMapping("/export")
+    public void export(HttpServletResponse response) {
+        deptService.exportDepts(response);
+    }
+
+    @Operation(summary = "导入部门", description = "从Excel导入部门")
+    @PostMapping("/import")
+    public R<String> importDepts(@RequestParam("file") MultipartFile file,
+                                 @RequestParam(value = "updateExisting", defaultValue = "false") boolean updateExisting) {
+        return R.ok(deptService.importDepts(file, updateExisting));
+    }
+
+    @Operation(summary = "同步部门", description = "从外部系统同步部门")
+    @PostMapping("/sync")
+    public R<String> sync() {
+        return R.ok(deptService.syncDepts());
     }
 
     @Operation(summary = "获取部门用户列表")

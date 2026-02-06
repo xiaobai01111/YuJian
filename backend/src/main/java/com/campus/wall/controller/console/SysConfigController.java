@@ -36,14 +36,14 @@ public class SysConfigController {
 
     @Operation(summary = "获取学号白名单")
     @GetMapping("/student-ids")
-    @SaCheckPermission("system:config:list")
+    @SaCheckPermission("content:verification:whitelist:list")
     public R<List<String>> getStudentIdWhitelist() {
         return R.ok(sysConfigService.getStudentIdWhitelist());
     }
 
     @Operation(summary = "更新学号白名单")
     @PutMapping("/student-ids")
-    @SaCheckPermission("system:config:edit")
+    @SaCheckPermission("content:verification:whitelist:edit")
     public R<Void> updateStudentIdWhitelist(@RequestBody List<String> studentIds) {
         sysConfigService.updateStudentIdWhitelist(studentIds);
         return R.ok();

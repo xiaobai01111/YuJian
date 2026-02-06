@@ -134,7 +134,7 @@ const loadReports = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const res: any = await getRecycleReports({
+    const res = await getRecycleReports({
       page: currentPage.value,
       size: pageSize.value,
       status: filters.status
@@ -209,8 +209,8 @@ const handleRestore = async (report: ReportVO) => {
   try {
     await restoreRecycleReport(report.id, reason || undefined)
     await loadReports({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '恢复失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '恢复失败')
   }
 }
 
@@ -221,8 +221,8 @@ const handlePurge = async (report: ReportVO) => {
   try {
     await purgeRecycleReport(report.id, reason || undefined)
     await loadReports({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '删除失败')
   }
 }
 

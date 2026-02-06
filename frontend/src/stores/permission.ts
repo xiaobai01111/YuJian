@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useUserStore } from './user'
 import { getRoutes } from '@/api/system'
+import type { ConsoleRouteVO } from '@/api/system'
 import { resolveComponent } from '@/router/modules'
-import type { RouteRecordRaw } from 'vue-router'
+import type { RouteRecordRaw, Router } from 'vue-router'
 
 export interface RouteItem {
     name: string
@@ -15,14 +16,20 @@ export interface RouteItem {
         hidden?: boolean
         perms?: string
         keepAlive?: boolean
+        groupCode?: string
+        featureCode?: string
+        routeType?: string
     }
     children?: RouteItem[]
 }
+
+type BackendRoute = ConsoleRouteVO
 
 export const usePermissionStore = defineStore('permission', () => {
     const permissions = ref<string[]>([])
     const routes = ref<RouteItem[]>([])
     const dynamicRoutesAdded = ref(false)
+    const hasConsoleMenus = ref(false) // 用户是否有后台菜单权限
 
     function fetchPermissions() {
         // 从用户信息中获取权限（登录时已返回）
@@ -45,14 +52,14 @@ export const usePermissionStore = defineStore('permission', () => {
         return required.some(p => permissions.value.includes(p))
     }
 
-    async function generateRoutes(router: any) {
+    async function generateRoutes(router: Router) {
         if (dynamicRoutesAdded.value) {
             return routes.value
         }
 
         try {
             // 从后端获取用户可访问的路由
-            const backendRoutes: any = await getRoutes()
+            const backendRoutes = await getRoutes()
             
             if (backendRoutes && backendRoutes.length > 0) {
                 // 转换后端路由格式为前端路由格式
@@ -62,10 +69,12 @@ export const usePermissionStore = defineStore('permission', () => {
                 dynamicRoutes.forEach((route: RouteRecordRaw) => {
                     router.addRoute('Console', route)
                 })
+                hasConsoleMenus.value = true
             } else {
                 // 如果后端没有返回路由，使用默认路由
                 routes.value = getDefaultRoutes()
                 addDefaultRoutes(router)
+                hasConsoleMenus.value = false
             }
             
             dynamicRoutesAdded.value = true
@@ -74,6 +83,7 @@ export const usePermissionStore = defineStore('permission', () => {
             // 出错时使用默认路由
             routes.value = getDefaultRoutes()
             addDefaultRoutes(router)
+            hasConsoleMenus.value = false
             dynamicRoutesAdded.value = true
         }
         
@@ -82,10 +92,10 @@ export const usePermissionStore = defineStore('permission', () => {
 
     // 构建动态路由（用于 router.addRoute）
     // 只添加叶子菜单作为路由，父级菜单仅用于侧边栏组织
-    function buildDynamicRoutes(backendRoutes: any[]): RouteRecordRaw[] {
+    function buildDynamicRoutes(backendRoutes: BackendRoute[]): RouteRecordRaw[] {
         const routes: RouteRecordRaw[] = []
         
-        function collectLeafRoutes(menus: any[]) {
+        function collectLeafRoutes(menus: BackendRoute[]) {
             for (const menu of menus) {
                 if (menu.children && menu.children.length > 0) {
                     // 递归处理子菜单
@@ -100,7 +110,10 @@ export const usePermissionStore = defineStore('permission', () => {
                             title: menu.meta?.title || menu.name,
                             icon: menu.meta?.icon,
                             hidden: menu.meta?.hidden === true,
-                            perms: menu.meta?.perms
+                            perms: menu.meta?.perms,
+                            groupCode: menu.meta?.groupCode,
+                            featureCode: menu.meta?.featureCode,
+                            routeType: menu.meta?.routeType
                         }
                     } as RouteRecordRaw)
                 }
@@ -126,7 +139,7 @@ export const usePermissionStore = defineStore('permission', () => {
     }
 
     // 添加默认路由
-    function addDefaultRoutes(router: any) {
+    function addDefaultRoutes(router: Router) {
         const defaultRoutes: RouteRecordRaw[] = [
             {
                 path: 'dashboard',
@@ -147,7 +160,7 @@ export const usePermissionStore = defineStore('permission', () => {
     }
 
     // 转换后端路由格式（用于菜单渲染）
-    function transformRoutes(backendRoutes: any[]): RouteItem[] {
+    function transformRoutes(backendRoutes: BackendRoute[]): RouteItem[] {
         return backendRoutes.map(route => {
             const item: RouteItem = {
                 name: route.name,
@@ -158,7 +171,10 @@ export const usePermissionStore = defineStore('permission', () => {
                     icon: route.meta?.icon,
                     hidden: route.meta?.hidden === true,
                     perms: route.meta?.perms,
-                    keepAlive: route.meta?.keepAlive
+                    keepAlive: route.meta?.keepAlive,
+                    groupCode: route.meta?.groupCode,
+                    featureCode: route.meta?.featureCode,
+                    routeType: route.meta?.routeType
                 }
             }
             if (route.children && route.children.length > 0) {
@@ -174,12 +190,12 @@ export const usePermissionStore = defineStore('permission', () => {
             {
                 path: '/console/dashboard',
                 name: 'ConsoleDashboard',
-                meta: { title: '仪表盘', icon: 'dashboard' }
+                meta: { title: '仪表盘', icon: 'dashboard', groupCode: 'WORKBENCH' }
             },
             {
                 path: '/console/profile',
                 name: 'ConsoleProfile',
-                meta: { title: '个人中心', icon: 'user' }
+                meta: { title: '个人中心', icon: 'user', groupCode: 'GENERAL' }
             }
         ]
     }
@@ -188,12 +204,14 @@ export const usePermissionStore = defineStore('permission', () => {
         permissions.value = []
         routes.value = []
         dynamicRoutesAdded.value = false
+        hasConsoleMenus.value = false
     }
 
     return {
         permissions,
         routes,
         dynamicRoutesAdded,
+        hasConsoleMenus,
         fetchPermissions,
         hasPermission,
         generateRoutes,

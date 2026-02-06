@@ -353,9 +353,8 @@ async function fetchData({ append = false, reset = false } = {}) {
       size: pageSize.value,
       keyword: searchKeyword.value || undefined
     })
-    const data = res.data || res
-    const records = data.records || []
-    total.value = data.total || 0
+    const records = res.records || []
+    total.value = res.total || 0
     if (append) {
       words.value = [...words.value, ...records]
     } else {
@@ -366,7 +365,7 @@ async function fetchData({ append = false, reset = false } = {}) {
     } else {
       hasMore.value = records.length >= pageSize.value
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Failed to load sensitive words', e)
     if (!append) {
       words.value = []
@@ -422,8 +421,8 @@ async function handleAdd() {
     showAddModal.value = false
     addForm.value = { word: '' }
     loadData()
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '添加失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '添加失败')
   } finally {
     addLoading.value = false
   }
@@ -441,10 +440,10 @@ async function handleBatchImport() {
       words: lines,
       level: 2
     })
-    batchResult.value = res.data || res
+    batchResult.value = res
     loadData()
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '导入失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '导入失败')
   } finally {
     batchLoading.value = false
   }
@@ -469,8 +468,8 @@ async function confirmDelete() {
     showDeleteModal.value = false
     deleteTarget.value = null
     loadData()
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '删除失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '删除失败')
   } finally {
     deleteLoading.value = false
   }
@@ -488,8 +487,8 @@ async function confirmBatchDelete() {
     showBatchDeleteModal.value = false
     selectedIds.value = []
     loadData()
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '删除失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '删除失败')
   } finally {
     deleteLoading.value = false
   }

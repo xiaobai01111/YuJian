@@ -30,6 +30,11 @@ public class SysMenu implements Serializable {
 
     private String icon;
 
+    /**
+     * 菜单分组编码：WORKBENCH/IAM/CONTENT/MONITOR/TOOLS/CAMPUS/GENERAL
+     */
+    private String groupCode;
+
     private Integer type;
 
     private Boolean visible;

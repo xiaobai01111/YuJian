@@ -32,6 +32,10 @@ export const useUserStore = defineStore('user', () => {
         localStorage.removeItem('userInfo')
     }
 
+    function forceLogout() {
+        clearToken()
+    }
+
     async function login(loginForm: LoginDTO) {
         try {
             const data = await loginApi(loginForm)
@@ -52,8 +56,10 @@ export const useUserStore = defineStore('user', () => {
     }
 
     async function logout() {
-        try { await logoutApi() } catch {}
+        const currentToken = token.value
         clearToken()
+        if (!currentToken) return
+        try { await logoutApi(currentToken) } catch {}
     }
 
     // 检查用户是否拥有指定权限
@@ -69,6 +75,7 @@ export const useUserStore = defineStore('user', () => {
         userInfo,
         setToken,
         setUserInfo,
+        forceLogout,
         logout,
         login,
         register,

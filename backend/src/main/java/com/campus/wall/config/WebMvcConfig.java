@@ -2,6 +2,7 @@ package com.campus.wall.config;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -15,7 +16,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     private final StorageProperties storageProperties;
 
     @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    public void addResourceHandlers(@NonNull ResourceHandlerRegistry registry) {
         boolean usesLocal = storageProperties.getPrimaryProvider() == com.campus.wall.enums.file.StorageProviderType.LOCAL
                 || storageProperties.getFallbackProvider() == com.campus.wall.enums.file.StorageProviderType.LOCAL;
         if (!usesLocal || !storageProperties.isLocalPublicEnabled()) {

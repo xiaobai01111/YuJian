@@ -41,18 +41,14 @@ public class RedisMonitorController {
     }
 
     private Map<String, String> fetchInfo() {
-        Properties props = redisTemplate.execute((RedisCallback<Properties>) connection -> {
-            var commands = connection.serverCommands();
-            return commands != null ? commands.info() : new Properties();
-        });
+        Properties props = redisTemplate.execute((RedisCallback<Properties>) connection -> connection.serverCommands().info());
         return toMap(props);
     }
 
     private Map<String, String> fetchInfoSection(String section) {
-        Properties props = redisTemplate.execute((RedisCallback<Properties>) connection -> {
-            var commands = connection.serverCommands();
-            return commands != null ? commands.info(section) : new Properties();
-        });
+        Properties props = redisTemplate.execute(
+            (RedisCallback<Properties>) connection -> connection.serverCommands().info(section)
+        );
         return toMap(props);
     }
 

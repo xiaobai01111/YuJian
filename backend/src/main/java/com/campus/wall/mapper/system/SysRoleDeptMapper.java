@@ -21,4 +21,7 @@ public interface SysRoleDeptMapper extends BaseMapper<SysRoleDept> {
         WHERE ur.user_id = #{userId}
         """)
     List<Long> selectDeptIdsByUserId(@Param("userId") Long userId);
+
+    @Select("SELECT COUNT(1) FROM sys_role_depts WHERE dept_id = #{deptId}")
+    Long countRolesByDeptId(@Param("deptId") Long deptId);
 }

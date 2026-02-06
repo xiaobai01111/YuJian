@@ -5,31 +5,31 @@
         <!-- Toolbar -->
         <div class="flex flex-wrap justify-between items-center mb-4 gap-4 flex-none">
           <div class="flex flex-wrap gap-2">
-            <button class="btn btn-primary btn-sm gap-2 font-normal" @click="openFormModal()">
+            <button v-if="canRoleAdd" class="btn btn-primary btn-sm gap-2 font-normal" @click="openFormModal()">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
               添加
             </button>
-            <button class="btn btn-success btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleEdit">
+            <button v-if="canRoleEdit" class="btn btn-success btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleEdit">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               修改
             </button>
-            <button class="btn btn-error btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length === 0" @click="handleBatchDelete">
+            <button v-if="canRoleDelete" class="btn btn-error btn-sm text-white gap-2 font-normal" :disabled="selectedIds.length === 0" @click="handleBatchDelete">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
               删除
             </button>
-            <button class="btn btn-success btn-outline btn-sm gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleAssignMenu">
+            <button v-if="canRoleAssign" class="btn btn-success btn-outline btn-sm gap-2 font-normal" :disabled="selectedIds.length !== 1" @click="handleAssignMenu">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
               </svg>
               分配菜单
             </button>
-            <button class="btn btn-outline btn-sm gap-2 font-normal" :disabled="!canAssignDept" @click="handleAssignDept">
+            <button v-if="canRoleAssign" class="btn btn-outline btn-sm gap-2 font-normal" :disabled="!canAssignDept" @click="handleAssignDept">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
               </svg>
@@ -99,7 +99,7 @@
                 <td>{{ role.roleKey }}</td>
                 <td>
                   <div class="flex items-center gap-2">
-                    <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="role.status === 0" :disabled="isAdminRole(role)" @change="handleStatusChange(role)" />
+                    <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="role.status === 0" :disabled="isRoleStatusToggleDisabled(role)" @change="handleStatusChange(role)" />
                     <span v-if="role.status === 1" class="badge badge-error badge-sm">停用</span>
                     <span v-else class="badge badge-success badge-sm">正常</span>
                   </div>
@@ -114,22 +114,22 @@
                 <td class="text-base-content/60 text-sm">{{ formatDate(role.createdAt) }}</td>
                 <td>
                    <div class="flex justify-center gap-2">
-                      <button class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" title="编辑" @click="openFormModal(role)">
+                      <button v-if="canRoleEdit" class="btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100" title="编辑" @click="openFormModal(role)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-                      <button v-if="!isAdminRole(role)" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" title="删除" @click="handleDelete(role)">
+                      <button v-if="canRoleDelete && !isAdminRole(role)" class="btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100" title="删除" @click="handleDelete(role)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
-                      <button v-if="!isAdminRole(role)" class="btn btn-square btn-xs bg-green-50 text-green-600 border-none hover:bg-green-100" title="菜单权限" @click="openMenuModal(role)">
+                      <button v-if="canRoleAssign && !isAdminRole(role)" class="btn btn-square btn-xs bg-green-50 text-green-600 border-none hover:bg-green-100" title="菜单权限" @click="openMenuModal(role)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </button>
-                      <button v-if="!isAdminRole(role)" class="btn btn-square btn-xs bg-purple-50 text-purple-600 border-none hover:bg-purple-100" title="授权部门" @click="openRoleDeptModal(role)">
+                      <button v-if="canRoleAssign && !isAdminRole(role)" class="btn btn-square btn-xs bg-purple-50 text-purple-600 border-none hover:bg-purple-100" title="授权部门" @click="openRoleDeptModal(role)">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
                         </svg>
@@ -259,7 +259,7 @@
         <h3 class="font-bold text-lg text-error">删除角色</h3>
         <p class="py-2 text-base-content/70">
           确定要删除角色
-          <strong v-if="deleteRoleTargets.length === 1">{{ deleteRoleTargets[0].roleName }}</strong>
+          <strong v-if="deleteRoleTargets.length === 1">{{ deleteRoleTargets[0]?.roleName }}</strong>
           <strong v-else>{{ deleteRoleTargets.length }} 个角色</strong>
           吗？
         </p>
@@ -312,10 +312,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
-import { getRoleList, createRole, updateRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers, getDeptTreeForRole, assignRoleDepts, getRoleDeptIds } from '@/api/system'
+import { getRoleList, createRole, updateRole, enableRole, disableRole, deleteRole, getMenuTree, assignRoleMenus, getRoleMenuIds, getRoleUsers, getDeptTreeForRole, assignRoleDepts, getRoleDeptIds } from '@/api/system'
 import type { RoleVO, RoleDTO, MenuVO, UserVO, DeptVO } from '@/api/system'
 import { defineComponent, h, type PropType } from 'vue'
 import { useDialog } from '@/composables/useDialog'
+import { useUserStore } from '@/stores/user'
 
 // --- Components ---
 // 菜单树组件 - 支持目录/菜单/按钮三级结构
@@ -333,9 +334,9 @@ const MenuTreeItem: ReturnType<typeof defineComponent> = defineComponent({
     return (): ReturnType<typeof h> => {
       const isChecked = props.selectedIds.includes(props.menu.id)
       const hasChildren = props.menu.children && props.menu.children.length > 0
-      const isButton = props.menu.menuType === 'F' || (props.menu as any).type === 2
+      const rawType = (props.menu as { type?: number }).type
+      const isButton = props.menu.menuType === 'F' || rawType === 2
       const paddingLeft = `${props.level * 20 + 8}px`
-      const prefix = props.level > 0 ? `${'|  '.repeat(Math.max(props.level - 1, 0))}|- ` : ''
       
       // 按钮权限（叶子节点，无展开）
       if (isButton || !hasChildren) {
@@ -481,6 +482,7 @@ const deleteRoleLoading = ref(false)
 const deleteWithUsers = ref(false)
 const deleteReason = ref('')
 const dialog = useDialog()
+const userStore = useUserStore()
 const queryParams = reactive({
   page: 1,
   size: 20,
@@ -492,6 +494,12 @@ const isAllSelected = computed(() => {
 })
 const selectedRole = computed(() => roleList.value.find(r => r.id === selectedIds.value[0]) || null)
 const canAssignDept = computed(() => selectedIds.value.length === 1 && !!selectedRole.value && !isAdminRole(selectedRole.value))
+const canRoleAdd = computed(() => userStore.hasPermission('system:role:add'))
+const canRoleEdit = computed(() => userStore.hasPermission('system:role:edit'))
+const canRoleDelete = computed(() => userStore.hasPermission('system:role:delete'))
+const canRoleAssign = computed(() => userStore.hasPermission('system:role:assign'))
+const canRoleEnable = computed(() => userStore.hasPermission('system:role:enable'))
+const canRoleDisable = computed(() => userStore.hasPermission('system:role:disable'))
 
 
 onMounted(() => {
@@ -533,7 +541,7 @@ const fetchRoles = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const res: any = await getRoleList(queryParams)
+    const res = await getRoleList(queryParams)
     const records = Array.isArray(res) ? res : (res?.records || [])
     total.value = Array.isArray(res) ? records.length : (res?.total || 0)
     if (append) {
@@ -549,9 +557,9 @@ const fetchRoles = async ({ append = false, reset = false } = {}) => {
     } else {
       hasMore.value = records.length >= queryParams.size
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '获取角色列表失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '获取角色列表失败')
   } finally {
     append ? (loadingMore.value = false) : (loading.value = false)
   }
@@ -615,9 +623,9 @@ const submitForm = async () => {
     const modal = document.getElementById('role_form_modal') as HTMLDialogElement
     modal.close()
     refreshRoles()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.message || error?.response?.data?.message || '保存失败')
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '保存失败')
   } finally {
     submitting.value = false
   }
@@ -632,11 +640,11 @@ const handleDelete = async (role: RoleVO) => {
   const modal = document.getElementById('role_delete_modal') as HTMLDialogElement
   modal.showModal()
   try {
-    const res: any = await getRoleUsers(role.id)
+    const res = await getRoleUsers(role.id)
     deleteRoleUsersMap.value = { [role.id]: res || [] }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '获取角色用户失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '获取角色用户失败')
   } finally {
     deleteRoleLoading.value = false
   }
@@ -662,9 +670,9 @@ const handleBatchDelete = async () => {
     const map: Record<number, UserVO[]> = {}
     results.forEach(r => { map[r.roleId] = r.users })
     deleteRoleUsersMap.value = map
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '获取角色用户失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '获取角色用户失败')
   } finally {
     deleteRoleLoading.value = false
   }
@@ -693,9 +701,9 @@ const confirmDeleteRole = async () => {
       await dialog.alert(`部分角色删除失败：${failed.join(', ')}`)
     }
     refreshRoles()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '删除失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '删除失败')
   } finally {
     submitting.value = false
   }
@@ -714,7 +722,7 @@ const openMenuModal = async (role: RoleVO) => {
   if (menuTree.value.length === 0) {
     loadingMenus.value = true
     try {
-      const res: any = await getMenuTree()
+      const res = await getMenuTree()
       menuTree.value = res || []
     } catch (error) {
       console.error(error)
@@ -723,11 +731,11 @@ const openMenuModal = async (role: RoleVO) => {
     }
   }
   try {
-    const res: any = await getRoleMenuIds(role.id)
+    const res = await getRoleMenuIds(role.id)
     selectedMenuIds.value = normalizeMenuSelection(menuTree.value, res || [])
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '获取角色菜单失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '获取角色菜单失败')
   }
 }
 
@@ -756,9 +764,9 @@ const submitRoleDept = async () => {
     roleDeptCounts.value[roleDeptRole.value.id] = roleDeptForm.deptIds.length
     const modal = document.getElementById('role_dept_modal') as HTMLDialogElement
     modal.close()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '保存授权部门失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '保存授权部门失败')
   } finally {
     submitting.value = false
   }
@@ -768,7 +776,7 @@ const ensureDeptTree = async () => {
   if (deptTree.value.length > 0) return
   loadingDepts.value = true
   try {
-    const res: any = await getDeptTreeForRole()
+    const res = await getDeptTreeForRole()
     deptTree.value = res || []
   } catch (error) {
     console.error(error)
@@ -780,13 +788,11 @@ const ensureDeptTree = async () => {
 const fetchRoleDeptIds = async (roleId: number, target?: { deptIds: number[] }) => {
   if (!roleId) return
   try {
-    const res: any = await getRoleDeptIds(roleId)
+    const res = await getRoleDeptIds(roleId)
     if (target) {
       target.deptIds = res || []
-    } else {
-      form.deptIds = res || []
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
   }
 }
@@ -934,9 +940,9 @@ const submitMenuPerms = async () => {
     
     const modal = document.getElementById('menu_perm_modal') as HTMLDialogElement
     modal.close()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '分配菜单失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '分配菜单失败')
   } finally {
     submitting.value = false
   }
@@ -976,6 +982,14 @@ const toggleSelectAll = () => {
 const handleStatusChange = async (role: RoleVO) => {
   const newStatus = role.status === 0 ? 1 : 0
   const actionName = newStatus === 1 ? '停用' : '启用'
+  if (newStatus === 0 && !canRoleEnable.value) {
+    await dialog.alert('缺少启用角色权限')
+    return
+  }
+  if (newStatus === 1 && !canRoleDisable.value) {
+    await dialog.alert('缺少停用角色权限')
+    return
+  }
   
   if (!await dialog.confirm(`确定要${actionName}角色 ${role.roleName} 吗？`)) {
     refreshRoles()
@@ -983,20 +997,16 @@ const handleStatusChange = async (role: RoleVO) => {
   }
   
   try {
-    const updated = await updateRole(role.id, {
-      roleName: role.roleName,
-      roleKey: role.roleKey,
-      sortOrder: role.sortOrder,
-      status: newStatus,
-      remark: role.remark
-    })
+    const updated = newStatus === 0
+      ? await enableRole(role.id)
+      : await disableRole(role.id)
     const idx = roleList.value.findIndex(r => r.id === role.id)
     if (idx !== -1) {
       roleList.value[idx] = updated
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.message || '更新角色状态失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '更新角色状态失败')
     refreshRoles()
   }
 }
@@ -1019,7 +1029,7 @@ const loadRoleDeptCounts = async (roles: RoleVO[], append = false) => {
         return
       }
       try {
-        const res: any = await getRoleDeptIds(role.id)
+        const res = await getRoleDeptIds(role.id)
         map[role.id] = Array.isArray(res) ? res.length : 0
       } catch (error) {
         console.error(error)
@@ -1032,6 +1042,14 @@ const loadRoleDeptCounts = async (roles: RoleVO[], append = false) => {
 
 const isAdminRole = (role: RoleVO) => {
   return role.id === 1 || role.roleKey === 'admin'
+}
+
+const isRoleStatusToggleDisabled = (role: RoleVO) => {
+  if (isAdminRole(role)) return true
+  if (role.status === 0) {
+    return !canRoleDisable.value
+  }
+  return !canRoleEnable.value
 }
 
 </script>

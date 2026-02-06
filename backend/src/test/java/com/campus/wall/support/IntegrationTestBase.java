@@ -6,21 +6,21 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Testcontainers(disabledWithoutDocker = true)
 public abstract class IntegrationTestBase {
 
+    @Container
     private static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine")
                     .withDatabaseName("campus_test")
                     .withUsername("campus")
                     .withPassword("campus");
-
-    static {
-        POSTGRES.start();
-    }
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry registry) {

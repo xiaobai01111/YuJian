@@ -275,7 +275,7 @@ const loadNotices = async () => {
 const loadLatestPosts = async () => {
   loadingPosts.value = true
   try {
-    const res: any = await getPostList(postQuery)
+    const res = await getPostList(postQuery)
     latestPosts.value = res.records || []
   } catch (e) {
     console.error('Failed to load posts', e)
@@ -341,10 +341,12 @@ const openNoticeDetail = (notice: NoticeVO) => {
   showDetailModal.value = true
 }
 
-const normalizeNoticeList = (res: any): NoticeVO[] => {
-  if (Array.isArray(res)) return res
-  if (res?.records && Array.isArray(res.records)) return res.records
-  if (res?.data && Array.isArray(res.data)) return res.data
+const normalizeNoticeList = (res: unknown): NoticeVO[] => {
+  if (Array.isArray(res)) return res as NoticeVO[]
+  if (!res || typeof res !== 'object') return []
+  const data = res as { records?: unknown; data?: unknown }
+  if (Array.isArray(data.records)) return data.records as NoticeVO[]
+  if (Array.isArray(data.data)) return data.data as NoticeVO[]
   return []
 }
 

@@ -74,8 +74,8 @@ const loadNotice = async () => {
     } else {
       notice.value = await getPublicNoticeDetail(id)
     }
-  } catch (e: any) {
-    error.value = e.response?.data?.msg || '公告不存在或无权查看'
+  } catch (e: unknown) {
+    error.value = (e as ApiErrorLike)?.response?.data?.msg || (e as ApiErrorLike)?.message || '公告不存在或无权查看'
   } finally {
     loading.value = false
   }

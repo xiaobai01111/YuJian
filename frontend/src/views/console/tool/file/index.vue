@@ -3,8 +3,8 @@
     <div class="flex-1 min-h-0 flex flex-col gap-6 overflow-hidden p-6">
       <div class="flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold">文件管理</h1>
-          <p class="text-gray-500 mt-1">管理系统文件与分类</p>
+          <h1 class="text-2xl font-bold">业务附件库</h1>
+          <p class="text-gray-500 mt-1">管理身份材料、举报证据等业务附件</p>
         </div>
         <div class="flex items-center gap-2">
           <input ref="fileInput" type="file" class="hidden" multiple @change="handleUpload" />

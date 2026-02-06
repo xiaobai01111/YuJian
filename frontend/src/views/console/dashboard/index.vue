@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 h-full overflow-y-auto">
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <div v-if="canUserStats" class="card bg-base-100 shadow-xl">
@@ -60,7 +60,7 @@
       <div class="card bg-base-100 shadow-xl lg:col-span-2">
         <div class="card-body">
           <h2 class="card-title mb-4">最近活动</h2>
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto max-h-96 overflow-y-auto">
             <table class="table table-zebra">
               <thead>
                 <tr>
@@ -110,7 +110,7 @@
           <div v-if="!canNoticeLatest" class="py-8 text-center text-slate-400">无权限查看</div>
           <div v-else-if="recentNoticesLoading" class="py-8 text-center text-slate-400">加载中...</div>
           <div v-else-if="recentNotices.length === 0" class="py-8 text-center text-slate-400">暂无公告</div>
-          <ul v-else class="space-y-2 text-sm">
+          <ul v-else class="space-y-2 text-sm max-h-80 overflow-y-auto">
             <li
               v-for="notice in recentNotices"
               :key="notice.id"
@@ -346,7 +346,7 @@ const canLoginLog = computed(() => permissionStore.hasPermission('system:dashboa
 const fetchStats = async () => {
   loading.value = true
   try {
-    const res: any = await getDashboardStats()
+    const res = await getDashboardStats()
     Object.assign(stats, res)
   } catch (error) {
     console.error('Failed to fetch dashboard stats', error)
@@ -362,7 +362,7 @@ const fetchActivities = async () => {
       activities.value = []
       return
     }
-    const res: any = await getRecentActivities()
+    const res = await getRecentActivities()
     activities.value = res || []
   } catch (error) {
     console.error('Failed to fetch recent activities', error)
@@ -378,7 +378,7 @@ const fetchRecentNotices = async () => {
   }
   recentNoticesLoading.value = true
   try {
-    const res: any = await getRecentNotices()
+    const res = await getRecentNotices()
     recentNotices.value = res || []
   } catch (error) {
     console.error('Failed to fetch recent notices', error)
@@ -394,7 +394,7 @@ const fetchRecentReports = async () => {
   }
   recentReportsLoading.value = true
   try {
-    const res: any = await getRecentReports()
+    const res = await getRecentReports()
     recentReports.value = res || []
   } catch (error) {
     console.error('Failed to fetch recent reports', error)
@@ -410,7 +410,7 @@ const fetchRecentVerifications = async () => {
   }
   recentVerificationsLoading.value = true
   try {
-    const res: any = await getRecentVerifications()
+    const res = await getRecentVerifications()
     recentVerifications.value = res || []
   } catch (error) {
     console.error('Failed to fetch recent verifications', error)
@@ -426,7 +426,7 @@ const fetchRecentOperLogs = async () => {
   }
   recentOperLogsLoading.value = true
   try {
-    const res: any = await getRecentOperLogs()
+    const res = await getRecentOperLogs()
     recentOperLogs.value = res || []
   } catch (error) {
     console.error('Failed to fetch recent oper logs', error)
@@ -442,7 +442,7 @@ const fetchLoginTrend = async () => {
   }
   loginTrendLoading.value = true
   try {
-    const res: any = await getLoginLogTrend()
+    const res = await getLoginLogTrend()
     loginTrend.value = res || []
   } catch (error) {
     console.error('Failed to fetch login trend', error)
@@ -454,7 +454,7 @@ const fetchLoginTrend = async () => {
 const openNoticeDetail = async (noticeId: number) => {
   if (!canNoticeLatest.value) return
   try {
-    const res: any = canNoticeManage.value
+    const res = canNoticeManage.value
       ? await getNoticeDetail(noticeId)
       : await getVisibleNoticeDetail(noticeId)
     noticeDetail.value = res || null

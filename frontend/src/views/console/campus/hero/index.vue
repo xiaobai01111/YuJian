@@ -3,8 +3,8 @@
     <div class="flex-1 min-h-0 flex flex-col gap-6 overflow-hidden p-6">
       <div class="flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold">Hero管理</h1>
-          <p class="text-slate-500 mt-1">配置前台各页面的首屏Hero内容与视觉</p>
+          <h1 class="text-2xl font-bold">校园展示位</h1>
+          <p class="text-slate-500 mt-1">配置前台各页面的首屏展示内容与视觉</p>
         </div>
         <button class="btn btn-primary btn-sm" @click="openCreateModal" v-permission="['campus:hero:add']">
           新增配置
@@ -184,7 +184,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
-import { createCampusHero, deleteCampusHero, getCampusHeroList, updateCampusHero, type CampusHeroDTO, type CampusHeroVO } from '@/api/system'
+import { createCampusHero, deleteCampusHero, getCampusHeroList, updateCampusHero, type CampusHeroDTO, type CampusHeroQuery, type CampusHeroVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
 const dialog = useDialog()
@@ -289,7 +289,7 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const params: any = { page: page.value, size: pageSize.value }
+    const params: CampusHeroQuery = { page: page.value, size: pageSize.value }
     if (filters.keyword) params.keyword = filters.keyword
     if (filters.enabled !== '') params.enabled = filters.enabled
     const res = await getCampusHeroList(params)
@@ -412,8 +412,8 @@ const handleSave = async () => {
     }
     closeModal()
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '保存失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -424,8 +424,8 @@ const handleDelete = async (hero: CampusHeroVO) => {
   try {
     await deleteCampusHero(hero.id)
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '删除失败')
   }
 }
 

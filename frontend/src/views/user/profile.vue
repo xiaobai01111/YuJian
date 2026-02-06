@@ -175,7 +175,7 @@ const loadProfile = async () => {
 const fetchPosts = async () => {
   loading.value = true
   try {
-    const res: any = await getUserPosts(targetUserId.value, 1, 20)
+    const res = await getUserPosts(targetUserId.value, 1, 20)
     myPosts.value = res.records || []
     postTotal.value = res.total || 0
   } catch (error) {
@@ -188,7 +188,7 @@ const fetchPosts = async () => {
 
 const fetchMyBookmarks = async () => {
   try {
-    const res: any = await getMyBookmarks(1, 20)
+    const res = await getMyBookmarks(1, 20)
     myBookmarks.value = res.records || []
     bookmarkTotal.value = res.total || 0
   } catch (error) {
@@ -224,7 +224,7 @@ const handleBatchBookmark = async () => {
   if (!confirmed) return
 
   try {
-    const res: any = await batchBookmarkPosts(Array.from(selectedPostIds.value))
+    const res = await batchBookmarkPosts(Array.from(selectedPostIds.value))
     const success = res?.success ?? 0
     const skipped = res?.skipped ?? 0
     myPosts.value.forEach(post => {
@@ -246,7 +246,7 @@ const handleBatchReport = async () => {
   if (!reason) return
 
   try {
-    const res: any = await batchReportPosts(Array.from(selectedPostIds.value), reason)
+    const res = await batchReportPosts(Array.from(selectedPostIds.value), reason)
     const success = res?.success ?? 0
     const skipped = res?.skipped ?? 0
     await dialog.alert(`已提交 ${success} 条举报，跳过 ${skipped} 条`)

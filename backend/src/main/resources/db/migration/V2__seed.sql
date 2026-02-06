@@ -22,28 +22,30 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (1, 0, '仪表盘', '/console/dashboard', 'views/console/dashboard/index.vue', 1, 'dashboard', 1, TRUE, 0),
     (2, 0, '系统管理', '/console', 'Layout', 0, 'setting', 2, TRUE, 0),
     (3, 0, '内容管理', '/console', 'Layout', 0, 'document', 3, TRUE, 0),
-    (4, 0, '系统监控', '/console', 'Layout', 0, 'monitor', 4, TRUE, 0),
-    (5, 0, '系统工具', '/console', 'Layout', 0, 'tool', 5, TRUE, 0),
-    (6, 0, '校园管理', '/console', 'Layout', 0, 'peoples', 6, TRUE, 0);
+    (5, 0, '资产管理', '/console', 'Layout', 0, 'image', 4, TRUE, 0),
+    (4, 0, '系统监控', '/console', 'Layout', 0, 'monitor', 5, TRUE, 0),
+    (6, 0, '校园管理', '/console', 'Layout', 0, 'peoples', 6, TRUE, 0),
+    (8, 0, '审计日志', '/console', 'Layout', 0, 'form', 7, TRUE, 0);
 
 -- 系统管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
-    (10, 2, '用户管理', '/console/user', 'views/console/user/index.vue', 1, 'user', 1, TRUE, 0),
-    (11, 2, '角色管理', '/console/role', 'views/console/role/index.vue', 1, 'role', 2, TRUE, 0),
-    (12, 2, '部门管理', '/console/dept', 'views/console/dept/index.vue', 1, 'tree', 3, TRUE, 0),
-    (13, 2, '认证规则', '/console/auth-rule', 'views/console/auth-rule/index.vue', 1, 'id-card', 4, TRUE, 0),
-    (14, 2, '敏感词管理', '/console/sensitive-word', 'views/console/sensitive-word/index.vue', 1, 'warning', 5, TRUE, 0),
-    (15, 2, '公告管理', '/console/notice', 'views/console/notice/index.vue', 1, 'bell', 6, TRUE, 0),
-    (16, 2, '登录日志', '/console/login-log', 'views/console/login-log/index.vue', 1, 'logininfor', 7, TRUE, 0),
-    (17, 2, '操作日志', '/console/oper-log', 'views/console/oper-log/index.vue', 1, 'form', 8, TRUE, 0),
-    (18, 2, '个人中心', '/console/profile', 'views/console/profile/index.vue', 1, 'user', 9, TRUE, 0),
-    (19, 2, '邮箱管理', '/console/email-config', 'views/console/email-config/index.vue', 1, 'email', 10, TRUE, 0);
+    (10, 2, '用户管理', '/console/system/user', 'views/console/user/index.vue', 1, 'user', 1, TRUE, 0),
+    (11, 2, '角色管理', '/console/system/role', 'views/console/role/index.vue', 1, 'role', 2, TRUE, 0),
+    (12, 2, '部门管理', '/console/system/dept', 'views/console/dept/index.vue', 1, 'tree', 3, TRUE, 0),
+    (23, 2, '身份审核', '/console/system/verification', 'views/console/verification/index.vue', 1, 'id-card', 4, TRUE, 0),
+    (13, 2, '认证规则', '/console/system/auth-rule', 'views/console/auth-rule/index.vue', 1, 'id-card', 5, TRUE, 0),
+    (14, 2, '敏感词管理', '/console/system/sensitive-word', 'views/console/sensitive-word/index.vue', 1, 'warning', 6, TRUE, 0),
+    (19, 2, '邮件服务配置', '/console/system/email-config', 'views/console/email-config/index.vue', 1, 'email', 7, TRUE, 0),
+    (18, 2, '个人中心', '/console/profile', 'views/console/profile/index.vue', 1, 'user', 99, FALSE, 0);
 
 -- 内容管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
-    (20, 3, '帖子管理', '/console/post', 'views/console/post/index.vue', 1, 'post', 1, TRUE, 0),
-    (21, 3, '评论管理', '/console/comment', 'views/console/comment/index.vue', 1, 'message', 2, TRUE, 0),
-    (22, 3, '举报管理', '/console/report', 'views/console/report/index.vue', 1, 'warning', 3, TRUE, 0);
+    (20, 3, '帖子管理', '/console/content/post', 'views/console/post/index.vue', 1, 'post', 1, TRUE, 0),
+    (21, 3, '评论管理', '/console/content/comment', 'views/console/comment/index.vue', 1, 'message', 2, TRUE, 0),
+    (15, 3, '公告管理', '/console/content/notice', 'views/console/notice/index.vue', 1, 'bell', 3, TRUE, 0),
+    (22, 3, '举报管理', '/console/content/report', 'views/console/report/index.vue', 1, 'warning', 4, TRUE, 0),
+    (28, 3, '审核中心', '/console/content/verify', 'views/console/content/verify/index.vue', 1, 'id-card', 5, TRUE, 0),
+    (24, 3, '回收站', '/console/content/recycle', 'views/console/recycle/index.vue', 1, 'recycle', 6, TRUE, 0);
 
 -- 系统监控子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
@@ -52,19 +54,21 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (33, 4, 'Redis监控', '/console/monitor/redis', 'views/console/monitor/redis/index.vue', 1, 'redis', 3, TRUE, 0),
     (35, 4, '阻止名单', '/console/monitor/blocklist', 'views/console/monitor/blocklist/index.vue', 1, 'block', 4, TRUE, 0);
 
--- 系统工具子菜单
+-- 资产管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
-    (40, 5, '文件管理', '/console/tool/file', 'views/console/tool/file/index.vue', 1, 'file', 1, TRUE, 0),
-    (41, 5, '图库管理', '/console/tool/gallery', 'views/console/tool/gallery/index.vue', 1, 'image', 2, TRUE, 0),
-    (24, 5, '回收站', '/console/recycle', 'Layout', 0, 'recycle', 3, TRUE, 0),
-    (25, 24, '帖子回收站', '/console/recycle/post', 'views/console/recycle/post.vue', 1, 'recycle', 1, TRUE, 0),
-    (26, 24, '评论回收站', '/console/recycle/comment', 'views/console/recycle/comment.vue', 1, 'recycle', 2, TRUE, 0),
-    (27, 24, '举报回收站', '/console/recycle/report', 'views/console/recycle/report.vue', 1, 'recycle', 3, TRUE, 0);
+    (40, 5, '公共媒体库', '/console/asset/media', 'views/console/tool/gallery/index.vue', 1, 'image', 1, TRUE, 0),
+    (41, 5, '业务附件库', '/console/asset/attachment', 'views/console/tool/file/index.vue', 1, 'file', 2, TRUE, 0),
+    (42, 5, '系统资源库', '/console/asset/resource', 'views/console/asset/resource/index.vue', 1, 'image', 3, TRUE, 0);
 
 -- 校园管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
-    (60, 6, 'Hero管理', '/console/campus/hero', 'views/console/campus/hero/index.vue', 1, 'image', 1, TRUE, 0),
-    (23, 6, '身份审核', '/console/verification', 'views/console/verification/index.vue', 1, 'id-card', 2, TRUE, 0);
+    (60, 6, '校园展示位', '/console/campus/showcase', 'views/console/campus/hero/index.vue', 1, 'image', 1, TRUE, 0),
+    (61, 6, '校园信息', '/console/campus/school', 'views/console/campus/school/index.vue', 1, 'tree', 2, TRUE, 0);
+
+-- 审计日志子菜单
+INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
+    (16, 8, '登录日志', '/console/audit/login-log', 'views/console/login-log/index.vue', 1, 'logininfor', 1, TRUE, 0),
+    (17, 8, '操作日志', '/console/audit/oper-log', 'views/console/oper-log/index.vue', 1, 'form', 2, TRUE, 0);
 
 -- 按钮权限
 INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, status) VALUES
@@ -73,20 +77,32 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (102, 10, '编辑用户', 'system:user:edit', 2, 3, TRUE, 0),
     (103, 10, '删除用户', 'system:user:delete', 2, 4, TRUE, 0),
     (104, 10, '封禁用户', 'system:user:ban', 2, 5, TRUE, 0),
-    (105, 10, '分配角色', 'system:user:role', 2, 6, TRUE, 0),
-    (106, 10, '导入用户', 'system:user:import', 2, 7, TRUE, 0),
-    (107, 10, '导出用户', 'system:user:export', 2, 8, TRUE, 0),
+    (108, 10, '解封用户', 'system:user:unban', 2, 6, TRUE, 0),
+    (109, 10, '恢复用户', 'system:user:restore', 2, 7, TRUE, 0),
+    (116, 10, '彻底删除用户', 'system:user:purge', 2, 8, TRUE, 0),
+    (105, 10, '分配角色', 'system:user:role', 2, 9, TRUE, 0),
+    (106, 10, '导入用户', 'system:user:import', 2, 10, TRUE, 0),
+    (107, 10, '导出用户', 'system:user:export', 2, 11, TRUE, 0),
 
     (110, 11, '查询角色', 'system:role:list', 2, 1, TRUE, 0),
-    (111, 11, '新增角色', 'system:role:add', 2, 2, TRUE, 0),
-    (112, 11, '编辑角色', 'system:role:edit', 2, 3, TRUE, 0),
-    (113, 11, '删除角色', 'system:role:delete', 2, 4, TRUE, 0),
-    (114, 11, '分配权限', 'system:role:assign', 2, 5, TRUE, 0),
+    (115, 11, '查看角色', 'system:role:view', 2, 2, TRUE, 0),
+    (111, 11, '新增角色', 'system:role:add', 2, 3, TRUE, 0),
+    (112, 11, '编辑角色', 'system:role:edit', 2, 4, TRUE, 0),
+    (117, 11, '启用角色', 'system:role:enable', 2, 5, TRUE, 0),
+    (118, 11, '停用角色', 'system:role:disable', 2, 6, TRUE, 0),
+    (113, 11, '删除角色', 'system:role:delete', 2, 7, TRUE, 0),
+    (114, 11, '分配权限', 'system:role:assign', 2, 8, TRUE, 0),
 
     (120, 12, '查询部门', 'system:dept:list', 2, 1, TRUE, 0),
     (121, 12, '新增部门', 'system:dept:add', 2, 2, TRUE, 0),
     (122, 12, '编辑部门', 'system:dept:edit', 2, 3, TRUE, 0),
     (123, 12, '删除部门', 'system:dept:delete', 2, 4, TRUE, 0),
+    (124, 12, '查看部门', 'system:dept:view', 2, 5, TRUE, 0),
+    (125, 12, '调整层级', 'system:dept:move', 2, 6, TRUE, 0),
+    (126, 12, '调整排序', 'system:dept:sort', 2, 7, TRUE, 0),
+    (127, 12, '导入部门', 'system:dept:import', 2, 8, TRUE, 0),
+    (128, 12, '导出部门', 'system:dept:export', 2, 9, TRUE, 0),
+    (129, 12, '同步部门', 'system:dept:sync', 2, 10, TRUE, 0),
 
     (130, 13, '查询认证规则', 'system:auth-rule:list', 2, 1, TRUE, 0),
     (131, 13, '新增认证规则', 'system:auth-rule:add', 2, 2, TRUE, 0),
@@ -168,17 +184,50 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (223, 22, '删除举报', 'content:report:delete', 2, 4, TRUE, 0),
 
     (230, 23, '查询审核', 'content:verification:list', 2, 1, TRUE, 0),
-    (231, 23, '处理审核', 'content:verification:handle', 2, 2, TRUE, 0),
+    (232, 23, '查看审核', 'content:verification:view', 2, 2, TRUE, 0),
+    (231, 23, '处理审核', 'content:verification:handle', 2, 3, TRUE, 0),
+    (233, 23, '查看学号白名单', 'content:verification:whitelist:list', 2, 4, TRUE, 0),
+    (234, 23, '编辑学号白名单', 'content:verification:whitelist:edit', 2, 5, TRUE, 0),
 
-    (300, 25, '查看帖子回收站', 'content:recycle:post:list', 2, 1, TRUE, 0),
-    (301, 25, '恢复帖子', 'content:recycle:post:restore', 2, 2, TRUE, 0),
-    (302, 25, '彻底删除帖子', 'content:recycle:post:purge', 2, 3, TRUE, 0),
-    (310, 26, '查看评论回收站', 'content:recycle:comment:list', 2, 1, TRUE, 0),
-    (311, 26, '恢复评论', 'content:recycle:comment:restore', 2, 2, TRUE, 0),
-    (312, 26, '彻底删除评论', 'content:recycle:comment:purge', 2, 3, TRUE, 0),
-    (320, 27, '查看举报回收站', 'content:recycle:report:list', 2, 1, TRUE, 0),
-    (321, 27, '恢复举报', 'content:recycle:report:restore', 2, 2, TRUE, 0),
-    (322, 27, '彻底删除举报', 'content:recycle:report:purge', 2, 3, TRUE, 0);
+    (300, 24, '查看帖子回收站', 'content:recycle:post:list', 2, 1, TRUE, 0),
+    (301, 24, '恢复帖子', 'content:recycle:post:restore', 2, 2, TRUE, 0),
+    (302, 24, '彻底删除帖子', 'content:recycle:post:purge', 2, 3, TRUE, 0),
+    (310, 24, '查看评论回收站', 'content:recycle:comment:list', 2, 4, TRUE, 0),
+    (311, 24, '恢复评论', 'content:recycle:comment:restore', 2, 5, TRUE, 0),
+    (312, 24, '彻底删除评论', 'content:recycle:comment:purge', 2, 6, TRUE, 0),
+    (320, 24, '查看举报回收站', 'content:recycle:report:list', 2, 7, TRUE, 0),
+    (321, 24, '恢复举报', 'content:recycle:report:restore', 2, 8, TRUE, 0),
+    (322, 24, '彻底删除举报', 'content:recycle:report:purge', 2, 9, TRUE, 0);
+
+-- 菜单分组编码（用于侧边栏分组）
+UPDATE sys_menus
+SET group_code = CASE
+    WHEN id = 1 THEN 'WORKBENCH'
+    WHEN id = 2 THEN 'SYSTEM'
+    WHEN id = 3 THEN 'CONTENT'
+    WHEN id = 5 THEN 'ASSET'
+    WHEN id = 4 THEN 'MONITOR'
+    WHEN id = 6 THEN 'CAMPUS'
+    WHEN id = 8 THEN 'AUDIT'
+    ELSE 'GENERAL'
+END
+WHERE parent_id = 0;
+
+WITH RECURSIVE menu_tree AS (
+    SELECT id, parent_id, group_code
+    FROM sys_menus
+    WHERE parent_id = 0
+      AND group_code IS NOT NULL
+      AND group_code <> ''
+    UNION ALL
+    SELECT c.id, c.parent_id, mt.group_code
+    FROM sys_menus c
+    INNER JOIN menu_tree mt ON c.parent_id = mt.id
+)
+UPDATE sys_menus m
+SET group_code = mt.group_code
+FROM menu_tree mt
+WHERE m.id = mt.id;
 
 SELECT setval('sys_menus_id_seq', (SELECT MAX(id) FROM sys_menus));
 
@@ -189,9 +238,10 @@ SELECT 1, id FROM sys_menus;
 -- 版主角色：内容管理 + 个人中心
 INSERT INTO sys_role_menus (role_id, menu_id) VALUES
     (2, 1),
-    (2, 3), (2, 20), (2, 21), (2, 22), (2, 23), (2, 24), (2, 25), (2, 26), (2, 27),
+    (2, 3), (2, 20), (2, 21), (2, 15), (2, 22), (2, 28), (2, 24),
+    (2, 150), (2, 151), (2, 152), (2, 153), (2, 154), (2, 155),
     (2, 200), (2, 210), (2, 211), (2, 212), (2, 213),
-    (2, 220), (2, 221), (2, 222), (2, 223), (2, 230), (2, 231),
+    (2, 220), (2, 221), (2, 222), (2, 223), (2, 230), (2, 232), (2, 231),
     (2, 300), (2, 301), (2, 302), (2, 310), (2, 311), (2, 312), (2, 320), (2, 321), (2, 322),
     (2, 18);
 
@@ -274,9 +324,10 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/console/config/smtp/test', 'POST', 'system:config:edit', 'console.config.smtp.test', TRUE),
     ('/api/v1/console/config/email-templates', 'GET', 'system:config:list', 'console.config.email.templates.get', TRUE),
     ('/api/v1/console/config/email-templates', 'PUT', 'system:config:edit', 'console.config.email.templates.update', TRUE),
-    ('/api/v1/console/config/student-ids', 'GET', 'system:config:list', 'console.config.student.ids.get', TRUE),
-    ('/api/v1/console/config/student-ids', 'PUT', 'system:config:edit', 'console.config.student.ids.update', TRUE),
+    ('/api/v1/console/config/student-ids', 'GET', 'content:verification:whitelist:list', 'console.config.student.ids.get', TRUE),
+    ('/api/v1/console/config/student-ids', 'PUT', 'content:verification:whitelist:edit', 'console.config.student.ids.update', TRUE),
     ('/api/v1/console/users', 'GET', 'system:user:list', 'console.users.list', TRUE),
+    ('/api/v1/console/users/deleted', 'GET', 'system:user:list', 'console.users.deleted.list', TRUE),
     ('/api/v1/console/users/*', 'GET', 'system:user:list', 'console.users.detail', TRUE),
     ('/api/v1/console/users', 'POST', 'system:user:add', 'console.users.add', TRUE),
     ('/api/v1/console/users/*', 'PUT', 'system:user:edit', 'console.users.edit', TRUE),
@@ -285,10 +336,12 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/console/users/batch-role', 'PUT', 'system:user:role', 'console.users.role.batch', TRUE),
     ('/api/v1/console/users/batch-assign', 'POST', 'system:user:role', 'console.users.assign.by.query', TRUE),
     ('/api/v1/console/users/*/ban', 'PUT', 'system:user:ban', 'console.users.ban', TRUE),
+    ('/api/v1/console/users/*/unban', 'PUT', 'system:user:unban', 'console.users.unban', TRUE),
     ('/api/v1/console/users/export', 'GET', 'system:user:export', 'console.users.export', TRUE),
     ('/api/v1/console/users/import', 'POST', 'system:user:import', 'console.users.import', TRUE),
     ('/api/v1/console/users/template', 'GET', 'system:user:import', 'console.users.template', TRUE),
-    ('/api/v1/console/users/*/restore', 'PUT', 'system:user:delete', 'console.users.restore', TRUE),
+    ('/api/v1/console/users/*/restore', 'PUT', 'system:user:restore', 'console.users.restore', TRUE),
+    ('/api/v1/console/users/*/purge', 'DELETE', 'system:user:purge', 'console.users.purge', TRUE),
     ('/api/v1/console/posts', 'GET', 'content:post:list', 'console.posts.list', TRUE),
     ('/api/v1/console/posts', 'POST', 'content:post:add', 'console.posts.add', TRUE),
     ('/api/v1/console/posts/*', 'PUT', 'content:post:edit', 'console.posts.edit', TRUE),
@@ -304,7 +357,7 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/console/reports/batch-handle', 'POST', 'content:report:batch-handle', 'console.reports.batch.handle', TRUE),
     ('/api/v1/console/reports/*', 'DELETE', 'content:report:delete', 'console.reports.delete', TRUE),
     ('/api/v1/console/verifications', 'GET', 'content:verification:list', 'console.verifications.list', TRUE),
-    ('/api/v1/console/verifications/*', 'GET', 'content:verification:list', 'console.verifications.detail', TRUE),
+    ('/api/v1/console/verifications/*', 'GET', 'content:verification:view', 'console.verifications.detail', TRUE),
     ('/api/v1/console/verifications/*', 'PUT', 'content:verification:handle', 'console.verifications.handle', TRUE),
     ('/api/v1/console/recycle/posts', 'GET', 'content:recycle:post:list', 'console.recycle.post.list', TRUE),
     ('/api/v1/console/recycle/posts/*/restore', 'PUT', 'content:recycle:post:restore', 'console.recycle.post.restore', TRUE),
@@ -360,26 +413,34 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/console/campus/heroes/*', 'PUT', 'campus:hero:edit', 'console.hero.edit', TRUE),
     ('/api/v1/console/campus/heroes/*', 'DELETE', 'campus:hero:delete', 'console.hero.delete', TRUE),
     ('/api/v1/system/roles/list', 'GET', 'system:role:list', 'system.role.list', TRUE),
+    ('/api/v1/system/roles/*', 'GET', 'system:role:view', 'system.role.detail', TRUE),
     ('/api/v1/system/roles', 'POST', 'system:role:add', 'system.role.add', TRUE),
     ('/api/v1/system/roles/*', 'PUT', 'system:role:edit', 'system.role.edit', TRUE),
+    ('/api/v1/system/roles/*/enable', 'PUT', 'system:role:enable', 'system.role.enable', TRUE),
+    ('/api/v1/system/roles/*/disable', 'PUT', 'system:role:disable', 'system.role.disable', TRUE),
     ('/api/v1/system/roles/*', 'DELETE', 'system:role:delete', 'system.role.delete', TRUE),
     ('/api/v1/system/roles/*/delete', 'POST', 'system:role:delete', 'system.role.delete.body', TRUE),
-    ('/api/v1/system/roles/*/menus', 'GET', 'system:role:assign', 'system.role.menus.get', TRUE),
+    ('/api/v1/system/roles/*/menus', 'GET', 'system:role:view', 'system.role.menus.get', TRUE),
     ('/api/v1/system/roles/*/menus', 'PUT', 'system:role:assign', 'system.role.menus.set', TRUE),
-    ('/api/v1/system/roles/*/depts', 'GET', 'system:role:assign', 'system.role.depts.get', TRUE),
+    ('/api/v1/system/roles/*/depts', 'GET', 'system:role:view', 'system.role.depts.get', TRUE),
     ('/api/v1/system/roles/*/depts', 'PUT', 'system:role:assign', 'system.role.depts.set', TRUE),
     ('/api/v1/system/roles/*/users', 'GET', 'system:role:list', 'system.role.users', TRUE),
-    ('/api/v1/system/roles/dept-tree', 'GET', 'system:role:assign', 'system.role.dept.tree', TRUE),
+    ('/api/v1/system/roles/dept-tree', 'GET', 'system:role:view', 'system.role.dept.tree', TRUE),
     ('/api/v1/system/dept/list', 'GET', 'system:dept:list', 'system.dept.list', TRUE),
     ('/api/v1/system/dept/tree', 'GET', 'system:dept:list', 'system.dept.tree', TRUE),
-    ('/api/v1/system/dept/*', 'GET', 'system:dept:list', 'system.dept.detail', TRUE),
+    ('/api/v1/system/dept/*', 'GET', 'system:dept:view', 'system.dept.detail', TRUE),
     ('/api/v1/system/dept', 'POST', 'system:dept:add', 'system.dept.add', TRUE),
     ('/api/v1/system/dept/*', 'PUT', 'system:dept:edit', 'system.dept.edit', TRUE),
     ('/api/v1/system/dept/*', 'DELETE', 'system:dept:delete', 'system.dept.delete', TRUE),
     ('/api/v1/system/dept/*/delete', 'POST', 'system:dept:delete', 'system.dept.delete.body', TRUE),
     ('/api/v1/system/dept/*/status', 'PUT', 'system:dept:edit', 'system.dept.status', TRUE),
-    ('/api/v1/system/dept/*/users', 'GET', 'system:dept:list', 'system.dept.users', TRUE),
-    ('/api/v1/system/dept/*/user-count', 'GET', 'system:dept:list', 'system.dept.user.count', TRUE),
+    ('/api/v1/system/dept/*/users', 'GET', 'system:dept:view', 'system.dept.users', TRUE),
+    ('/api/v1/system/dept/*/user-count', 'GET', 'system:dept:view', 'system.dept.user.count', TRUE),
+    ('/api/v1/system/dept/*/move', 'PUT', 'system:dept:move', 'system.dept.move', TRUE),
+    ('/api/v1/system/dept/*/sort', 'PUT', 'system:dept:sort', 'system.dept.sort', TRUE),
+    ('/api/v1/system/dept/export', 'GET', 'system:dept:export', 'system.dept.export', TRUE),
+    ('/api/v1/system/dept/import', 'POST', 'system:dept:import', 'system.dept.import', TRUE),
+    ('/api/v1/system/dept/sync', 'POST', 'system:dept:sync', 'system.dept.sync', TRUE),
     ('/api/v1/system/auth-rules', 'GET', 'system:auth-rule:list', 'system.authrule.list', TRUE),
     ('/api/v1/system/auth-rules', 'POST', 'system:auth-rule:add', 'system.authrule.add', TRUE),
     ('/api/v1/system/auth-rules/*', 'PUT', 'system:auth-rule:edit', 'system.authrule.edit', TRUE),
@@ -390,8 +451,8 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/system/sensitive-words/*', 'DELETE', 'system:sensitive-word:delete', 'system.sensitive.delete', TRUE),
     ('/api/v1/system/sensitive-words', 'DELETE', 'system:sensitive-word:delete', 'system.sensitive.delete.batch', TRUE),
     ('/api/v1/system/sensitive-words/*', 'PUT', 'system:sensitive-word:edit', 'system.sensitive.edit', TRUE),
-    ('/api/v1/system/menu/list', 'GET', 'system:role:assign', 'system.menu.list', TRUE),
-    ('/api/v1/system/api-permissions', 'GET', 'system:role:assign', 'system.api.perm.list', TRUE),
+    ('/api/v1/system/menu/list', 'GET', 'system:role:view', 'system.menu.list', TRUE),
+    ('/api/v1/system/api-permissions', 'GET', 'system:role:view', 'system.api.perm.list', TRUE),
     ('/api/v1/system/api-permissions', 'POST', 'system:role:assign', 'system.api.perm.add', TRUE),
     ('/api/v1/system/api-permissions/*', 'PUT', 'system:role:assign', 'system.api.perm.edit', TRUE),
     ('/api/v1/system/api-permissions/*', 'DELETE', 'system:role:assign', 'system.api.perm.delete', TRUE),

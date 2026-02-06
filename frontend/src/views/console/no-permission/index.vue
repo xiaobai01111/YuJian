@@ -48,7 +48,7 @@ const adminContact = ref<AdminContactVO>({})
 
 onMounted(async () => {
   try {
-    const res: any = await getAdminContact()
+    const res = await getAdminContact()
     adminContact.value = res || {}
   } catch (e) {
     console.error('Failed to get admin contact', e)

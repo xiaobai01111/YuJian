@@ -23,6 +23,25 @@ export interface MenuVO {
     children?: MenuVO[]
 }
 
+export interface ConsoleRouteMeta {
+    title: string
+    icon?: string
+    hidden?: boolean
+    perms?: string
+    keepAlive?: boolean
+    groupCode?: string
+    featureCode?: string
+    routeType?: string
+}
+
+export interface ConsoleRouteVO {
+    name: string
+    path: string
+    component?: string
+    meta?: ConsoleRouteMeta
+    children?: ConsoleRouteVO[]
+}
+
 export interface UserVO {
     id: number
     username: string
@@ -38,6 +57,7 @@ export interface UserVO {
     sex?: number
     verifyStatus?: number
     status: number
+    deleted?: number
     creditScore?: number
     loginDate?: string
     createdAt: string
@@ -84,11 +104,11 @@ export interface RoleDTO {
 
 // --- Menu & Router ---
 export function getRoutes() {
-    return request.get('/api/v1/system/menu/routes')
+    return request.get<ConsoleRouteVO[]>('/api/v1/system/menu/routes')
 }
 
 export function getMenuTree() {
-    return request.get('/api/v1/system/menu/list')
+    return request.get<MenuVO[]>('/api/v1/system/menu/list')
 }
 
 // --- Dept ---
@@ -118,27 +138,27 @@ export interface DeptDTO {
 }
 
 export function getDeptList() {
-    return request.get('/api/v1/system/dept/list')
+    return request.get<DeptVO[]>('/api/v1/system/dept/list')
 }
 
 export function getDeptTree() {
-    return request.get('/api/v1/system/dept/tree')
+    return request.get<DeptVO[]>('/api/v1/system/dept/tree')
 }
 
 export function getDeptTreeForRole() {
-    return request.get('/api/v1/system/roles/dept-tree')
+    return request.get<DeptVO[]>('/api/v1/system/roles/dept-tree')
 }
 
 export function createDept(data: DeptDTO) {
-    return request.post('/api/v1/system/dept', data)
+    return request.post<number>('/api/v1/system/dept', data)
 }
 
 export function updateDept(id: number, data: DeptDTO) {
-    return request.put(`/api/v1/system/dept/${id}`, data)
+    return request.put<void>(`/api/v1/system/dept/${id}`, data)
 }
 
 export function deleteDept(id: number) {
-    return request.delete(`/api/v1/system/dept/${id}`)
+    return request.delete<void>(`/api/v1/system/dept/${id}`)
 }
 
 export type DeptUserStrategy = 'TRANSFER_PARENT' | 'UNASSIGN' | 'DELETE'
@@ -149,19 +169,53 @@ export interface DeptDeleteDTO {
 }
 
 export function deleteDeptWithStrategy(id: number, data: DeptDeleteDTO) {
-    return request.post(`/api/v1/system/dept/${id}/delete`, data)
+    return request.post<void>(`/api/v1/system/dept/${id}/delete`, data)
 }
 
 export function updateDeptStatus(id: number, status: number) {
-    return request.put(`/api/v1/system/dept/${id}/status`, { status })
+    return request.put<void>(`/api/v1/system/dept/${id}/status`, { status })
 }
 
 export function getDeptUsers(deptId: number) {
-    return request.get(`/api/v1/system/dept/${deptId}/users`)
+    return request.get<UserVO[]>(`/api/v1/system/dept/${deptId}/users`)
 }
 
 export function getDeptUserCount(deptId: number) {
-    return request.get(`/api/v1/system/dept/${deptId}/user-count`)
+    return request.get<number>(`/api/v1/system/dept/${deptId}/user-count`)
+}
+
+export interface DeptMoveDTO {
+    parentId: number
+    sortOrder?: number
+}
+
+export interface DeptSortDTO {
+    sortOrder: number
+}
+
+export function moveDept(id: number, data: DeptMoveDTO) {
+    return request.put<void>(`/api/v1/system/dept/${id}/move`, data)
+}
+
+export function updateDeptSort(id: number, data: DeptSortDTO) {
+    return request.put<void>(`/api/v1/system/dept/${id}/sort`, data)
+}
+
+export function exportDepts() {
+    return request.get('/api/v1/system/dept/export', { responseType: 'blob' })
+}
+
+export function importDepts(file: File, updateExisting: boolean = false) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('updateExisting', String(updateExisting))
+    return request.post<string>('/api/v1/system/dept/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })
+}
+
+export function syncDepts() {
+    return request.post<string>('/api/v1/system/dept/sync')
 }
 
 // --- User ---
@@ -191,39 +245,72 @@ export interface UserEditDTO {
     remark?: string
 }
 
-export function getUserList(params?: any) {
-    return request.get('/api/v1/console/users', { params })
+export interface UserQuery {
+    page?: number
+    size?: number
+    username?: string
+    nickname?: string
+    phone?: string
+    loginDateStart?: string
+    loginDateEnd?: string
+}
+
+export function getUserList(params?: UserQuery) {
+    return request.get<PageResult<UserVO>>('/api/v1/console/users', { params })
+}
+
+export function getDeletedUserList(params?: UserQuery) {
+    return request.get<PageResult<UserVO>>('/api/v1/console/users/deleted', { params })
 }
 
 export function createUser(data: UserCreateDTO) {
-    return request.post('/api/v1/console/users', data)
+    return request.post<number>('/api/v1/console/users', data)
 }
 
 export function editUser(userId: number, data: UserEditDTO) {
-    return request.put(`/api/v1/console/users/${userId}`, data)
+    return request.put<void>(`/api/v1/console/users/${userId}`, data)
 }
 
 export function deleteUsers(ids: number[], reason?: string) {
-    return request.delete('/api/v1/console/users', { data: { ids, reason } })
+    return request.delete<void>('/api/v1/console/users', { data: { ids, reason } })
 }
 
 export function updateUserRole(userId: number, roleIds: number[]) {
-    return request.put(`/api/v1/console/users/${userId}/role`, { roleIds })
+    return request.put<void>(`/api/v1/console/users/${userId}/role`, { roleIds })
 }
 
 export function batchUpdateUserRole(userIds: number[], roleIds: number[]) {
-    return request.put('/api/v1/console/users/batch-role', { userIds, roleIds })
+    return request.put<void>('/api/v1/console/users/batch-role', { userIds, roleIds })
 }
 
-export function batchAssignUsersByQuery(data: any) {
-    return request.post('/api/v1/console/users/batch-assign', data)
+export interface UserBatchAssignQuery {
+    userIds?: number[]
+    roleIds?: number[]
+    deptId?: number
+    keyword?: string
 }
 
-export function banUser(userId: number, status: number, reason?: string) {
-    return request.put(`/api/v1/console/users/${userId}/ban`, { status, reason })
+export function batchAssignUsersByQuery(data: UserBatchAssignQuery) {
+    return request.post<number>('/api/v1/console/users/batch-assign', data)
 }
 
-export function exportUsers(params?: any) {
+export function banUser(userId: number, reason?: string) {
+    return request.put<UserVO>(`/api/v1/console/users/${userId}/ban`, { reason })
+}
+
+export function unbanUser(userId: number, reason?: string) {
+    return request.put<UserVO>(`/api/v1/console/users/${userId}/unban`, { reason })
+}
+
+export function restoreUser(userId: number, reason?: string) {
+    return request.put<void>(`/api/v1/console/users/${userId}/restore`, { reason })
+}
+
+export function purgeUser(userId: number, reason?: string) {
+    return request.delete<void>(`/api/v1/console/users/${userId}/purge`, { data: { reason } })
+}
+
+export function exportUsers(params?: UserQuery) {
     return request.get('/api/v1/console/users/export', { params, responseType: 'blob' })
 }
 
@@ -231,7 +318,7 @@ export function importUsers(file: File, updateExisting: boolean = false) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('updateExisting', String(updateExisting))
-    return request.post('/api/v1/console/users/import', formData, {
+    return request.post<string>('/api/v1/console/users/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     })
 }
@@ -266,15 +353,15 @@ export interface LoginLogQuery {
 }
 
 export function getLoginLogList(params?: LoginLogQuery) {
-    return request.get('/api/v1/console/login-logs', { params })
+    return request.get<PageResult<LoginLogVO>>('/api/v1/console/login-logs', { params })
 }
 
 export function deleteLoginLog(id: number) {
-    return request.delete(`/api/v1/console/login-logs/${id}`)
+    return request.delete<void>(`/api/v1/console/login-logs/${id}`)
 }
 
 export function clearLoginLogs() {
-    return request.delete('/api/v1/console/login-logs/clear')
+    return request.delete<void>('/api/v1/console/login-logs/clear')
 }
 
 export function exportLoginLogs(params?: LoginLogQuery) {
@@ -315,7 +402,7 @@ export function getOnlineUserList(params?: OnlineUserQuery) {
 }
 
 export function kickoutOnlineUser(token: string) {
-    return request.post('/api/v1/console/online-users/kickout', { token })
+    return request.post<void>('/api/v1/console/online-users/kickout', { token })
 }
 
 // --- Server Monitor ---
@@ -367,7 +454,7 @@ export interface ServerMonitorVO {
 }
 
 export function getServerMonitor() {
-    return request.get('/api/v1/console/monitor/server')
+    return request.get<ServerMonitorVO>('/api/v1/console/monitor/server')
 }
 
 // --- Redis Monitor ---
@@ -404,7 +491,7 @@ export interface RedisMonitorVO {
 }
 
 export function getRedisMonitor() {
-    return request.get('/api/v1/console/monitor/redis')
+    return request.get<RedisMonitorVO>('/api/v1/console/monitor/redis')
 }
 
 // --- Blocklist ---
@@ -602,8 +689,8 @@ export interface OperLogVO {
     targetId?: number
     action?: string
     reason?: string
-    beforeValue?: any
-    afterValue?: any
+    beforeValue?: unknown
+    afterValue?: unknown
     ipAddress?: string
     createdAt?: string
 }
@@ -619,15 +706,15 @@ export interface OperLogQuery {
 }
 
 export function getOperLogList(params?: OperLogQuery) {
-    return request.get('/api/v1/console/oper-logs', { params })
+    return request.get<PageResult<OperLogVO>>('/api/v1/console/oper-logs', { params })
 }
 
 export function deleteOperLog(id: number) {
-    return request.delete(`/api/v1/console/oper-logs/${id}`)
+    return request.delete<void>(`/api/v1/console/oper-logs/${id}`)
 }
 
 export function clearOperLogs() {
-    return request.delete('/api/v1/console/oper-logs/clear')
+    return request.delete<void>('/api/v1/console/oper-logs/clear')
 }
 
 export function exportOperLogs(params?: OperLogQuery) {
@@ -635,45 +722,63 @@ export function exportOperLogs(params?: OperLogQuery) {
 }
 
 // --- Role ---
-export function getRoleList(params?: any) {
-    return request.get('/api/v1/system/roles/list', { params })
+export interface RoleListQuery {
+    page?: number
+    size?: number
+    keyword?: string
+}
+
+export function getRoleList(params?: RoleListQuery) {
+    return request.get<PageResult<RoleVO> | RoleVO[]>('/api/v1/system/roles/list', { params })
 }
 
 export function createRole(data: RoleDTO) {
-    return request.post('/api/v1/system/roles', data)
+    return request.post<RoleVO>('/api/v1/system/roles', data)
 }
 
 export function updateRole(id: number, data: RoleDTO) {
-    return request.put(`/api/v1/system/roles/${id}`, data)
+    return request.put<RoleVO>(`/api/v1/system/roles/${id}`, data)
+}
+
+export function getRoleDetail(roleId: number) {
+    return request.get<RoleVO>(`/api/v1/system/roles/${roleId}`)
+}
+
+export function enableRole(roleId: number) {
+    return request.put<RoleVO>(`/api/v1/system/roles/${roleId}/enable`)
+}
+
+export function disableRole(roleId: number) {
+    return request.put<RoleVO>(`/api/v1/system/roles/${roleId}/disable`)
 }
 
 export function getRoleMenuIds(roleId: number) {
-    return request.get(`/api/v1/system/roles/${roleId}/menus`)
+    return request.get<number[]>(`/api/v1/system/roles/${roleId}/menus`)
 }
 
 export function getRoleUsers(roleId: number) {
-    return request.get(`/api/v1/system/roles/${roleId}/users`)
+    return request.get<UserVO[]>(`/api/v1/system/roles/${roleId}/users`)
 }
 
 export function deleteRole(roleId: number, data?: { deleteUsers?: boolean; reason?: string }) {
     const payload = data ?? { deleteUsers: false }
-    return request.post(`/api/v1/system/roles/${roleId}/delete`, payload)
+    return request.post<void>(`/api/v1/system/roles/${roleId}/delete`, payload)
 }
 
 export function deleteRoles(roleIds: number[]) {
-    return request.delete('/api/v1/system/roles', { data: roleIds })
+    return request.delete<void>('/api/v1/system/roles', { data: roleIds })
 }
 
 export function assignRoleMenus(roleId: number, menuIds: number[]) {
-    return request.put(`/api/v1/system/roles/${roleId}/menus`, menuIds)
+    return request.put<RoleVO>(`/api/v1/system/roles/${roleId}/menus`, menuIds)
 }
 
 export function assignRoleDepts(roleId: number, deptIds: number[]) {
-    return request.put(`/api/v1/system/roles/${roleId}/depts`, { deptIds })
+    return request.put<RoleVO>(`/api/v1/system/roles/${roleId}/depts`, { deptIds })
 }
 
 export function getRoleDeptIds(roleId: number) {
-    return request.get(`/api/v1/system/roles/${roleId}/depts`)
+    return request.get<number[]>(`/api/v1/system/roles/${roleId}/depts`)
 }
 
 // --- Notice (公告) ---
@@ -708,49 +813,49 @@ export interface NoticeDTO {
 
 // 公开接口（未登录可访问）
 export function getPublicNotices(limit: number = 10) {
-    return request.get('/api/v1/notices/public', { params: { limit } })
+    return request.get<NoticeVO[]>('/api/v1/notices/public', { params: { limit } })
 }
 
 export function getPublicNoticeDetail(id: number) {
-    return request.get(`/api/v1/notices/public/${id}`)
+    return request.get<NoticeVO>(`/api/v1/notices/public/${id}`)
 }
 
 // 登录用户接口
 export function getVisibleNotices(page: number = 1, size: number = 10) {
-    return request.get('/api/v1/notices', { params: { page, size } })
+    return request.get<PageResult<NoticeVO>>('/api/v1/notices', { params: { page, size } })
 }
 
 export function getVisibleNoticeDetail(id: number) {
-    return request.get(`/api/v1/notices/${id}`)
+    return request.get<NoticeVO>(`/api/v1/notices/${id}`)
 }
 
 // 后台管理接口
 export function queryNotices(params: { page?: number; size?: number; status?: number; keyword?: string }) {
-    return request.get('/api/v1/console/notices', { params })
+    return request.get<PageResult<NoticeVO>>('/api/v1/console/notices', { params })
 }
 
 export function getNoticeDetail(id: number) {
-    return request.get(`/api/v1/console/notices/${id}`)
+    return request.get<NoticeVO>(`/api/v1/console/notices/${id}`)
 }
 
 export function createNotice(data: NoticeDTO) {
-    return request.post('/api/v1/console/notices', data)
+    return request.post<NoticeVO>('/api/v1/console/notices', data)
 }
 
 export function updateNotice(id: number, data: NoticeDTO) {
-    return request.put(`/api/v1/console/notices/${id}`, data)
+    return request.put<NoticeVO>(`/api/v1/console/notices/${id}`, data)
 }
 
 export function publishNotice(id: number) {
-    return request.put(`/api/v1/console/notices/${id}/publish`)
+    return request.put<void>(`/api/v1/console/notices/${id}/publish`)
 }
 
 export function offlineNotice(id: number) {
-    return request.put(`/api/v1/console/notices/${id}/offline`)
+    return request.put<void>(`/api/v1/console/notices/${id}/offline`)
 }
 
 export function deleteNotice(id: number) {
-    return request.delete(`/api/v1/console/notices/${id}`)
+    return request.delete<void>(`/api/v1/console/notices/${id}`)
 }
 
 // --- Campus Hero (Hero配置) ---
@@ -772,6 +877,7 @@ export interface CampusHeroVO {
     statsNumber?: string
     statsLabel?: string
     avatarUrls?: string[]
+    avatarNames?: string[]
     floatCardLabel?: string
     floatCardValue?: string
     sortOrder?: number
@@ -800,7 +906,14 @@ export interface CampusHeroDTO {
     sortOrder?: number
 }
 
-export function getCampusHeroList(params: { page?: number; size?: number; keyword?: string; enabled?: boolean }) {
+export interface CampusHeroQuery {
+    page?: number
+    size?: number
+    keyword?: string
+    enabled?: boolean
+}
+
+export function getCampusHeroList(params: CampusHeroQuery) {
     return request.get<PageResult<CampusHeroVO>>('/api/v1/console/campus/heroes', { params })
 }
 
@@ -829,7 +942,8 @@ export interface SensitiveWordVO {
     id: number
     word: string
     level: number
-    createdAt?: string
+    levelText: string
+    createdAt: string
 }
 
 export interface SensitiveWordDTO {
@@ -838,23 +952,32 @@ export interface SensitiveWordDTO {
 }
 
 export function querySensitiveWords(params: { page?: number; size?: number; level?: number; keyword?: string }) {
-    return request.get('/api/v1/system/sensitive-words', { params })
+    return request.get<PageResult<SensitiveWordVO>>('/api/v1/system/sensitive-words', { params })
 }
 
 export function createSensitiveWord(data: SensitiveWordDTO) {
-    return request.post('/api/v1/system/sensitive-words', data)
+    return request.post<SensitiveWordVO>('/api/v1/system/sensitive-words', data)
+}
+
+export interface SensitiveWordBatchImportResult {
+    addedCount: number
+    skippedCount: number
+    invalidCount: number
+    added: string[]
+    skipped: string[]
+    invalid: string[]
 }
 
 export function createSensitiveWordsBatch(data: { words: string[]; level?: number }) {
-    return request.post('/api/v1/system/sensitive-words/batch', data)
+    return request.post<SensitiveWordBatchImportResult>('/api/v1/system/sensitive-words/batch', data)
 }
 
 export function deleteSensitiveWord(id: number) {
-    return request.delete(`/api/v1/system/sensitive-words/${id}`)
+    return request.delete<void>(`/api/v1/system/sensitive-words/${id}`)
 }
 
 export function deleteSensitiveWords(ids: number[]) {
-    return request.delete('/api/v1/system/sensitive-words', { data: ids })
+    return request.delete<number>('/api/v1/system/sensitive-words', { data: ids })
 }
 
 // --- Auth Rules (认证规则) ---
@@ -887,19 +1010,19 @@ export interface AuthRuleDTO {
 }
 
 export function queryAuthRules(params: { page?: number; size?: number; triggerType?: string; verifyMethod?: string; enabled?: boolean }) {
-    return request.get('/api/v1/system/auth-rules', { params })
+    return request.get<PageResult<AuthRuleVO>>('/api/v1/system/auth-rules', { params })
 }
 
 export function createAuthRule(data: AuthRuleDTO) {
-    return request.post('/api/v1/system/auth-rules', data)
+    return request.post<number>('/api/v1/system/auth-rules', data)
 }
 
 export function updateAuthRule(id: number, data: AuthRuleDTO) {
-    return request.put(`/api/v1/system/auth-rules/${id}`, data)
+    return request.put<void>(`/api/v1/system/auth-rules/${id}`, data)
 }
 
 export function deleteAuthRule(id: number) {
-    return request.delete(`/api/v1/system/auth-rules/${id}`)
+    return request.delete<void>(`/api/v1/system/auth-rules/${id}`)
 }
 
 // --- Verification (身份审核) ---
@@ -919,7 +1042,13 @@ export interface VerificationVO {
     reviewedAt?: string
 }
 
-export function getVerificationList(params: { status?: number; page?: number; size?: number }) {
+export interface VerificationQuery {
+    status?: number
+    page?: number
+    size?: number
+}
+
+export function getVerificationList(params: VerificationQuery) {
     return request.get<PageResult<VerificationVO>>('/api/v1/console/verifications', { params })
 }
 

@@ -234,6 +234,8 @@ import {
   updateBlocklist,
   type BlocklistBatchImportResult,
   type BlocklistDTO,
+  type BlocklistTargetType,
+  type BlocklistQuery,
   type BlocklistVO
 } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
@@ -254,7 +256,11 @@ const hasMore = ref(true)
 const scrollContainer = ref<HTMLElement | null>(null)
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
-const queryParams = reactive({
+const queryParams = reactive<{
+  targetType: '' | BlocklistTargetType
+  status: '' | number
+  keyword: string
+}>({
   targetType: '',
   status: '',
   keyword: ''
@@ -305,12 +311,12 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const params: any = {
+    const params: BlocklistQuery = {
       page: page.value,
       size: pageSize.value
     }
     if (queryParams.targetType) params.targetType = queryParams.targetType
-    if (queryParams.status !== '') params.status = queryParams.status
+    if (queryParams.status !== '') params.status = Number(queryParams.status)
     if (queryParams.keyword) params.keyword = queryParams.keyword
 
     const res = await getBlocklist(params)
@@ -322,12 +328,12 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
     } else {
       hasMore.value = records.length >= pageSize.value
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!append) {
       blocklist.value = []
       total.value = 0
     }
-    await dialog.alert(error?.message || error?.response?.data?.message || '获取阻止名单失败')
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '获取阻止名单失败')
   } finally {
     append ? (loadingMore.value = false) : (loading.value = false)
   }
@@ -427,8 +433,8 @@ const handleSave = async () => {
     }
     closeModal()
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '保存失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -455,8 +461,8 @@ const handleBatchImport = async () => {
     })
     batchResult.value = res
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '批量导入失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '批量导入失败')
   } finally {
     batchLoading.value = false
   }
@@ -467,8 +473,8 @@ const handleDelete = async (item: BlocklistVO) => {
   try {
     await deleteBlocklist(item.id)
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '删除失败')
   }
 }
 

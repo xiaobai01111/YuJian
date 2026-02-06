@@ -56,17 +56,11 @@ const heroKey = computed(() => {
   if (isHomePage.value) {
     return 'HOME'
   }
-  if (route.meta?.hero) {
-    return String(route.name || '')
-  }
   return ''
 })
 
 const showHero = computed(() => {
-  if (heroConfig.value && heroConfig.value.enabled === false) {
-    return false
-  }
-  return isHomePage.value || !!route.meta.heroKey || !!route.meta.hero
+  return !!heroConfig.value?.enabled
 })
 
 const fetchHeroConfig = async () => {
@@ -75,7 +69,7 @@ const fetchHeroConfig = async () => {
     return
   }
   try {
-    const res: any = await getCampusHeroByPage(heroKey.value)
+    const res = await getCampusHeroByPage(heroKey.value)
     heroConfig.value = res || null
   } catch (error) {
     console.error('Failed to fetch hero config', error)
@@ -86,7 +80,7 @@ const fetchHeroConfig = async () => {
 const heroProps = computed(() => {
   if (heroConfig.value?.enabled) {
     const config = heroConfig.value
-    const props: Record<string, any> = {}
+    const props: Record<string, unknown> = {}
     if (config.theme) props.theme = config.theme
     if (config.titleStart) props.titleStart = config.titleStart
     if (config.titleHighlight) props.titleHighlight = config.titleHighlight
@@ -100,22 +94,12 @@ const heroProps = computed(() => {
     if (config.statsNumber) props.statsNumber = config.statsNumber
     if (config.statsLabel) props.statsLabel = config.statsLabel
     if (config.avatarUrls && config.avatarUrls.length > 0) props.avatarUrls = config.avatarUrls
+    if (config.avatarNames && config.avatarNames.length > 0) props.avatarNames = config.avatarNames
     if (config.floatCardLabel) props.floatCardLabel = config.floatCardLabel
     if (config.floatCardValue) props.floatCardValue = config.floatCardValue
     return props
   }
-  if (isHomePage.value) {
-    return {
-      theme: 'blue',
-      titleStart: '连接每一份',
-      titleHighlight: '校园心声',
-      description: 'CampusWall 是一个连接校友、分享生活、互助成长的校园社区。在这里，每一个声音都值得被倾听。',
-      badge: 'New v2.0 Released',
-      primaryBtnText: '开始探索 🚀',
-      secondaryBtnText: '热门话题 🔥'
-    }
-  }
-  return route.meta.hero || {}
+  return {}
 })
 
 watch(

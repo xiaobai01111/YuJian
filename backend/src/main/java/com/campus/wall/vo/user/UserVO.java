@@ -22,6 +22,7 @@ public class UserVO {
     private Integer verifyStatus;
     private Integer status;
     private Integer creditScore;
+    private Integer deleted;
     private LocalDateTime loginDate;
     private LocalDateTime createdAt;
     private String remark;

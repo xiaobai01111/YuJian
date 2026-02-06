@@ -30,8 +30,20 @@
 import { computed, h } from 'vue'
 import { useRoute } from 'vue-router'
 
+interface SidebarRouteMeta {
+  title?: string
+  icon?: string
+  hidden?: boolean
+}
+
+interface SidebarRoute {
+  path: string
+  meta?: SidebarRouteMeta
+  children?: SidebarRoute[]
+}
+
 const props = defineProps<{
-  route: any,
+  route: SidebarRoute,
   basePath: string
 }>()
 
@@ -39,13 +51,13 @@ const currentRoute = useRoute()
 
 const isOpen = computed(() => {
   if (!props.route.children) return false
-  return props.route.children.some((child: any) => 
+  return props.route.children.some((child) => 
     currentRoute.path.startsWith(child.path)
   )
 })
 
-const hasChildren = (item: any) => {
-  return item.children && item.children.some((child: any) => !child.meta?.hidden)
+const hasChildren = (item: SidebarRoute) => {
+  return item.children && item.children.some((child) => !child.meta?.hidden)
 }
 
 const resolvePath = (routePath: string) => {
@@ -60,6 +72,9 @@ const resolvePath = (routePath: string) => {
 
   const iconPaths: Record<string, string> = {
   dashboard: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z',
+  document: 'M7 3h7l5 5v13a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2zm7 1v4h4',
+  role: 'M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m6-4a4 4 0 11-8 0 4 4 0 018 0z',
+  email: 'M4 6h16v12H4V6zm1 1l7 5 7-5',
   user: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
   peoples: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
   setting: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',

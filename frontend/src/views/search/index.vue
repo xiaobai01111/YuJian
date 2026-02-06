@@ -162,7 +162,7 @@ const handleSearch = async () => {
   queryParams.page = 1
   
   try {
-    const res: any = await getPostList(queryParams)
+    const res = await getPostList(queryParams)
     postList.value = res.records || []
     total.value = res.total || 0
   } catch (error) {
@@ -179,14 +179,7 @@ const quickSearch = (kw: string) => {
 
 const changePage = (page: number) => {
   queryParams.page = page
-  // Call API again directly instead of handleSearch to keep existing keyword state consistent
-  loading.value = true
-  getPostList(queryParams).then((res: any) => {
-      postList.value = res.records || []
-      total.value = res.total || 0
-  }).finally(() => {
-      loading.value = false
-  })
+  void handleSearch()
 }
 
 const goToDetail = (id: number) => {

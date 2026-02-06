@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
  * 操作审计日志实体
  */
 @Data
+@SuppressWarnings("serial")
 @TableName(value = "sys_oper_log", autoResultMap = true)
 public class SysOperLog implements Serializable {
 

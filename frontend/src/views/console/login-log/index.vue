@@ -93,7 +93,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
-import { clearLoginLogs, deleteLoginLog, exportLoginLogs, getLoginLogList, type LoginLogVO } from '@/api/system'
+import { clearLoginLogs, deleteLoginLog, exportLoginLogs, getLoginLogList, type LoginLogQuery, type LoginLogVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
@@ -153,7 +153,7 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const params: any = {
+    const params: LoginLogQuery = {
       page: page.value,
       size: pageSize.value
     }
@@ -172,12 +172,12 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
     } else {
       hasMore.value = records.length >= pageSize.value
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!append) {
       logList.value = []
       total.value = 0
     }
-    await dialog.alert(error?.message || error?.response?.data?.message || '获取登录日志失败')
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '获取登录日志失败')
   } finally {
     append ? (loadingMore.value = false) : (loading.value = false)
   }
@@ -207,8 +207,8 @@ const handleDelete = async (log: LoginLogVO) => {
   try {
     await deleteLoginLog(log.id)
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '删除失败')
   }
 }
 
@@ -217,8 +217,8 @@ const handleClear = async () => {
   try {
     await clearLoginLogs()
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '清空失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '清空失败')
   }
 }
 
@@ -232,12 +232,12 @@ const handleExport = async () => {
     link.download = '登录日志.xlsx'
     link.click()
     window.URL.revokeObjectURL(url)
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '导出失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '导出失败')
   }
 }
 
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr?: string) => {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleString()
 }

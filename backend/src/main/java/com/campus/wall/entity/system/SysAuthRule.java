@@ -16,6 +16,7 @@ import java.util.List;
  * 认证规则实体
  */
 @Data
+@SuppressWarnings("serial")
 @TableName(value = "sys_auth_rules", autoResultMap = true)
 public class SysAuthRule implements Serializable {
 

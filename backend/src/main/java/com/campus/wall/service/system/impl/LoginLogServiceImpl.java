@@ -63,7 +63,7 @@ public class LoginLogServiceImpl implements LoginLogService {
 
     @Override
     public void clearLogs() {
-        loginLogMapper.delete(new LambdaQueryWrapper<SysLoginLog>());
+        loginLogMapper.delete(new LambdaQueryWrapper<>());
     }
 
     @Override

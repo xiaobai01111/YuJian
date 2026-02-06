@@ -147,9 +147,9 @@ const fetchData = async () => {
   try {
     const res = await getRedisMonitor()
     data.value = res || null
-  } catch (error: any) {
+  } catch (error: unknown) {
     data.value = null
-    await dialog.alert(error?.message || error?.response?.data?.message || '获取Redis监控失败')
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '获取Redis监控失败')
   } finally {
     loading.value = false
   }

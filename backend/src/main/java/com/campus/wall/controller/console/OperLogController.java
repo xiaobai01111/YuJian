@@ -55,7 +55,7 @@ public class OperLogController {
 
     @DeleteMapping("/clear")
     public R<Void> clear() {
-        operLogMapper.delete(new LambdaQueryWrapper<SysOperLog>());
+        operLogMapper.delete(new LambdaQueryWrapper<>());
         return R.ok();
     }
 

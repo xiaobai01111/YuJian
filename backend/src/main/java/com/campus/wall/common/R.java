@@ -8,6 +8,7 @@ import java.io.Serializable;
  * 统一响应结果封装
  */
 @Data
+@SuppressWarnings("serial")
 public class R<T> implements Serializable {
 
     private static final long serialVersionUID = 1L;

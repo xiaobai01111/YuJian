@@ -20,16 +20,6 @@ configurations {
     }
 }
 
-repositories {
-    maven {
-        url = uri("https://maven.aliyun.com/repository/public")
-    }
-    maven {
-        url = uri("https://maven.aliyun.com/repository/spring")
-    }
-    mavenCentral()
-}
-
 val saTokenVersion = "1.38.0"
 val mybatisPlusVersion = "3.5.5"
 val springdocVersion = "2.8.4"
@@ -76,6 +66,7 @@ dependencies {
 
     // Utilities
     compileOnly("org.projectlombok:lombok")
+    compileOnly("com.github.spotbugs:spotbugs-annotations:4.8.5")
     annotationProcessor("org.projectlombok:lombok")
     implementation("cn.hutool:hutool-all:$hutoolVersion")
     implementation("org.jsoup:jsoup:1.18.1")
@@ -113,5 +104,5 @@ tasks.bootJar {
 }
 
 tasks.withType<JavaCompile> {
-    options.compilerArgs.add("-Xlint:deprecation")
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing", "-Werror"))
 }

@@ -374,7 +374,7 @@ public class NoticeServiceImpl implements NoticeService {
             return Collections.emptyList();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<List<Long>>() {});
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
             // 返回空列表而非抛异常，避免单条坏数据拖垮整个列表
             return Collections.emptyList();
@@ -386,7 +386,7 @@ public class NoticeServiceImpl implements NoticeService {
             return Collections.emptyList();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<List<Long>>() {});
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
             throw new BusinessException("公告可见范围数据损坏，请联系管理员");
         }

@@ -76,7 +76,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, nextTick, reactive, ref } from 'vue'
-import { getOnlineUserList, kickoutOnlineUser, type OnlineUserVO } from '@/api/system'
+import { getOnlineUserList, kickoutOnlineUser, type OnlineUserQuery, type OnlineUserVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
@@ -115,7 +115,7 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const params: any = {
+    const params: OnlineUserQuery = {
       page: page.value,
       size: pageSize.value
     }
@@ -131,12 +131,12 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
     } else {
       hasMore.value = records.length >= pageSize.value
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!append) {
       userList.value = []
       total.value = 0
     }
-    await dialog.alert(error?.message || error?.response?.data?.message || '获取在线用户失败')
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '获取在线用户失败')
   } finally {
     append ? (loadingMore.value = false) : (loading.value = false)
   }
@@ -181,8 +181,8 @@ const handleKickout = async (user: OnlineUserVO) => {
   try {
     await kickoutOnlineUser(user.token)
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '强制下线失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '强制下线失败')
   }
 }
 

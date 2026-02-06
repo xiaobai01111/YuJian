@@ -1,21 +1,32 @@
 import axios from 'axios'
-import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { useUserStore } from '@/stores/user'
 
-const service: AxiosInstance = axios.create({
+type HttpClient = Omit<AxiosInstance, 'get' | 'post' | 'put' | 'delete' | 'patch'> & {
+    get<R = unknown, D = unknown>(url: string, config?: AxiosRequestConfig<D>): Promise<R>
+    delete<R = unknown, D = unknown>(url: string, config?: AxiosRequestConfig<D>): Promise<R>
+    post<R = unknown, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<R>
+    put<R = unknown, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<R>
+    patch<R = unknown, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>): Promise<R>
+}
+
+let handlingUnauthorized = false
+
+const service: HttpClient = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '',
     timeout: 10000,
-})
+}) as HttpClient
 
 service.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const userStore = useUserStore()
         if (userStore.token) {
+            handlingUnauthorized = false
             config.headers['Authorization'] = `Bearer ${userStore.token}`
         }
         return config
     },
-    (error: any) => {
+    (error: unknown) => {
         return Promise.reject(error)
     }
 )
@@ -27,7 +38,7 @@ service.interceptors.response.use(
             return response.data
         }
         
-        const res = response.data
+        const res = response.data as { code?: number; message?: string; data?: unknown }
         // Handle backend R wrapper format
         if (res.code === 200) {
             return res.data
@@ -35,18 +46,19 @@ service.interceptors.response.use(
             return Promise.reject(new Error(res.message || '请求失败'))
         }
     },
-    (error: any) => {
+    (error: unknown) => {
         // Handle auth errors (401)
-        if (error.response && error.response.status === 401) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
             const userStore = useUserStore()
-            // 仅在存在登录态时才触发强制退出，避免未登录用户首页刷新死循环
-            if (userStore.token) {
-                userStore.logout()
-                location.reload()
+            // 只处理一次，避免并发请求同时 401 导致循环跳转/刷新
+            if (userStore.token && !handlingUnauthorized) {
+                handlingUnauthorized = true
+                userStore.forceLogout()
+                window.location.replace('/')
             }
         }
-        if (error.response && error.response.data) {
-            const data = error.response.data
+        if (axios.isAxiosError(error) && error.response?.data) {
+            const data = error.response.data as { message?: string; msg?: string }
             error.message = data.message || data.msg || error.message
         }
         return Promise.reject(error)

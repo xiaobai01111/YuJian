@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
+import type { RouteItem } from '@/stores/permission'
 import { getSetupStatus } from '@/api/setup'
 
 const router = createRouter({
@@ -22,96 +23,31 @@ const router = createRouter({
             path: '/confessions',
             name: 'Confessions',
             component: () => import('@/views/confessions/index.vue'),
-            meta: {
-                heroKey: 'CONFESSIONS',
-                hero: {
-                    titleStart: '勇敢表达',
-                    titleHighlight: '爱的声音',
-                    description: '暗恋、表白、祝福。在这里，大声说出你的爱。让心意传递，让缘分开始。',
-                    theme: 'pink',
-                    badge: 'Confessions Wall',
-                    primaryBtnText: '发布表白',
-                    secondaryBtnText: '最新表白',
-                    floatCardLabel: '今日表白',
-                    floatCardValue: '99+ 条'
-                }
-            }
+            meta: { heroKey: 'CONFESSIONS' }
         },
         {
             path: '/treehole',
             name: 'TreeHole',
             component: () => import('@/views/treehole/index.vue'),
-            meta: {
-                heroKey: 'TREEHOLE',
-                hero: {
-                    titleStart: '倾听内心',
-                    titleHighlight: '真实树洞',
-                    description: '匿名倾诉，释放压力。在这里，做最真实的自己。我们是你忠实的倾听者。',
-                    theme: 'emerald',
-                    badge: 'Anonymous Treehole',
-                    primaryBtnText: '发布心声',
-                    secondaryBtnText: '查看树洞',
-                    floatCardLabel: '新收录',
-                    floatCardValue: '58 个秘密'
-                }
-            }
+            meta: { heroKey: 'TREEHOLE' }
         },
         {
             path: '/help',
             name: 'Help',
             component: () => import('@/views/help/index.vue'),
-            meta: {
-                heroKey: 'HELP',
-                hero: {
-                    titleStart: '互帮互助',
-                    titleHighlight: '共同成长',
-                    description: '学业困惑、生活难题、求职经验。在这里，寻找答案，分享经验，温暖彼此。',
-                    theme: 'blue',
-                    badge: 'Q&A Help',
-                    primaryBtnText: '发起求助',
-                    secondaryBtnText: '我来解答',
-                    floatCardLabel: '已解决',
-                    floatCardValue: '1,203 个问题'
-                }
-            }
+            meta: { heroKey: 'HELP' }
         },
         {
             path: '/market',
             name: 'Market',
             component: () => import('@/views/market/index.vue'),
-            meta: {
-                heroKey: 'MARKET',
-                hero: {
-                    titleStart: '旧物新生',
-                    titleHighlight: '跳蚤市场',
-                    description: '教材书籍、数码电子、生活用品。在这里，让闲置物品流转，发现物美价廉的宝贝。',
-                    theme: 'orange',
-                    badge: 'Flea Market',
-                    primaryBtnText: '发布闲置',
-                    secondaryBtnText: '逛逛市场',
-                    floatCardLabel: '今日上新',
-                    floatCardValue: '45 件好物'
-                }
-            }
+            meta: { heroKey: 'MARKET' }
         },
         {
             path: '/lost-found',
             name: 'LostFound',
             component: () => import('@/views/lost-found/index.vue'),
-            meta: {
-                heroKey: 'LOST_FOUND',
-                hero: {
-                    titleStart: '寻找失物',
-                    titleHighlight: '传递温暖',
-                    description: '丢失物品、捡到失物。在这里，发布信息，让物品回归主人，让善意流转。',
-                    theme: 'purple',
-                    badge: 'Lost & Found',
-                    primaryBtnText: '发布信息',
-                    secondaryBtnText: '最近信息',
-                    floatCardLabel: '寻回率',
-                    floatCardValue: '85%'
-                }
-            }
+            meta: { heroKey: 'LOST_FOUND' }
         },
         {
             path: '/notices',
@@ -178,12 +114,50 @@ const router = createRouter({
             name: 'ConsoleNoPermission',
             component: () => import('@/views/console/no-permission/index.vue'),
             meta: { layout: 'div' }
+        },
+        {
+            path: '/403',
+            name: 'Forbidden',
+            component: () => import('@/views/console/no-permission/index.vue'),
+            meta: { layout: 'div', public: true }
+        },
+        {
+            path: '/404',
+            name: 'NotFound',
+            component: () => import('@/views/error/404.vue'),
+            meta: { layout: 'div', public: true }
+        },
+        {
+            path: '/:pathMatch(.*)*',
+            name: 'CatchAllNotFound',
+            component: () => import('@/views/error/404.vue'),
+            meta: { layout: 'div', public: true }
         }
     ]
 })
 
 let setupChecked = false
 let setupCompleted = true
+
+function resolveConsolePath(path: string, parentPath: string): string {
+    if (!path) return parentPath
+    if (path.startsWith('/')) return path
+    if (!parentPath) return `/console/${path}`
+    return parentPath.endsWith('/') ? `${parentPath}${path}` : `${parentPath}/${path}`
+}
+
+function hasRouteAccess(targetPath: string, routes: RouteItem[], parentPath = ''): boolean {
+    for (const route of routes) {
+        const currentPath = resolveConsolePath(route.path, parentPath)
+        if (currentPath === targetPath) {
+            return true
+        }
+        if (route.children && route.children.length > 0 && hasRouteAccess(targetPath, route.children, currentPath)) {
+            return true
+        }
+    }
+    return false
+}
 
 router.beforeEach(async (to, _from, next) => {
     const userStore = useUserStore()
@@ -210,7 +184,8 @@ router.beforeEach(async (to, _from, next) => {
 
     // 未登录允许访问的路径
     const whiteList = ['/', '/notices', '/setup']
-    const isWhitelisted = whiteList.includes(to.path) || to.path.startsWith('/notices/')
+    const isPublicErrorRoute = to.matched.some(record => record.meta?.public === true)
+    const isWhitelisted = whiteList.includes(to.path) || to.path.startsWith('/notices/') || isPublicErrorRoute
 
     if (userStore.token) {
          // 动态路由未加载时，获取权限并注册路由
@@ -223,22 +198,14 @@ router.beforeEach(async (to, _from, next) => {
              // 检查后台权限
              if (to.path.startsWith('/console') && to.path !== '/console/no-permission') {
                  // 检查用户是否有任何后台菜单权限
-                 const hasConsoleAccess = permissionStore.routes.length > 0
-                 if (!hasConsoleAccess) {
+                 if (!permissionStore.hasConsoleMenus) {
                      next('/console/no-permission')
                      return
                  }
                  // 检查具体路由权限（排除基础路由 dashboard 和 profile）
                  const basePaths = ['/console/dashboard', '/console/profile', '/console']
                  if (!basePaths.includes(to.path)) {
-                     const hasRouteAccess = permissionStore.routes.some(r => {
-                         if (r.path === to.path) return true
-                         if (r.children) {
-                             return r.children.some(c => c.path === to.path || `/console/${c.path}` === to.path)
-                         }
-                         return false
-                     })
-                     if (!hasRouteAccess) {
+                     if (!hasRouteAccess(to.path, permissionStore.routes)) {
                          // 路由不在用户权限范围内，重定向到仪表盘
                          next('/console/dashboard')
                          return
@@ -248,6 +215,9 @@ router.beforeEach(async (to, _from, next) => {
              next()
          }
     } else {
+        if (permissionStore.dynamicRoutesAdded) {
+            permissionStore.clearPermissions()
+        }
         if (isWhitelisted) {
              next()
         } else {

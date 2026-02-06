@@ -136,7 +136,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             return List.of("edu.cn");
         }
         try {
-            return objectMapper.readValue(value, new TypeReference<List<String>>() {});
+            return objectMapper.readValue(value, new TypeReference<>() {});
         } catch (Exception e) {
             log.warn("Failed to parse {}: {}", SysConfigKeys.EMAIL_ALLOWED_DOMAINS, value, e);
             return List.of("edu.cn");
@@ -177,7 +177,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             return List.of();
         }
         try {
-            return objectMapper.readValue(value, new TypeReference<List<String>>() {});
+            return objectMapper.readValue(value, new TypeReference<>() {});
         } catch (Exception e) {
             log.warn("Failed to parse {}: {}", SysConfigKeys.STUDENT_ID_WHITELIST, value, e);
             return List.of();
@@ -357,7 +357,7 @@ public class SysConfigServiceImpl implements SysConfigService {
         if (atIndex <= 1) {
             return "***" + email.substring(atIndex);
         }
-        String prefix = email.substring(0, Math.min(2, atIndex));
+        String prefix = email.substring(0, 2);
         return prefix + "***" + email.substring(atIndex);
     }
 
@@ -373,14 +373,12 @@ public class SysConfigServiceImpl implements SysConfigService {
     }
 
     private String buildSmtpFingerprint(SmtpConfigCache smtp) {
-        StringBuilder builder = new StringBuilder();
-        builder.append(smtp.host()).append('|')
-            .append(smtp.port()).append('|')
-            .append(smtp.username()).append('|')
-            .append(smtp.password()).append('|')
-            .append(smtp.fromName()).append('|')
-            .append(smtp.ssl());
-        return builder.toString();
+        return smtp.host() + '|'
+            + smtp.port() + '|'
+            + smtp.username() + '|'
+            + smtp.password() + '|'
+            + smtp.fromName() + '|'
+            + smtp.ssl();
     }
 
     private JavaMailSenderImpl buildMailSender(SmtpConfigCache smtp) {
@@ -425,7 +423,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             return getDefaultTemplates();
         }
         try {
-            return objectMapper.readValue(value, new TypeReference<Map<String, Object>>() {});
+            return objectMapper.readValue(value, new TypeReference<>() {});
         } catch (Exception e) {
             log.warn("Failed to parse {}", SysConfigKeys.EMAIL_TEMPLATES, e);
             return getDefaultTemplates();
@@ -456,15 +454,12 @@ public class SysConfigServiceImpl implements SysConfigService {
             Object subjectObj = template.get("subject");
             Object bodyObj = template.get("body");
             
-            if (subjectObj == null || !(subjectObj instanceof String) || ((String) subjectObj).isBlank()) {
+            if (!(subjectObj instanceof String subject) || subject.isBlank()) {
                 throw new RuntimeException("模板 [" + templateName + "] 缺少必填字段: subject");
             }
-            if (bodyObj == null || !(bodyObj instanceof String) || ((String) bodyObj).isBlank()) {
+            if (!(bodyObj instanceof String body) || body.isBlank()) {
                 throw new RuntimeException("模板 [" + templateName + "] 缺少必填字段: body");
             }
-            
-            String subject = (String) subjectObj;
-            String body = (String) bodyObj;
             
             if (subject.length() > 200) {
                 throw new RuntimeException("模板 [" + templateName + "] 的subject过长（最大200字符）");

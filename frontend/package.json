@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "check:no-any": "sh -c 'rg -n --pcre2 \"(:\\\\s*any\\\\b|<\\\\s*any\\\\s*>|\\\\bas\\\\s+any\\\\b|\\\\bArray<any>\\\\b|\\\\bPromise<any>\\\\b|\\\\bRecord<[^>]*,\\\\s*any\\\\s*>)\" src --glob \"*.{ts,tsx,vue}\" && { echo \"Explicit any is not allowed.\"; exit 1; } || true'",
+    "check:console-align": "node ./scripts/check-console-alignment.mjs",
+    "typecheck": "vue-tsc -b",
+    "build": "pnpm run check:no-any && pnpm run typecheck && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

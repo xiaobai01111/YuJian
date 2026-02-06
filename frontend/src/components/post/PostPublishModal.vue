@@ -217,8 +217,8 @@ const handleSubmit = async () => {
     if (files.value.length > 0) {
       const uploadedIds: number[] = []
       for (const file of files.value) {
-        const res: any = await uploadPostImage(file)
-        const fileId = typeof res === 'number' ? res : res?.id || res?.data?.id
+        const res = await uploadPostImage(file)
+        const fileId = res?.id
         if (!fileId) {
           throw new Error('图片上传失败')
         }
@@ -228,13 +228,13 @@ const handleSubmit = async () => {
     } else {
       form.fileIds = []
     }
-    const res: any = props.useConsoleApi ? await createConsolePost(form) : await createPost(form)
-    const postId = typeof res === 'number' ? res : res?.id || res?.data?.id || 0
+    const res = props.useConsoleApi ? await createConsolePost(form) : await createPost(form)
+    const postId = Number(res || 0)
     emit('success', postId)
     close()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error.message || '发布失败')
+    await dialog.alert((error as ApiErrorLike)?.message || '发布失败')
   } finally {
     submitting.value = false
   }

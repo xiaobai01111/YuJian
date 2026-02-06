@@ -179,13 +179,16 @@ public class CampusHeroServiceImpl implements CampusHeroService {
             vo.setStatsNumber(null);
             vo.setStatsLabel(null);
             vo.setAvatarUrls(new ArrayList<>());
+            vo.setAvatarNames(new ArrayList<>());
             return;
         }
         String pageKey = hero.getPageKey();
         long count = resolveStatsCount(pageKey);
         vo.setStatsNumber(formatCount(count));
         vo.setStatsLabel(resolveStatsLabel(pageKey));
-        vo.setAvatarUrls(loadAvatarUrls());
+        List<User> recentUsers = loadRecentUsers();
+        vo.setAvatarUrls(recentUsers.stream().map(User::getAvatar).toList());
+        vo.setAvatarNames(recentUsers.stream().map(this::resolveDisplayName).toList());
     }
 
     private long resolveStatsCount(String pageKey) {
@@ -229,20 +232,26 @@ public class CampusHeroServiceImpl implements CampusHeroService {
         };
     }
 
-    private List<String> loadAvatarUrls() {
-        List<User> users = userMapper.selectList(
+    private List<User> loadRecentUsers() {
+        return userMapper.selectList(
             new LambdaQueryWrapper<User>()
                 .eq(User::getDeleted, 0)
-                .isNotNull(User::getAvatar)
-                .ne(User::getAvatar, "")
                 .orderByDesc(User::getLoginDate)
                 .orderByDesc(User::getCreatedAt)
                 .last("LIMIT " + AVATAR_LIMIT)
         );
-        return users.stream()
-            .map(User::getAvatar)
-            .filter(url -> url != null && !url.isBlank())
-            .toList();
+    }
+
+    private String resolveDisplayName(User user) {
+        if (user == null) {
+            return "";
+        }
+        String nickname = trimToNull(user.getNickname());
+        if (nickname != null) {
+            return nickname;
+        }
+        String username = trimToNull(user.getUsername());
+        return username != null ? username : "";
     }
 
     private String normalizePageKey(String pageKey) {

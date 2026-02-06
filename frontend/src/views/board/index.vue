@@ -137,7 +137,7 @@ const fetchData = async () => {
   try {
     queryParams.board = boardKey.value || undefined
     
-    const res: any = await getPostList(queryParams)
+    const res = await getPostList(queryParams)
     postList.value = res.records || []
   } catch (error) {
     console.error('Failed to fetch posts', error)

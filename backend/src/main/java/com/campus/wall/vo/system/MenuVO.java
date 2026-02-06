@@ -17,6 +17,7 @@ public class MenuVO {
     private String component;
     private String perms;
     private String icon;
+    private String groupCode;
     private Integer type;
     private Boolean visible;
     private Integer status;

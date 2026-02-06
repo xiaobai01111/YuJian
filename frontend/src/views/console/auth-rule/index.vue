@@ -314,7 +314,7 @@ let observer: IntersectionObserver | null = null
 
 const filterTrigger = ref<string>('')
 const filterMethod = ref<string>('')
-const filterEnabled = ref<any>('')
+const filterEnabled = ref<boolean | ''>('')
 
 const roleOptions = ref<RoleVO[]>([])
 const emailDomains = ref<string[]>([])
@@ -342,9 +342,10 @@ const form = reactive<AuthRuleDTO>({
   remark: ''
 })
 
-const selectedRoleId = computed<number | null>({
+const selectedRoleId = computed({
   get() {
-    return form.roleIds && form.roleIds.length > 0 ? form.roleIds[0] : null
+    const first = form.roleIds?.[0]
+    return first ?? null
   },
   set(value) {
     form.roleIds = value ? [value] : []
@@ -372,23 +373,22 @@ const loadRules = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const res: any = await queryAuthRules({
+    const res = await queryAuthRules({
       page: currentPage.value,
       size: pageSize.value,
       triggerType: filterTrigger.value || undefined,
       verifyMethod: filterMethod.value || undefined,
       enabled: filterEnabled.value === '' ? undefined : filterEnabled.value
     })
-    const data = res?.data || res
-    const records = data.records || []
-    total.value = data.total || 0
+    const records = res.records || []
+    total.value = res.total || 0
     rules.value = append ? [...rules.value, ...records] : records
     if (total.value) {
       hasMore.value = rules.value.length < total.value
     } else {
       hasMore.value = records.length >= pageSize.value
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error(e)
     if (!append) {
       rules.value = []
@@ -425,17 +425,17 @@ const loadMore = async () => {
 
 const loadOptions = async () => {
   try {
-    const roles: any = await getRoleList()
-    roleOptions.value = roles || []
+    const roles = await getRoleList()
+    roleOptions.value = Array.isArray(roles) ? roles : (roles.records || [])
   } catch {}
   try {
-    const domains: any = await getEmailDomains()
+    const domains = await getEmailDomains()
     emailDomains.value = Array.isArray(domains) ? domains : []
   } catch {
     emailDomains.value = []
   }
   try {
-    const ids: any = await getStudentIdWhitelist()
+    const ids = await getStudentIdWhitelist()
     studentIdWhitelist.value = Array.isArray(ids) ? ids : []
   } catch {
     studentIdWhitelist.value = []
@@ -470,7 +470,9 @@ const openEditModal = (rule: AuthRuleVO) => {
   form.verifyMethod = rule.verifyMethod || ''
   form.matchType = rule.matchType || 'ANY'
   form.matchValue = rule.matchValue || ''
-  form.roleIds = rule.roleIds && rule.roleIds.length > 0 ? [rule.roleIds[0]] : []
+  form.roleIds = rule.roleIds && rule.roleIds.length > 0 && rule.roleIds[0] !== undefined
+    ? [rule.roleIds[0]]
+    : []
   form.priority = rule.priority ?? 100
   form.remark = rule.remark || ''
   selectedDomains.value = rule.matchType === 'EMAIL_DOMAIN' && rule.matchValue
@@ -534,8 +536,8 @@ const handleSave = async () => {
     }
     formModal.value?.close()
     await loadRules({ reset: true })
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '保存失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -558,8 +560,8 @@ const confirmDelete = async () => {
     await deleteAuthRule(deleteTarget.value.id)
     closeDelete()
     await loadRules({ reset: true })
-  } catch (e: any) {
-    await dialog.alert(e.message || e.response?.data?.message || '删除失败')
+  } catch (e: unknown) {
+    await dialog.alert((e as ApiErrorLike)?.message || (e as ApiErrorLike)?.response?.data?.message || '删除失败')
   } finally {
     saving.value = false
   }

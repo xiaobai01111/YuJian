@@ -62,16 +62,11 @@ public class FileAccessController {
 
         response.setContentType(contentType);
         response.setHeader("X-Content-Type-Options", "nosniff");
-        if (!isImage) {
-            download = true;
-        }
         if (visibility == FileVisibility.PRIVATE) {
             response.setHeader("Cache-Control", "no-store");
-            if (!isImage) {
-                download = true;
-            } else {
-                download = false;
-            }
+            download = !isImage;
+        } else if (!isImage) {
+            download = true;
         }
 
         response.setHeader("Content-Disposition", HttpHeaderUtil.buildContentDisposition(filename, download));

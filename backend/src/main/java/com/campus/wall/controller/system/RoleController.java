@@ -46,6 +46,12 @@ public class RoleController {
         return R.ok(roleService.getRoleMenuIds(id));
     }
 
+    @Operation(summary = "角色详情", description = "获取角色详情")
+    @GetMapping("/{id}")
+    public R<RoleVO> detail(@PathVariable Long id) {
+        return R.ok(roleService.getRoleById(id));
+    }
+
     @Operation(summary = "创建角色")
     @PostMapping
     public R<RoleVO> create(@RequestBody @Valid RoleDTO dto) {
@@ -60,6 +66,18 @@ public class RoleController {
         RoleVO role = roleService.updateRole(id, dto.getRoleName(), dto.getRoleKey(), dto.getStatus(),
             dto.getSortOrder(), dto.getRemark(), dto.getMenuIds());
         return R.ok(role);
+    }
+
+    @Operation(summary = "启用角色")
+    @PutMapping("/{id}/enable")
+    public R<RoleVO> enable(@PathVariable Long id) {
+        return R.ok(roleService.updateRoleStatus(id, 0));
+    }
+
+    @Operation(summary = "停用角色")
+    @PutMapping("/{id}/disable")
+    public R<RoleVO> disable(@PathVariable Long id) {
+        return R.ok(roleService.updateRoleStatus(id, 1));
     }
 
     @Operation(summary = "删除角色")

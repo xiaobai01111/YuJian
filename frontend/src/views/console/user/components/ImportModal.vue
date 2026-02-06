@@ -143,13 +143,13 @@ const handleImport = async () => {
   
   loading.value = true
   try {
-    const res: any = await importUsers(selectedFile.value, updateExisting.value)
+    const res = await importUsers(selectedFile.value, updateExisting.value)
     await dialog.alert(res || '导入成功')
     emit('success')
     close()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.msg || '导入失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.msg || '导入失败')
   } finally {
     loading.value = false
   }

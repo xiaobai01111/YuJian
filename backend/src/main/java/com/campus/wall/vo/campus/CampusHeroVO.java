@@ -24,6 +24,7 @@ public class CampusHeroVO {
     private String statsNumber;
     private String statsLabel;
     private List<String> avatarUrls;
+    private List<String> avatarNames;
     private String floatCardLabel;
     private String floatCardValue;
     private Integer sortOrder;

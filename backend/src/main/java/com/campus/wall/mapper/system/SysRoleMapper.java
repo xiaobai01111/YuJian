@@ -20,7 +20,7 @@ public interface SysRoleMapper extends BaseMapper<SysRole> {
         INNER JOIN sys_user_roles ur ON r.id = ur.role_id
         INNER JOIN users u ON ur.user_id = u.id
         LEFT JOIN sys_depts d ON u.dept_id = d.id
-        WHERE ur.user_id = #{userId} 
+        WHERE ur.user_id = #{userId}
           AND r.status = 0
           AND u.deleted = 0
           AND (u.dept_id IS NULL OR d.status = 0)
@@ -33,7 +33,7 @@ public interface SysRoleMapper extends BaseMapper<SysRole> {
         INNER JOIN sys_user_roles ur ON r.id = ur.role_id
         INNER JOIN users u ON ur.user_id = u.id
         LEFT JOIN sys_depts d ON u.dept_id = d.id
-        WHERE ur.user_id = #{userId} 
+        WHERE ur.user_id = #{userId}
           AND r.status = 0
           AND u.deleted = 0
           AND (u.dept_id IS NULL OR d.status = 0)

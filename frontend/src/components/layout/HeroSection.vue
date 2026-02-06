@@ -46,31 +46,35 @@
 
         <div v-if="showStats" class="flex items-center gap-4 pt-8">
            <div class="avatar-group -space-x-4 rtl:space-x-reverse">
-            <template v-if="avatarUrls.length > 0">
-              <div v-for="(url, index) in visibleAvatars" :key="`${url}-${index}`" class="avatar border-base-100">
-                <div class="w-10 h-10">
-                  <img :src="url" alt="avatar" />
+            <template v-if="visibleAvatarSlots.length > 0">
+              <div v-for="(slot, index) in visibleAvatarSlots" :key="slot.key" class="avatar placeholder border-base-100">
+                <div class="w-10 h-10 rounded-full bg-base-300 text-base-content/70 flex items-center justify-center font-semibold text-xs leading-none overflow-hidden">
+                  <img
+                    v-if="slot.url && !isAvatarBroken(slot.key)"
+                    class="w-full h-full rounded-full object-cover"
+                    :src="resolveFileUrl(slot.url)"
+                    alt="avatar"
+                    loading="lazy"
+                    @error="handleAvatarError(slot.key)"
+                  />
+                  <span v-else>{{ getAvatarText(slot.name, index) }}</span>
                 </div>
               </div>
               <div v-if="extraAvatarCount > 0" class="avatar placeholder border-base-100">
                 <div class="w-10 h-10 bg-neutral text-neutral-content">
-                  <span class="text-xs">+{{ extraAvatarCount }}</span>
+                  <span class="text-xs">+{{ displayExtraAvatarCount }}</span>
                 </div>
               </div>
             </template>
             <template v-else>
-              <div class="avatar border-base-100">
-                <div class="w-10 h-10 bg-base-300"></div>
+              <div v-for="placeholder in fallbackPlaceholders" :key="placeholder" class="avatar placeholder border-base-100">
+                <div class="w-10 h-10 rounded-full bg-base-300 text-base-content/70 flex items-center justify-center font-semibold text-xs leading-none">
+                  <span>{{ getFallbackAvatarText(placeholder) }}</span>
+                </div>
               </div>
-              <div class="avatar border-base-100">
-                <div class="w-10 h-10 bg-base-300"></div>
-              </div>
-              <div class="avatar border-base-100">
-                <div class="w-10 h-10 bg-base-300"></div>
-              </div>
-              <div class="avatar placeholder border-base-100">
+              <div v-if="extraAvatarCount > 0" class="avatar placeholder border-base-100">
                 <div class="w-10 h-10 bg-neutral text-neutral-content">
-                  <span class="text-xs">+99</span>
+                  <span class="text-xs">+{{ displayExtraAvatarCount }}</span>
                 </div>
               </div>
             </template>
@@ -105,7 +109,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed, h, ref, watch } from 'vue'
+import { resolveFileUrl } from '@/utils/file'
 
 const props = defineProps({
   theme: { type: String, default: 'blue' }, // blue, pink, emerald, orange, purple
@@ -121,6 +126,7 @@ const props = defineProps({
   statsNumber: { type: String, default: '12,000+' },
   statsLabel: { type: String, default: '同学已加入' },
   avatarUrls: { type: Array as () => string[], default: () => [] },
+  avatarNames: { type: Array as () => string[], default: () => [] },
   floatCardLabel: { type: String, default: '热门动态' },
   floatCardValue: { type: String, default: '+128 ' }
 })
@@ -230,8 +236,96 @@ const iconColorClass = computed(() => {
   return map[props.theme] || map.blue
 })
 
-const visibleAvatars = computed(() => props.avatarUrls.slice(0, 3))
-const extraAvatarCount = computed(() => Math.max(props.avatarUrls.length - visibleAvatars.value.length, 0))
+const rawAvatarUrls = computed(() => props.avatarUrls.map(url => (url || '').trim()))
+const rawAvatarNames = computed(() => props.avatarNames.map(name => (name || '').trim()))
+const avatarSlotCount = computed(() => Math.max(rawAvatarUrls.value.length, rawAvatarNames.value.length))
+const visibleAvatarSlots = computed(() =>
+  Array.from({ length: Math.min(avatarSlotCount.value, 3) }, (_, index) => ({
+    key: `slot-${index}`,
+    url: rawAvatarUrls.value[index] || '',
+    name: rawAvatarNames.value[index] || ''
+  }))
+)
+const totalAvatarCount = computed(() => {
+  if (avatarSlotCount.value > 0) {
+    return Math.max(parseStatsCount(props.statsNumber), avatarSlotCount.value)
+  }
+  return parseStatsCount(props.statsNumber)
+})
+const fallbackAvatarCount = computed(() => Math.min(Math.max(totalAvatarCount.value, 1), 3))
+const fallbackPlaceholders = computed(() =>
+  Array.from({ length: fallbackAvatarCount.value }, (_, index) => index)
+)
+const extraAvatarCount = computed(() => {
+  const shownCount = avatarSlotCount.value > 0 ? visibleAvatarSlots.value.length : fallbackAvatarCount.value
+  return Math.max(totalAvatarCount.value - shownCount, 0)
+})
+const displayExtraAvatarCount = computed(() => formatCompactCount(extraAvatarCount.value))
+
+const brokenAvatarKeys = ref<Set<string>>(new Set())
+const fallbackCharPool = computed(() => {
+  const source =
+    `${props.statsLabel || ''}${props.titleHighlight || ''}${props.titleStart || ''}`
+      .replace(/[0-9+\s,.\-]/g, '')
+  const chars = Array.from(source).filter(char => /[A-Za-z\u4e00-\u9fa5]/.test(char))
+  return chars.length > 0 ? chars : ['校', '园', '墙', '友']
+})
+
+const isAvatarBroken = (key: string) => brokenAvatarKeys.value.has(key)
+const handleAvatarError = (key: string) => {
+  if (brokenAvatarKeys.value.has(key)) return
+  brokenAvatarKeys.value = new Set([...brokenAvatarKeys.value, key])
+}
+
+const extractNameInitial = (name: string) => {
+  const trimmed = name.trim()
+  if (!trimmed) return ''
+  const first = Array.from(trimmed)[0] || ''
+  if (!first) return ''
+  if (/^[A-Za-z]$/.test(first)) return first.toUpperCase()
+  return first
+}
+
+const getAvatarText = (name: string, index: number) => {
+  const initial = extractNameInitial(name)
+  if (initial) return initial
+  return getFallbackAvatarText(index)
+}
+
+const getFallbackAvatarText = (index: number) => {
+  const char = fallbackCharPool.value[index % fallbackCharPool.value.length] || '校'
+  return /^[A-Za-z]$/.test(char) ? char.toUpperCase() : char
+}
+
+watch(
+  () => [props.avatarUrls, props.avatarNames],
+  () => {
+    brokenAvatarKeys.value = new Set()
+  },
+  { deep: true }
+)
+
+const parseStatsCount = (value?: string) => {
+  if (!value) return 0
+  const normalized = value.replace(/\s/g, '')
+  if (normalized.includes('万')) {
+    const num = Number(normalized.replace(/[^\d.]/g, ''))
+    if (Number.isFinite(num)) {
+      return Math.max(0, Math.floor(num * 10000))
+    }
+  }
+  const num = Number(normalized.replace(/[^\d]/g, ''))
+  return Number.isFinite(num) ? Math.max(0, num) : 0
+}
+
+const formatCompactCount = (count: number) => {
+  if (count >= 10000) {
+    const wan = count / 10000
+    const text = wan % 1 === 0 ? wan.toFixed(0) : wan.toFixed(1)
+    return `${text}万`
+  }
+  return String(count)
+}
 
 // Icons
 const iconComponent = computed(() => {

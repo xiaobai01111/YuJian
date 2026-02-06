@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { UserVO } from './system'
+import type { PageResult, UserVO } from './system'
 
 export interface FileVO {
     id: number
@@ -27,6 +27,7 @@ export interface PostVO {
     commentCount: number
     viewCount: number
     createdAt: string
+    updatedAt?: string
     author?: UserVO
     isLiked: boolean
     isBookmarked: boolean
@@ -60,16 +61,22 @@ export interface PostCreateDTO {
     showOnHome?: boolean
 }
 
+export interface BatchActionResultVO {
+    requested: number
+    success: number
+    skipped: number
+}
+
 export function getPostList(params: PostQueryDTO) {
-    return request.get('/api/v1/posts', { params })
+    return request.get<PageResult<PostVO>>('/api/v1/posts', { params })
 }
 
 export function getConsolePostList(params: PostQueryDTO) {
-    return request.get('/api/v1/console/posts', { params })
+    return request.get<PageResult<PostVO>>('/api/v1/console/posts', { params })
 }
 
 export function getPostDetail(id: number) {
-    return request.get(`/api/v1/posts/${id}`)
+    return request.get<PostVO>(`/api/v1/posts/${id}`)
 }
 
 export function recordPostView(id: number) {
@@ -77,63 +84,63 @@ export function recordPostView(id: number) {
 }
 
 export function createPost(data: PostCreateDTO) {
-    return request.post('/api/v1/posts', data)
+    return request.post<number>('/api/v1/posts', data)
 }
 
 export function createConsolePost(data: PostCreateDTO) {
-    return request.post('/api/v1/console/posts', data)
+    return request.post<number>('/api/v1/console/posts', data)
 }
 
-export function updatePost(id: number, data: any) {
-    return request.put(`/api/v1/posts/${id}`, data)
+export function updatePost(id: number, data: unknown) {
+    return request.put<void>(`/api/v1/posts/${id}`, data)
 }
 
 export function deletePost(id: number) {
-    return request.delete(`/api/v1/posts/${id}`)
+    return request.delete<void>(`/api/v1/posts/${id}`)
 }
 
 export function likePost(id: number) {
-    return request.post(`/api/v1/posts/${id}/like`)
+    return request.post<void>(`/api/v1/posts/${id}/like`)
 }
 
 export function unlikePost(id: number) {
-    return request.delete(`/api/v1/posts/${id}/like`)
+    return request.delete<void>(`/api/v1/posts/${id}/like`)
 }
 
 export function bookmarkPost(id: number) {
-    return request.post(`/api/v1/posts/${id}/bookmark`)
+    return request.post<void>(`/api/v1/posts/${id}/bookmark`)
 }
 
 export function batchBookmarkPosts(postIds: number[]) {
-    return request.post('/api/v1/posts/bookmarks/batch', { postIds })
+    return request.post<BatchActionResultVO>('/api/v1/posts/bookmarks/batch', { postIds })
 }
 
 export function unbookmarkPost(id: number) {
-    return request.delete(`/api/v1/posts/${id}/bookmark`)
+    return request.delete<void>(`/api/v1/posts/${id}/bookmark`)
 }
 
 export function batchReportPosts(postIds: number[], reason: string) {
-    return request.post('/api/v1/posts/reports/batch', { postIds, reason })
+    return request.post<BatchActionResultVO>('/api/v1/posts/reports/batch', { postIds, reason })
 }
 
 export function resolvePost(id: number) {
-    return request.put(`/api/v1/posts/${id}/resolve`)
+    return request.put<void>(`/api/v1/posts/${id}/resolve`)
 }
 
 export function soldPost(id: number) {
-    return request.put(`/api/v1/posts/${id}/sold`)
+    return request.put<void>(`/api/v1/posts/${id}/sold`)
 }
 
 export function deleteConsolePost(id: number, reason?: string) {
-    return request.delete(`/api/v1/console/posts/${id}`, { params: reason ? { reason } : {} })
+    return request.delete<void>(`/api/v1/console/posts/${id}`, { params: reason ? { reason } : {} })
 }
 
 export function resolveConsolePost(id: number, reason?: string) {
-    return request.put(`/api/v1/console/posts/${id}/resolve`, null, { params: reason ? { reason } : {} })
+    return request.put<void>(`/api/v1/console/posts/${id}/resolve`, null, { params: reason ? { reason } : {} })
 }
 
 export function soldConsolePost(id: number, reason?: string) {
-    return request.put(`/api/v1/console/posts/${id}/sold`, null, { params: reason ? { reason } : {} })
+    return request.put<void>(`/api/v1/console/posts/${id}/sold`, null, { params: reason ? { reason } : {} })
 }
 
 // 帖子状态常量
@@ -171,5 +178,5 @@ export function getStatusClass(status: number): string {
 }
 
 export function searchPosts(params: { keyword: string; board?: string; page?: number; size?: number }) {
-    return request.get('/api/v1/posts/search', { params })
+    return request.get<PageResult<PostVO>>('/api/v1/posts/search', { params })
 }

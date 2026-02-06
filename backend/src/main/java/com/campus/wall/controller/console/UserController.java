@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
 import com.campus.wall.dto.user.BatchUserRoleDTO;
+import com.campus.wall.dto.user.UserActionReasonDTO;
 import com.campus.wall.dto.user.UserBanDTO;
 import com.campus.wall.dto.user.UserCreateDTO;
 import com.campus.wall.dto.user.UserBatchAssignDTO;
@@ -38,6 +39,12 @@ public class UserController {
     @GetMapping
     public R<PageResult<UserVO>> list(UserQueryDTO query) {
         return R.ok(userService.queryUsers(query));
+    }
+
+    @Operation(summary = "已删除用户列表", description = "分页查询已删除用户")
+    @GetMapping("/deleted")
+    public R<PageResult<UserVO>> listDeleted(UserQueryDTO query) {
+        return R.ok(userService.queryDeletedUsers(query));
     }
 
     @Operation(summary = "用户详情", description = "获取用户详细信息")
@@ -89,16 +96,21 @@ public class UserController {
         return R.ok(affected);
     }
 
-    @Operation(summary = "封禁/解封用户", description = "封禁或解封用户，封禁时强制下线，返回最新用户状态")
+    @Operation(summary = "封禁用户", description = "封禁用户，封禁时强制下线，返回最新用户状态")
     @PutMapping("/{id}/ban")
     public R<UserVO> ban(@PathVariable Long id, @RequestBody @Valid UserBanDTO dto) {
         Long operatorId = StpUtil.getLoginIdAsLong();
-        userService.updateUserStatusWithReason(id, dto.getStatus(), dto.getReason(), operatorId);
-        // 封禁时强制下线
-        if (dto.getStatus() == 1) {
-            StpUtil.kickout(id);
-        }
-        // 返回最新用户状态
+        userService.updateUserStatusWithReason(id, 1, dto.getReason(), operatorId);
+        StpUtil.kickout(id);
+        return R.ok(userService.getUserById(id));
+    }
+
+    @Operation(summary = "解封用户", description = "解封用户并返回最新用户状态")
+    @PutMapping("/{id}/unban")
+    public R<UserVO> unban(@PathVariable Long id,
+                           @RequestBody(required = false) UserActionReasonDTO dto) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        userService.updateUserStatusWithReason(id, 0, dto != null ? dto.getReason() : null, operatorId);
         return R.ok(userService.getUserById(id));
     }
 
@@ -123,9 +135,19 @@ public class UserController {
 
     @Operation(summary = "恢复用户", description = "恢复已删除的用户")
     @PutMapping("/{id}/restore")
-    public R<Void> restore(@PathVariable Long id) {
+    public R<Void> restore(@PathVariable Long id,
+                           @RequestBody(required = false) UserActionReasonDTO dto) {
         Long operatorId = StpUtil.getLoginIdAsLong();
-        userService.restoreUser(id, operatorId);
+        userService.restoreUser(id, operatorId, dto != null ? dto.getReason() : null);
+        return R.ok();
+    }
+
+    @Operation(summary = "彻底删除用户", description = "物理删除已软删除用户，不可恢复")
+    @DeleteMapping("/{id}/purge")
+    public R<Void> purge(@PathVariable Long id,
+                         @RequestBody(required = false) UserActionReasonDTO dto) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        userService.purgeUser(id, operatorId, dto != null ? dto.getReason() : null);
         return R.ok();
     }
 }

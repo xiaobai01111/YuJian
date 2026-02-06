@@ -25,4 +25,4 @@ export interface SetupInitPayload {
 
 export const getSetupStatus = () => request.get<SetupStatus>('/api/v1/setup/status')
 
-export const initSetup = (payload: SetupInitPayload) => request.post('/api/v1/setup/init', payload)
+export const initSetup = (payload: SetupInitPayload) => request.post<void>('/api/v1/setup/init', payload)

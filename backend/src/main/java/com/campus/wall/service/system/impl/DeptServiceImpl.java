@@ -1,6 +1,9 @@
 package com.campus.wall.service.system.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.poi.excel.ExcelReader;
+import cn.hutool.poi.excel.ExcelUtil;
+import cn.hutool.poi.excel.ExcelWriter;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.dto.system.DeptDeleteDTO;
@@ -8,6 +11,7 @@ import com.campus.wall.entity.system.SysDept;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.constant.SecurityConstants;
 import com.campus.wall.mapper.system.SysDeptMapper;
+import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.DeptService;
@@ -20,10 +24,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,6 +41,7 @@ import java.util.stream.Collectors;
 public class DeptServiceImpl implements DeptService {
 
     private final SysDeptMapper deptMapper;
+    private final SysRoleDeptMapper roleDeptMapper;
     private final SysRoleMapper roleMapper;
     private final UserMapper userMapper;
     private final UserService userService;
@@ -180,6 +191,20 @@ public class DeptServiceImpl implements DeptService {
             throw new BusinessException("部门不存在");
         }
 
+        if (dept.getParentId() != null && !dept.getParentId().equals(existing.getParentId())) {
+            if (!SecurityUtil.isSuperAdmin() && !SecurityUtil.hasPermission("system:dept:move")) {
+                throw new BusinessException("无权限调整部门层级");
+            }
+        }
+        if (dept.getSortOrder() != null) {
+            Integer oldSort = existing.getSortOrder();
+            if (oldSort == null || !dept.getSortOrder().equals(oldSort)) {
+                if (!SecurityUtil.isSuperAdmin() && !SecurityUtil.hasPermission("system:dept:sort")) {
+                    throw new BusinessException("无权限调整部门排序");
+                }
+            }
+        }
+
         if (isSystemDept(existing.getId())) {
             if (dept.getParentId() != null && !dept.getParentId().equals(existing.getParentId())) {
                 throw new BusinessException("系统部门不允许修改上级");
@@ -325,6 +350,12 @@ public class DeptServiceImpl implements DeptService {
         if (childCount > 0) {
             throw new BusinessException("存在子部门，无法删除，请先删除或转移子部门");
         }
+
+        // 检查是否被角色数据权限引用
+        Long roleRefCount = roleDeptMapper.countRolesByDeptId(id);
+        if (roleRefCount != null && roleRefCount > 0) {
+            throw new BusinessException("该部门已被角色数据权限引用，请先在角色授权中解除关联后再删除");
+        }
         
         Long operatorId = StpUtil.getLoginIdAsLong();
         List<User> deptUsers = userMapper.selectList(
@@ -383,7 +414,7 @@ public class DeptServiceImpl implements DeptService {
                         .map(User::getId)
                         .collect(Collectors.toList());
                     if (!userIds.isEmpty()) {
-                        userService.deleteUsersWithReason(userIds, operatorId, reason != null ? reason : "部门删除");
+                        userService.deleteUsersWithReason(userIds, operatorId, reason);
                     }
                     // 处理未删除的用户（管理员/操作者），清除其dept_id避免悬挂引用
                     List<User> excludedUsers = deptUsers.stream()
@@ -413,6 +444,81 @@ public class DeptServiceImpl implements DeptService {
     }
 
     @Override
+    @Transactional
+    public void move(Long id, Long parentId, Integer sortOrder) {
+        if (parentId == null) {
+            throw new BusinessException("上级部门不能为空");
+        }
+        if (parentId == 0L) {
+            parentId = SecurityConstants.SYSTEM_DEPT_ID;
+        }
+        SysDept dept = deptMapper.selectById(id);
+        if (dept == null) {
+            throw new BusinessException("部门不存在");
+        }
+        if (isSystemDept(id)) {
+            throw new BusinessException("系统部门不允许调整层级");
+        }
+        if (parentId.equals(id)) {
+            throw new BusinessException("不能将自己设为上级部门");
+        }
+        if (isDescendant(id, parentId)) {
+            throw new BusinessException("不能将子孙部门设为上级部门");
+        }
+        if (!isSystemDept(parentId)) {
+            SysDept parent = deptMapper.selectById(parentId);
+            if (parent == null) {
+                throw new BusinessException("上级部门不存在");
+            }
+        }
+        Long sameNameCount = deptMapper.selectCount(
+            new LambdaQueryWrapper<SysDept>()
+                .eq(SysDept::getParentId, parentId)
+                .eq(SysDept::getDeptName, dept.getDeptName())
+                .ne(SysDept::getId, id)
+        );
+        if (sameNameCount != null && sameNameCount > 0) {
+            throw new BusinessException("同级部门名称已存在");
+        }
+
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        HashMap<String, Object> before = new HashMap<>();
+        before.put("parentId", dept.getParentId());
+        before.put("sortOrder", dept.getSortOrder());
+
+        dept.setParentId(parentId);
+        if (sortOrder != null) {
+            dept.setSortOrder(sortOrder);
+        }
+        deptMapper.updateById(dept);
+
+        HashMap<String, Object> after = new HashMap<>();
+        after.put("parentId", dept.getParentId());
+        after.put("sortOrder", dept.getSortOrder());
+        operLogService.log(operatorId, null, "dept", id, "move", null, before, after, null);
+    }
+
+    @Override
+    @Transactional
+    public void updateSort(Long id, Integer sortOrder) {
+        if (sortOrder == null) {
+            throw new BusinessException("排序值不能为空");
+        }
+        SysDept dept = deptMapper.selectById(id);
+        if (dept == null) {
+            throw new BusinessException("部门不存在");
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        HashMap<String, Object> before = new HashMap<>();
+        before.put("sortOrder", dept.getSortOrder());
+        dept.setSortOrder(sortOrder);
+        deptMapper.updateById(dept);
+        HashMap<String, Object> after = new HashMap<>();
+        after.put("sortOrder", dept.getSortOrder());
+        operLogService.log(operatorId, null, "dept", id, "sort", null, before, after, null);
+    }
+
+    @Override
     public List<UserVO> getDeptUsers(Long deptId) {
         List<User> users = userMapper.selectList(
             new LambdaQueryWrapper<User>().eq(User::getDeptId, deptId).eq(User::getDeleted, 0)
@@ -425,6 +531,152 @@ public class DeptServiceImpl implements DeptService {
         return userMapper.selectCount(
             new LambdaQueryWrapper<User>().eq(User::getDeptId, deptId).eq(User::getDeleted, 0)
         );
+    }
+
+    @Override
+    public void exportDepts(HttpServletResponse response) {
+        List<SysDept> depts = listAll();
+        ExcelWriter writer = ExcelUtil.getWriter(true);
+        writer.addHeaderAlias("id", "部门ID");
+        writer.addHeaderAlias("parentId", "上级部门ID");
+        writer.addHeaderAlias("deptName", "部门名称");
+        writer.addHeaderAlias("sortOrder", "排序");
+        writer.addHeaderAlias("leader", "负责人");
+        writer.addHeaderAlias("phone", "联系电话");
+        writer.addHeaderAlias("email", "邮箱");
+        writer.addHeaderAlias("status", "状态");
+        writer.addHeaderAlias("dataScope", "数据范围");
+        writer.addHeaderAlias("createdAt", "创建时间");
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (SysDept dept : depts) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", dept.getId());
+            row.put("parentId", dept.getParentId());
+            row.put("deptName", dept.getDeptName());
+            row.put("sortOrder", dept.getSortOrder());
+            row.put("leader", dept.getLeader());
+            row.put("phone", dept.getPhone());
+            row.put("email", dept.getEmail());
+            row.put("status", dept.getStatus() != null && dept.getStatus() == 0 ? "正常" : "停用");
+            row.put("dataScope", formatDataScope(dept.getDataScope()));
+            row.put("createdAt", dept.getCreatedAt());
+            rows.add(row);
+        }
+        writer.write(rows, true);
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8");
+        try {
+            response.setHeader("Content-Disposition", com.campus.wall.util.HttpHeaderUtil.buildContentDisposition("部门列表.xlsx", true));
+            writer.flush(response.getOutputStream(), true);
+            writer.close();
+        } catch (IOException e) {
+            throw new BusinessException("导出失败");
+        }
+    }
+
+    @Override
+    @Transactional
+    public String importDepts(MultipartFile file, boolean updateExisting) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("文件不能为空");
+        }
+        int successCount = 0;
+        int failCount = 0;
+        StringBuilder errorMsg = new StringBuilder();
+        try {
+            ExcelReader reader = ExcelUtil.getReader(file.getInputStream());
+            List<Map<String, Object>> rows = reader.readAll();
+            for (int i = 0; i < rows.size(); i++) {
+                Map<String, Object> row = rows.get(i);
+                try {
+                    String deptName = stringValue(row.get("部门名称"));
+                    if (!StringUtils.hasText(deptName)) {
+                        failCount++;
+                        errorMsg.append("第").append(i + 2).append("行：部门名称为空\n");
+                        continue;
+                    }
+                    Long parentId = parseLong(row.get("上级部门ID"));
+                    if (parentId == null) {
+                        String parentName = stringValue(row.get("上级部门"));
+                        if (StringUtils.hasText(parentName)) {
+                            SysDept parent = deptMapper.selectOne(
+                                new LambdaQueryWrapper<SysDept>().eq(SysDept::getDeptName, parentName.trim())
+                            );
+                            if (parent == null) {
+                                failCount++;
+                                errorMsg.append("第").append(i + 2).append("行：上级部门不存在\n");
+                                continue;
+                            }
+                            parentId = parent.getId();
+                        }
+                    }
+                    if (parentId == null || parentId == 0L) {
+                        parentId = SecurityConstants.SYSTEM_DEPT_ID;
+                    }
+                    if (!isSystemDept(parentId)) {
+                        SysDept parent = deptMapper.selectById(parentId);
+                        if (parent == null) {
+                            failCount++;
+                            errorMsg.append("第").append(i + 2).append("行：上级部门不存在\n");
+                            continue;
+                        }
+                    }
+                    Integer sortOrder = parseInteger(row.get("排序"));
+                    Integer status = parseStatus(row.get("状态"));
+                    Integer dataScope = parseDataScope(row.get("数据范围"));
+                    String leader = stringValue(row.get("负责人"));
+                    String phone = stringValue(row.get("联系电话"));
+                    String email = stringValue(row.get("邮箱"));
+
+                    SysDept existing = deptMapper.selectOne(
+                        new LambdaQueryWrapper<SysDept>()
+                            .eq(SysDept::getParentId, parentId)
+                            .eq(SysDept::getDeptName, deptName.trim())
+                    );
+
+                    if (existing != null) {
+                        if (!updateExisting) {
+                            failCount++;
+                            errorMsg.append("第").append(i + 2).append("行：部门已存在\n");
+                            continue;
+                        }
+                        existing.setLeader(StringUtils.hasText(leader) ? leader.trim() : existing.getLeader());
+                        existing.setPhone(StringUtils.hasText(phone) ? phone.trim() : existing.getPhone());
+                        existing.setEmail(StringUtils.hasText(email) ? email.trim() : existing.getEmail());
+                        if (sortOrder != null) existing.setSortOrder(sortOrder);
+                        if (status != null) existing.setStatus(status);
+                        if (dataScope != null) existing.setDataScope(dataScope);
+                        deptMapper.updateById(existing);
+                        successCount++;
+                    } else {
+                        SysDept dept = new SysDept();
+                        dept.setParentId(parentId);
+                        dept.setDeptName(deptName.trim());
+                        dept.setSortOrder(sortOrder != null ? sortOrder : 0);
+                        dept.setLeader(StringUtils.hasText(leader) ? leader.trim() : null);
+                        dept.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
+                        dept.setEmail(StringUtils.hasText(email) ? email.trim() : null);
+                        dept.setStatus(status != null ? status : 0);
+                        dept.setDataScope(dataScope != null ? dataScope : SecurityConstants.DATA_SCOPE_DEPT);
+                        deptMapper.insert(dept);
+                        successCount++;
+                    }
+                } catch (Exception e) {
+                    failCount++;
+                    errorMsg.append("第").append(i + 2).append("行：").append(e.getMessage()).append("\n");
+                }
+            }
+        } catch (IOException e) {
+            throw new BusinessException("读取文件失败");
+        }
+        return String.format("导入完成：成功 %d 条，失败 %d 条。%s",
+            successCount, failCount, failCount > 0 ? "\n" + errorMsg : "");
+    }
+
+    @Override
+    public String syncDepts() {
+        return "未配置同步源，未执行";
     }
 
     @SuppressWarnings("unused")
@@ -489,5 +741,109 @@ public class DeptServiceImpl implements DeptService {
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user, vo);
         return vo;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value).trim();
+    }
+
+    private Long parseLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = String.valueOf(value).trim();
+        if (str.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(str);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer parseInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = String.valueOf(value).trim();
+        if (str.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(str);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer parseStatus(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = String.valueOf(value).trim();
+        if (str.isEmpty()) {
+            return null;
+        }
+        if ("正常".equals(str) || "启用".equals(str) || "0".equals(str)) {
+            return 0;
+        }
+        if ("停用".equals(str) || "禁用".equals(str) || "1".equals(str)) {
+            return 1;
+        }
+        try {
+            return Integer.parseInt(str);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer parseDataScope(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = String.valueOf(value).trim();
+        if (str.isEmpty()) {
+            return null;
+        }
+        switch (str) {
+            case "全部数据权限":
+                return SecurityConstants.DATA_SCOPE_ALL;
+            case "自定义数据权限":
+                return SecurityConstants.DATA_SCOPE_CUSTOM;
+            case "本部门及以下数据权限":
+                return SecurityConstants.DATA_SCOPE_DEPT_AND_CHILD;
+            case "本部门数据权限":
+                return SecurityConstants.DATA_SCOPE_DEPT;
+            case "仅本人数据权限":
+                return SecurityConstants.DATA_SCOPE_SELF;
+            default:
+                try {
+                    int scope = Integer.parseInt(str);
+                    return scope;
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+        }
+    }
+
+    private String formatDataScope(Integer dataScope) {
+        if (dataScope == null) {
+            return "-";
+        }
+        switch (dataScope) {
+            case SecurityConstants.DATA_SCOPE_ALL:
+                return "全部数据权限";
+            case SecurityConstants.DATA_SCOPE_CUSTOM:
+                return "自定义数据权限";
+            case SecurityConstants.DATA_SCOPE_DEPT:
+                return "本部门数据权限";
+            case SecurityConstants.DATA_SCOPE_DEPT_AND_CHILD:
+                return "本部门及以下数据权限";
+            case SecurityConstants.DATA_SCOPE_SELF:
+                return "仅本人数据权限";
+            default:
+                return String.valueOf(dataScope);
+        }
     }
 }

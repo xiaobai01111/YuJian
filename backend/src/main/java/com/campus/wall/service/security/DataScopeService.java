@@ -103,12 +103,11 @@ public class DataScopeService {
         if (scope == null || scope.isAllowAll() || scope.getScopedDeptIds().isEmpty()) {
             return List.of();
         }
-        List<User> users = userMapper.selectList(
-                new LambdaQueryWrapper<User>()
-                        .select(User::getId)
-                        .eq(User::getDeleted, 0)
-                        .in(User::getDeptId, scope.getScopedDeptIds())
-        );
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.select(User::getId)
+                .eq(User::getDeleted, 0)
+                .in(User::getDeptId, scope.getScopedDeptIds());
+        List<User> users = userMapper.selectList(wrapper);
         return users.stream()
                 .map(User::getId)
                 .filter(Objects::nonNull)
@@ -121,12 +120,14 @@ public class DataScopeService {
             return List.of();
         }
         List<Long> scopedUserIds = resolveScopedUserIds(scope);
-        if (scope.isAllowSelf() && userId != null && !scopedUserIds.contains(userId)) {
-            scopedUserIds = new ArrayList<>(scopedUserIds);
-            scopedUserIds.add(userId);
-        }
-        if (scopedUserIds.isEmpty() && scope.isAllowSelf() && userId != null) {
-            return List.of(userId);
+        if (scope.isAllowSelf() && userId != null) {
+            if (scopedUserIds.isEmpty()) {
+                return List.of(userId);
+            }
+            if (!scopedUserIds.contains(userId)) {
+                scopedUserIds = new ArrayList<>(scopedUserIds);
+                scopedUserIds.add(userId);
+            }
         }
         return scopedUserIds;
     }

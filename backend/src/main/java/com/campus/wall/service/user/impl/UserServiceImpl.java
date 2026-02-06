@@ -38,6 +38,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,6 +80,34 @@ public class UserServiceImpl implements UserService {
             .collect(Collectors.toList());
 
         return PageResult.of(records, page.getTotal(), page.getSize(), page.getCurrent());
+    }
+
+    @Override
+    public PageResult<UserVO> queryDeletedUsers(UserQueryDTO query) {
+        LocalDateTime loginDateStart = parseDateStart(query.getLoginDateStart());
+        LocalDateTime loginDateEnd = parseDateEnd(query.getLoginDateEnd());
+        long size = query.getSize() == null ? 20L : query.getSize();
+        long page = query.getPage() == null ? 1L : query.getPage();
+        long offset = Math.max(0L, (page - 1L) * size);
+
+        List<User> users = userMapper.selectDeletedUsersPage(
+            query.getUsername(),
+            query.getNickname(),
+            query.getPhone(),
+            loginDateStart,
+            loginDateEnd,
+            size,
+            offset
+        );
+        long total = userMapper.countDeletedUsers(
+            query.getUsername(),
+            query.getNickname(),
+            query.getPhone(),
+            loginDateStart,
+            loginDateEnd
+        );
+        List<UserVO> records = users.stream().map(this::toUserVO).collect(Collectors.toList());
+        return PageResult.of(records, total, size, page);
     }
 
     @Override
@@ -348,19 +378,37 @@ public class UserServiceImpl implements UserService {
     }
 
     private void applyLoginDateRange(LambdaQueryWrapper<User> wrapper, String start, String end) {
-        if (!StringUtils.hasText(start) && !StringUtils.hasText(end)) {
-            return;
+        LocalDateTime startTime = parseDateStart(start);
+        LocalDateTime endTime = parseDateEnd(end);
+        if (startTime != null) {
+            wrapper.ge(User::getLoginDate, startTime);
+        }
+        if (endTime != null) {
+            wrapper.le(User::getLoginDate, endTime);
+        }
+    }
+
+    private LocalDateTime parseDateStart(String start) {
+        if (!StringUtils.hasText(start)) {
+            return null;
         }
         try {
-            java.time.LocalDate startDate = StringUtils.hasText(start) ? java.time.LocalDate.parse(start) : null;
-            java.time.LocalDate endDate = StringUtils.hasText(end) ? java.time.LocalDate.parse(end) : null;
-            if (startDate != null) {
-                wrapper.ge(User::getLoginDate, startDate.atStartOfDay());
-            }
-            if (endDate != null) {
-                wrapper.le(User::getLoginDate, endDate.plusDays(1).atStartOfDay().minusNanos(1));
-            }
+            LocalDate startDate = LocalDate.parse(start);
+            return startDate.atStartOfDay();
         } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private LocalDateTime parseDateEnd(String end) {
+        if (!StringUtils.hasText(end)) {
+            return null;
+        }
+        try {
+            LocalDate endDate = LocalDate.parse(end);
+            return endDate.plusDays(1).atStartOfDay().minusNanos(1);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
@@ -483,6 +531,12 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void restoreUser(Long userId, Long operatorId) {
+        restoreUser(userId, operatorId, null);
+    }
+
+    @Override
+    @Transactional
+    public void restoreUser(Long userId, Long operatorId, String reason) {
         // 使用原生SQL查询已删除的用户（绕过@TableLogic）
         User user = userMapper.selectDeletedById(userId);
         if (user == null) {
@@ -494,10 +548,34 @@ public class UserServiceImpl implements UserService {
         user.setDeletedAt(null);
         user.setDeletedBy(null);
         user.setDeletedReason(null);
-        userMapper.restoreById(userId);
+        int restored = userMapper.restoreById(userId);
+        if (restored == 0) {
+            throw new BusinessException("恢复用户失败，请重试");
+        }
 
         // 记录审计日志
-        operLogService.log(operatorId, null, "user", userId, "restore", null, null, null, null);
+        operLogService.log(operatorId, null, "user", userId, "restore", reason, 
+                java.util.Map.of("deleted", 1), java.util.Map.of("deleted", 0), null);
+    }
+
+    @Override
+    @Transactional
+    public void purgeUser(Long userId, Long operatorId, String reason) {
+        User user = userMapper.selectDeletedById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在或未被删除");
+        }
+        if (isSystemAdminUserId(userId)) {
+            throw new BusinessException("管理员账号不允许彻底删除");
+        }
+
+        int deleted = userMapper.hardDeleteById(userId);
+        if (deleted == 0) {
+            throw new BusinessException("彻底删除失败，请重试");
+        }
+        permissionService.clearUserCache(userId);
+        operLogService.log(operatorId, null, "user", userId, "purge", reason, 
+                java.util.Map.of("username", user.getUsername()), null, null);
     }
 
     @Override

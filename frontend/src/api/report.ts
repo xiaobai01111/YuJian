@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { UserVO } from './system'
+import type { PageResult, UserVO } from './system'
 
 export interface ReportPostVO {
   id: number
@@ -30,19 +30,19 @@ export interface ReportQueryDTO {
 }
 
 export function getConsoleReports(params: ReportQueryDTO) {
-  return request.get('/api/v1/console/reports', { params })
+  return request.get<PageResult<ReportVO>>('/api/v1/console/reports', { params })
 }
 
 export function getConsoleReportDetail(id: number) {
-  return request.get(`/api/v1/console/reports/${id}`)
+  return request.get<ReportVO>(`/api/v1/console/reports/${id}`)
 }
 
 export function handleConsoleReport(id: number, data: ReportHandleDTO) {
-  return request.put(`/api/v1/console/reports/${id}/handle`, data)
+  return request.put<void>(`/api/v1/console/reports/${id}/handle`, data)
 }
 
 export function batchHandleConsoleReports(ids: number[], result: string, remark?: string) {
-  return request.post('/api/v1/console/reports/batch-handle', {
+  return request.post<void>('/api/v1/console/reports/batch-handle', {
     ids,
     result,
     remark
@@ -50,7 +50,7 @@ export function batchHandleConsoleReports(ids: number[], result: string, remark?
 }
 
 export function deleteConsoleReport(id: number, reason?: string) {
-  return request.delete(`/api/v1/console/reports/${id}`, {
+  return request.delete<void>(`/api/v1/console/reports/${id}`, {
     params: reason ? { reason } : {}
   })
 }

@@ -21,6 +21,11 @@ public interface RoleService {
     List<Long> getRoleMenuIds(Long roleId);
 
     /**
+     * 获取角色详情
+     */
+    RoleVO getRoleById(Long roleId);
+
+    /**
      * 分页查询角色
      */
     PageResult<RoleVO> queryRoles(int page, int size, String keyword);
@@ -34,6 +39,11 @@ public interface RoleService {
      * 更新角色
      */
     RoleVO updateRole(Long roleId, String roleName, String roleKey, Integer status, Integer sortOrder, String remark, List<Long> menuIds);
+
+    /**
+     * 更新角色状态
+     */
+    RoleVO updateRoleStatus(Long roleId, Integer status);
 
     /**
      * 删除角色

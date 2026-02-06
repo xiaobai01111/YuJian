@@ -1,5 +1,6 @@
 package com.campus.wall.config;
 
+import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.R;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +38,9 @@ public class RequestLogAspect {
     private final ObjectMapper objectMapper;
 
     @Pointcut("within(com.campus.wall.controller..*)")
+    @SuppressWarnings("EmptyMethod")
     public void controllerLayer() {
+        // pointcut definition
     }
 
     @Around("controllerLayer()")
@@ -68,7 +71,18 @@ public class RequestLogAspect {
             return result;
         } catch (Throwable ex) {
             long cost = System.currentTimeMillis() - start;
-            log.error("request failed {} {} costMs={}", method, path, cost, ex);
+            if (ex instanceof BusinessException businessException) {
+                log.warn(
+                    "request failed {} {} costMs={} code={} message={}",
+                    method,
+                    path,
+                    cost,
+                    businessException.getCode(),
+                    truncate(businessException.getMessage())
+                );
+            } else {
+                log.error("request failed {} {} costMs={}", method, path, cost, ex);
+            }
             throw ex;
         }
     }
@@ -142,7 +156,7 @@ public class RequestLogAspect {
             return sanitizeArray(value);
         }
         try {
-            Map<String, Object> map = objectMapper.convertValue(value, new TypeReference<Map<String, Object>>() {});
+            Map<String, Object> map = objectMapper.convertValue(value, new TypeReference<>() {});
             return sanitizeMap(map);
         } catch (IllegalArgumentException ex) {
             return value.getClass().getSimpleName();

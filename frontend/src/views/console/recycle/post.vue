@@ -150,7 +150,7 @@ const loadPosts = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const res: any = await getRecyclePosts({
+    const res = await getRecyclePosts({
       page: currentPage.value,
       size: pageSize.value,
       board: filters.board || undefined,
@@ -220,8 +220,8 @@ const handleRestore = async (post: PostVO) => {
   try {
     await restoreRecyclePost(post.id, reason || undefined)
     await loadPosts({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '恢复失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '恢复失败')
   }
 }
 
@@ -232,8 +232,8 @@ const handlePurge = async (post: PostVO) => {
   try {
     await purgeRecyclePost(post.id, reason || undefined)
     await loadPosts({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '删除失败')
   }
 }
 

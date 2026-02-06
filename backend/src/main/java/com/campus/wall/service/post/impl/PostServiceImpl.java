@@ -76,7 +76,9 @@ public class PostServiceImpl implements PostService {
     private static final int STATUS_NORMAL = 0;
     private static final int STATUS_RESOLVED = 1;
     private static final int STATUS_DELETED = 2;
+    @SuppressWarnings("unused")
     private static final int STATUS_PENDING_AUDIT = 3;
+    @SuppressWarnings("unused")
     private static final int STATUS_ARCHIVED = 4;
     private static final int STATUS_SOLD = 5;
     // 前端可见的状态列表

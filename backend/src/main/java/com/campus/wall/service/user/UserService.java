@@ -25,6 +25,11 @@ public interface UserService {
     PageResult<UserVO> queryUsers(UserQueryDTO query);
 
     /**
+     * 分页查询已删除用户
+     */
+    PageResult<UserVO> queryDeletedUsers(UserQueryDTO query);
+
+    /**
      * 获取用户详情
      */
     UserDetailVO getUserDetail(Long userId);
@@ -58,6 +63,16 @@ public interface UserService {
      * 恢复已删除用户
      */
     void restoreUser(Long userId, Long operatorId);
+
+    /**
+     * 恢复已删除用户（带理由）
+     */
+    void restoreUser(Long userId, Long operatorId, String reason);
+
+    /**
+     * 彻底删除已软删用户
+     */
+    void purgeUser(Long userId, Long operatorId, String reason);
 
     /**
      * 更新用户信息

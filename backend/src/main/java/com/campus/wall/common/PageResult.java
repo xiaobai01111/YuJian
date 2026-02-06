@@ -9,6 +9,7 @@ import java.util.List;
  * 分页结果封装
  */
 @Data
+@SuppressWarnings("serial")
 public class PageResult<T> implements Serializable {
 
     private static final long serialVersionUID = 1L;

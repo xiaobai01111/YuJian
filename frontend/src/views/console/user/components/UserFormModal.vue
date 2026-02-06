@@ -241,9 +241,9 @@ const handleSubmit = async () => {
     }
     emit('success')
     close()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
-    await dialog.alert(error?.response?.data?.msg || '操作失败')
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.msg || '操作失败')
   } finally {
     loading.value = false
   }

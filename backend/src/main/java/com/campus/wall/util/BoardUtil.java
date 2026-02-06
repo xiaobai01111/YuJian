@@ -40,34 +40,14 @@ public final class BoardUtil {
             return null;
         }
 
-        switch (value) {
-            case "confession":
-            case "confessions":
-                return BOARD_CONFESSIONS;
-            case "tree-hole":
-            case "tree_hole":
-            case "tree hole":
-            case "treehole":
-                return BOARD_TREE_HOLE;
-            case "help":
-            case "qa":
-            case "qna":
-                return BOARD_HELP;
-            case "market":
-            case "flea":
-            case "flea-market":
-            case "flea_market":
-                return BOARD_MARKET;
-            case "lostfound":
-            case "lost-found":
-            case "lost_found":
-            case "lost found":
-                return BOARD_LOST_FOUND;
-            default:
-                break;
-        }
-
-        return VALID_BOARDS.contains(value) ? value : null;
+        return switch (value) {
+            case "confession", "confessions" -> BOARD_CONFESSIONS;
+            case "tree-hole", "tree_hole", "tree hole", "treehole" -> BOARD_TREE_HOLE;
+            case "help", "qa", "qna" -> BOARD_HELP;
+            case "market", "flea", "flea-market", "flea_market" -> BOARD_MARKET;
+            case "lostfound", "lost-found", "lost_found", "lost found" -> BOARD_LOST_FOUND;
+            default -> VALID_BOARDS.contains(value) ? value : null;
+        };
     }
 
     /**

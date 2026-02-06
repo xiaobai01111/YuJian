@@ -207,7 +207,7 @@ const loadComments = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const res: any = await getConsoleComments({
+    const res = await getConsoleComments({
       page: currentPage.value,
       size: pageSize.value,
       postId: filters.postId.trim() ? parsePostId(filters.postId.trim()) : undefined,
@@ -298,8 +298,8 @@ const handleEdit = async (comment: CommentConsoleVO) => {
   try {
     await updateConsoleComment(comment.id, { content: content.trim() }, reason || undefined)
     await loadComments({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '修改失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '修改失败')
   }
 }
 
@@ -310,8 +310,8 @@ const handleDelete = async (comment: CommentConsoleVO) => {
   try {
     await deleteConsoleComment(comment.id, reason || undefined)
     await loadComments({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '删除失败')
   }
 }
 
@@ -326,8 +326,8 @@ const handleBatchDelete = async () => {
   try {
     await batchDeleteConsoleComments(selectedIds.value, reason || undefined)
     await loadComments({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || '批量删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || '批量删除失败')
   }
 }
 

@@ -3,8 +3,8 @@
     <div class="flex-1 min-h-0 flex flex-col gap-6 overflow-hidden p-6">
       <div class="flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold">图库管理</h1>
-          <p class="text-gray-500 mt-1">管理系统图片与分类</p>
+          <h1 class="text-2xl font-bold">公共媒体库</h1>
+          <p class="text-gray-500 mt-1">管理可复用的图片媒体资源</p>
         </div>
         <div class="flex items-center gap-2">
           <input ref="fileInput" type="file" class="hidden" accept="image/*" multiple @change="handleUpload" />

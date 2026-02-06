@@ -216,7 +216,7 @@ const queryParams = reactive<PostQueryDTO>({
 const fetchData = async () => {
   loading.value = true
   try {
-    const res: any = await getPostList({
+    const res = await getPostList({
       ...queryParams,
       lostFoundType: postType.value
     })

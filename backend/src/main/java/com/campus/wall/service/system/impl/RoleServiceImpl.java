@@ -15,6 +15,7 @@ import com.campus.wall.mapper.system.SysRoleMenuMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.OperLogService;
+import com.campus.wall.service.system.PermissionService;
 import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.service.system.RoleService;
 import com.campus.wall.service.user.UserService;
@@ -26,8 +27,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +48,11 @@ public class RoleServiceImpl implements RoleService {
     private final UserMapper userMapper;
     private final UserService userService;
     private final OperLogService operLogService;
+    private final PermissionService permissionService;
+
+    private static final String PERM_ROLE_ASSIGN = "system:role:assign";
+    private static final String PERM_ROLE_ENABLE = "system:role:enable";
+    private static final String PERM_ROLE_DISABLE = "system:role:disable";
 
     @Override
     public List<RoleVO> getAllRoles() {
@@ -58,6 +66,15 @@ public class RoleServiceImpl implements RoleService {
     @Override
     public List<Long> getRoleMenuIds(Long roleId) {
         return sysMenuMapper.selectMenuIdsByRoleId(roleId);
+    }
+
+    @Override
+    public RoleVO getRoleById(Long roleId) {
+        SysRole role = sysRoleMapper.selectById(roleId);
+        if (role == null) {
+            throw new BusinessException("角色不存在");
+        }
+        return toRoleVO(role, true);
     }
 
     @Override
@@ -102,6 +119,7 @@ public class RoleServiceImpl implements RoleService {
 
         // 分配菜单
         if (menuIds != null && !menuIds.isEmpty()) {
+            requireCurrentUserPermission(PERM_ROLE_ASSIGN, "缺少角色授权权限");
             assignMenus(role.getId(), menuIds);
         }
 
@@ -151,6 +169,17 @@ public class RoleServiceImpl implements RoleService {
         before.put("remark", role.getRemark());
         Integer oldStatus = role.getStatus();
 
+        if (!isAdmin && status != null && !Objects.equals(oldStatus, status)) {
+            if (status == 0) {
+                requireCurrentUserPermission(PERM_ROLE_ENABLE, "缺少启用角色权限");
+            } else if (status == 1) {
+                requireCurrentUserPermission(PERM_ROLE_DISABLE, "缺少停用角色权限");
+            }
+        }
+        if (menuIds != null) {
+            requireCurrentUserPermission(PERM_ROLE_ASSIGN, "缺少角色授权权限");
+        }
+
         if (roleName != null && !isAdmin) {
             role.setRoleName(roleName);
         }
@@ -166,8 +195,7 @@ public class RoleServiceImpl implements RoleService {
         sysRoleMapper.updateById(role);
 
         // 更新菜单分配（管理员角色不允许修改菜单）
-        if (menuIds != null && !isAdmin) {
-            sysRoleMenuMapper.deleteByRoleId(roleId);
+        if (menuIds != null) {
             assignMenus(roleId, menuIds);
         }
 
@@ -189,7 +217,7 @@ public class RoleServiceImpl implements RoleService {
     @Transactional
     public void deleteRole(Long roleId, boolean deleteUsers, String reason) {
         SysRole role = sysRoleMapper.selectById(roleId);
-        if (role != null && isAdminRole(role)) {
+        if (isAdminRole(role)) {
             throw new BusinessException("管理员角色不允许删除");
         }
         List<Long> userIds = sysUserRoleMapper.selectUserIdsByRoleId(roleId);
@@ -231,12 +259,14 @@ public class RoleServiceImpl implements RoleService {
     @Transactional
     public RoleVO assignMenus(Long roleId, List<Long> menuIds) {
         SysRole role = sysRoleMapper.selectById(roleId);
-        if (role != null && isAdminRole(role)) {
+        if (isAdminRole(role)) {
             throw new BusinessException("管理员角色不允许修改权限");
         }
+        requireCurrentUserPermission(PERM_ROLE_ASSIGN, "缺少角色授权权限");
         if (menuIds == null) {
             menuIds = List.of();
         }
+        ensureAssignableMenuScope(menuIds);
         List<Long> beforeMenuIds = sysMenuMapper.selectMenuIdsByRoleId(roleId);
         // 先删除已有的菜单关联
         sysRoleMenuMapper.deleteByRoleId(roleId);
@@ -258,6 +288,45 @@ public class RoleServiceImpl implements RoleService {
         RoleVO vo = toRoleVO(role, false);
         vo.setMenuIds(menuIds);
         return vo;
+    }
+
+    @Override
+    @Transactional
+    public RoleVO updateRoleStatus(Long roleId, Integer status) {
+        SysRole role = sysRoleMapper.selectById(roleId);
+        if (role == null) {
+            throw new BusinessException("角色不存在");
+        }
+        if (isAdminRole(role)) {
+            throw new BusinessException("管理员角色状态不允许修改");
+        }
+        if (status == null || (status != 0 && status != 1)) {
+            throw new BusinessException("角色状态参数非法");
+        }
+
+        Integer oldStatus = role.getStatus();
+        if (Objects.equals(oldStatus, status)) {
+            return toRoleVO(role, false);
+        }
+        if (status == 0) {
+            requireCurrentUserPermission(PERM_ROLE_ENABLE, "缺少启用角色权限");
+        } else {
+            requireCurrentUserPermission(PERM_ROLE_DISABLE, "缺少停用角色权限");
+        }
+
+        role.setStatus(status);
+        sysRoleMapper.updateById(role);
+        if (status == 1) {
+            kickoutUsersByRoleId(roleId);
+        }
+
+        HashMap<String, Object> before = new HashMap<>();
+        before.put("status", oldStatus);
+        HashMap<String, Object> after = new HashMap<>();
+        after.put("status", status);
+        String action = status == 0 ? "enable" : "disable";
+        operLogService.log(StpUtil.getLoginIdAsLong(), null, "role", roleId, action, null, before, after, null);
+        return toRoleVO(role, false);
     }
 
     @Override
@@ -348,6 +417,49 @@ public class RoleServiceImpl implements RoleService {
         }
         List<String> roleKeys = sysRoleMapper.selectRoleKeysByUserId(userId);
         return roleKeys != null && roleKeys.contains(SecurityUtil.getSuperAdminRoleKey());
+    }
+
+    private void requireCurrentUserPermission(String permission, String message) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (isSystemAdminUserId(operatorId)) {
+            return;
+        }
+        if (!permissionService.hasPermission(operatorId, permission)) {
+            throw new BusinessException(message);
+        }
+    }
+
+    private void ensureAssignableMenuScope(List<Long> menuIds) {
+        if (menuIds == null || menuIds.isEmpty()) {
+            return;
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (isSystemAdminUserId(operatorId)) {
+            return;
+        }
+
+        List<SysRole> roles = sysRoleMapper.selectRolesByUserId(operatorId);
+        Set<Long> allowedMenuIds = new HashSet<>();
+        if (roles != null) {
+            for (SysRole role : roles) {
+                if (role == null || role.getId() == null) {
+                    continue;
+                }
+                List<Long> roleMenuIds = sysMenuMapper.selectMenuIdsByRoleId(role.getId());
+                if (roleMenuIds != null) {
+                    allowedMenuIds.addAll(roleMenuIds);
+                }
+            }
+        }
+
+        List<Long> overGranted = menuIds.stream()
+            .filter(Objects::nonNull)
+            .filter(menuId -> !allowedMenuIds.contains(menuId))
+            .distinct()
+            .collect(Collectors.toList());
+        if (!overGranted.isEmpty()) {
+            throw new BusinessException("不能授予超出当前账号权限上限的菜单");
+        }
     }
 
     private RoleVO toRoleVO(SysRole role, boolean withMenuIds) {

@@ -40,5 +40,14 @@ public class RouterVO {
 
         @Schema(description = "是否缓存")
         private Boolean keepAlive;
+
+        @Schema(description = "菜单分组编码（用于前端分组）")
+        private String groupCode;
+
+        @Schema(description = "功能编码（用于前后端功能对齐）")
+        private String featureCode;
+
+        @Schema(description = "路由类型：CATALOG/MENU/BUTTON")
+        private String routeType;
     }
 }

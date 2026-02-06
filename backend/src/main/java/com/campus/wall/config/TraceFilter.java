@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -20,13 +21,14 @@ import java.util.UUID;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TraceFilter extends OncePerRequestFilter {
 
+    @SuppressWarnings("UastIncorrectHttpHeaderInspection")
     public static final String TRACE_HEADER = "X-Trace-Id";
     public static final String TRACE_MDC_KEY = "traceId";
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
         String traceId = request.getHeader(TRACE_HEADER);
         if (!StringUtils.hasText(traceId)) {
             traceId = UUID.randomUUID().toString().replace("-", "");

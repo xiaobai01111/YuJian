@@ -5,7 +5,7 @@
         <!-- Toolbar -->
         <div class="flex flex-wrap justify-between items-center mb-4 gap-4 flex-none">
           <div class="flex flex-wrap gap-2">
-            <button class="btn btn-primary btn-sm gap-2 font-normal" @click="openFormModal()">
+            <button v-if="canAdd" class="btn btn-primary btn-sm gap-2 font-normal" @click="openFormModal()">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
@@ -20,6 +20,24 @@
           </div>
 
           <div class="flex gap-2">
+            <button v-if="canImport" class="btn btn-outline btn-sm gap-2 font-normal" @click="handleImportClick">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12v7m0 0l-3-3m3 3l3-3M8 12h8M12 3v9" />
+              </svg>
+              导入
+            </button>
+            <button v-if="canExport" class="btn btn-outline btn-sm gap-2 font-normal" @click="handleExport">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-3-3m3 3l3-3M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+              </svg>
+              导出
+            </button>
+            <button v-if="canSync" class="btn btn-outline btn-sm gap-2 font-normal" @click="handleSync">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              同步
+            </button>
             <button class="btn btn-circle btn-ghost btn-sm" @click="() => fetchDeptTree()">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -27,6 +45,8 @@
             </button>
           </div>
         </div>
+
+        <input ref="importInputRef" type="file" class="hidden" accept=".xlsx,.xls" @change="handleImportChange" />
 
         <div class="flex flex-wrap items-center gap-2 mb-4 flex-none">
           <div class="form-control">
@@ -73,6 +93,7 @@
                   :dept="dept"
                   :level="0"
                   :expanded-ids="expandedIds"
+                  :permissions="rowPermissions"
                   @toggle-expand="toggleExpand"
                   @edit="openFormModal"
                   @delete="handleDelete"
@@ -173,7 +194,7 @@
               value="系统部门（顶级）"
               disabled
             />
-            <select v-else v-model="form.parentId" class="select select-bordered w-full">
+            <select v-else v-model="form.parentId" class="select select-bordered w-full" :disabled="isEdit && !canMove">
               <option v-for="dept in flatDeptList" :key="dept.id" :value="dept.id">
                 {{ '　'.repeat(dept.level) + dept.deptName }}
               </option>
@@ -200,7 +221,7 @@
             </div>
             <div class="form-control w-full">
               <label class="label"><span class="label-text font-medium">排序</span></label>
-              <input type="number" v-model="form.sortOrder" class="input input-bordered w-full" />
+              <input type="number" v-model="form.sortOrder" class="input input-bordered w-full" :disabled="isEdit && !canSort" />
             </div>
           </div>
           <div class="form-control w-full">
@@ -237,12 +258,20 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, defineComponent, h, type PropType } from 'vue'
-import { getDeptTree, createDept, updateDept, deleteDeptWithStrategy, updateDeptStatus, getDeptUsers, type DeptVO, type DeptDTO, type DeptUserStrategy } from '@/api/system'
+import { getDeptTree, createDept, updateDept, deleteDeptWithStrategy, updateDeptStatus, getDeptUsers, importDepts, exportDepts, syncDepts, type DeptVO, type DeptDTO, type DeptUserStrategy } from '@/api/system'
 import type { UserVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
+import { useUserStore } from '@/stores/user'
 
 interface DeptNode extends DeptVO {
-  level?: number
+  level: number
+}
+
+interface DeptRowPermissions {
+  canEdit: boolean
+  canAdd: boolean
+  canDelete: boolean
+  canEditStatus: boolean
 }
 
 // --- Components ---
@@ -251,16 +280,17 @@ const DeptTreeRow = defineComponent({
   props: {
     dept: { type: Object as PropType<DeptVO>, required: true },
     level: { type: Number, default: 0 },
-    expandedIds: { type: Set as PropType<Set<number>>, required: true }
+    expandedIds: { type: Set as PropType<Set<number>>, required: true },
+    permissions: { type: Object as PropType<DeptRowPermissions>, required: true }
   },
   emits: ['toggle-expand', 'edit', 'delete', 'add-child', 'status-change'],
-  setup(props, { emit }) {
+  setup(props, { emit }): () => ReturnType<typeof h>[] {
     return () => {
       const hasChildren = props.dept.children && props.dept.children.length > 0
       const isExpanded = props.expandedIds.has(props.dept.id)
       const paddingLeft = `${props.level * 24 + 16}px`
 
-      const rows = []
+      const rows: Array<ReturnType<typeof h>> = []
       const cellBorder = 'border-bottom: 1px solid hsl(var(--b2) / 0.8); border-right: 1px solid hsl(var(--b2) / 0.8)'
       const cellBorderLast = 'border-bottom: 1px solid hsl(var(--b2) / 0.8)'
       
@@ -298,13 +328,14 @@ const DeptTreeRow = defineComponent({
             type: 'checkbox',
             class: 'toggle toggle-primary toggle-sm',
             checked: props.dept.status === 0,
+            disabled: !props.permissions.canEditStatus,
             onChange: () => emit('status-change', props.dept)
           })
         ]),
         h('td', { class: 'text-base-content/60 text-sm', style: cellBorder }, formatDate(props.dept.createdAt)),
         h('td', { style: cellBorderLast }, [
           h('div', { class: 'flex justify-center gap-2' }, [
-            h('button', {
+            props.permissions.canEdit ? h('button', {
               class: 'btn btn-square btn-xs bg-blue-50 text-blue-600 border-none hover:bg-blue-100',
               title: '编辑',
               onClick: () => emit('edit', props.dept)
@@ -312,8 +343,8 @@ const DeptTreeRow = defineComponent({
               h('svg', { class: 'h-3.5 w-3.5', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
                 h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' })
               ])
-            ]),
-            h('button', {
+            ]) : null,
+            props.permissions.canAdd ? h('button', {
               class: 'btn btn-square btn-xs bg-green-50 text-green-600 border-none hover:bg-green-100',
               title: '新增子部门',
               onClick: () => emit('add-child', null, props.dept.id)
@@ -321,8 +352,8 @@ const DeptTreeRow = defineComponent({
               h('svg', { class: 'h-3.5 w-3.5', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
                 h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 4v16m8-8H4' })
               ])
-            ]),
-            props.dept.id === SYSTEM_DEPT_ID ? null : h('button', {
+            ]) : null,
+            props.permissions.canDelete && props.dept.id !== SYSTEM_DEPT_ID ? h('button', {
               class: 'btn btn-square btn-xs bg-red-50 text-red-600 border-none hover:bg-red-100',
               title: '删除',
               onClick: () => emit('delete', props.dept)
@@ -330,7 +361,7 @@ const DeptTreeRow = defineComponent({
               h('svg', { class: 'h-3.5 w-3.5', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
                 h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' })
               ])
-            ])
+            ]) : null
           ])
         ])
       ]))
@@ -342,10 +373,11 @@ const DeptTreeRow = defineComponent({
             dept: child,
             level: props.level + 1,
             expandedIds: props.expandedIds,
+            permissions: props.permissions,
             onToggleExpand: (id: number) => emit('toggle-expand', id),
             onEdit: (d: DeptVO) => emit('edit', d),
             onDelete: (d: DeptVO) => emit('delete', d),
-            onAddChild: (_: any, parentId: number) => emit('add-child', null, parentId),
+            onAddChild: (_: unknown, parentId: number) => emit('add-child', null, parentId),
             onStatusChange: (d: DeptVO) => emit('status-change', d)
           }))
         }
@@ -405,6 +437,23 @@ const isExpanded = ref(false)
 const SYSTEM_DEPT_ID = 1
 const dialog = useDialog()
 const searchKeyword = ref('')
+const userStore = useUserStore()
+
+const canAdd = computed(() => userStore.hasPermission('system:dept:add'))
+const canEdit = computed(() => userStore.hasPermission('system:dept:edit'))
+const canDelete = computed(() => userStore.hasPermission('system:dept:delete'))
+const canMove = computed(() => userStore.hasPermission('system:dept:move'))
+const canSort = computed(() => userStore.hasPermission('system:dept:sort'))
+const canImport = computed(() => userStore.hasPermission('system:dept:import'))
+const canExport = computed(() => userStore.hasPermission('system:dept:export'))
+const canSync = computed(() => userStore.hasPermission('system:dept:sync'))
+
+const rowPermissions = computed<DeptRowPermissions>(() => ({
+  canEdit: canEdit.value,
+  canAdd: canAdd.value,
+  canDelete: canDelete.value,
+  canEditStatus: canEdit.value
+}))
 
 const form = reactive<DeptDTO>({
   parentId: SYSTEM_DEPT_ID,
@@ -418,6 +467,7 @@ const form = reactive<DeptDTO>({
 })
 const isEdit = ref(false)
 const currentId = ref<number>(0)
+const importInputRef = ref<HTMLInputElement | null>(null)
 
 // Flatten dept tree for parent select
 const flatDeptList = computed(() => {
@@ -441,13 +491,78 @@ onMounted(() => {
 const fetchDeptTree = async (preserveExpanded = false) => {
   loading.value = true
   try {
-    const res: any = await getDeptTree()
+    const res = await getDeptTree()
     deptTree.value = res || []
     applySearch(preserveExpanded)
   } catch (error) {
     console.error(error)
   } finally {
     loading.value = false
+  }
+}
+
+const handleExport = async () => {
+  if (!canExport.value) {
+    await dialog.alert('无权限导出部门')
+    return
+  }
+  try {
+    const res = await exportDepts()
+    const blob = new Blob([res as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '部门列表.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error(error)
+    await dialog.alert('导出失败')
+  }
+}
+
+const handleImportClick = () => {
+  if (!canImport.value) {
+    void dialog.alert('无权限导入部门')
+    return
+  }
+  importInputRef.value?.click()
+}
+
+const handleImportChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files || files.length === 0) return
+  const file = files[0]
+  const updateExisting = await dialog.confirm('若部门已存在，是否更新？', {
+    title: '导入部门',
+    confirmText: '更新',
+    cancelText: '跳过'
+  })
+  try {
+    const res = await importDepts(file, updateExisting)
+    await dialog.alert(res || '导入完成')
+    fetchDeptTree(true)
+  } catch (error: unknown) {
+    console.error(error)
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '导入失败')
+  } finally {
+    input.value = ''
+  }
+}
+
+const handleSync = async () => {
+  if (!canSync.value) {
+    await dialog.alert('无权限同步部门')
+    return
+  }
+  try {
+    const res = await syncDepts()
+    await dialog.alert(res || '同步完成')
+    fetchDeptTree(true)
+  } catch (error: unknown) {
+    console.error(error)
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '同步失败')
   }
 }
 
@@ -528,6 +643,10 @@ const filterDeptTree = (nodes: DeptVO[], keyword: string) => {
 
 const openFormModal = (dept?: DeptVO | null, parentId?: number) => {
   if (dept) {
+    if (!canEdit.value) {
+      void dialog.alert('无权限编辑部门')
+      return
+    }
     isEdit.value = true
     currentId.value = dept.id
     form.parentId = dept.parentId === 0 ? SYSTEM_DEPT_ID : dept.parentId
@@ -539,6 +658,10 @@ const openFormModal = (dept?: DeptVO | null, parentId?: number) => {
     form.status = dept.status
     form.dataScope = dept.dataScope ?? 3
   } else {
+    if (!canAdd.value) {
+      void dialog.alert('无权限新增部门')
+      return
+    }
     isEdit.value = false
     form.parentId = parentId || SYSTEM_DEPT_ID
     form.deptName = ''
@@ -556,6 +679,14 @@ const openFormModal = (dept?: DeptVO | null, parentId?: number) => {
 const submitForm = async () => {
   if (!form.deptName) {
     await dialog.alert('请输入部门名称')
+    return
+  }
+  if (isEdit.value && !canEdit.value) {
+    await dialog.alert('无权限编辑部门')
+    return
+  }
+  if (!isEdit.value && !canAdd.value) {
+    await dialog.alert('无权限新增部门')
     return
   }
   submitting.value = true
@@ -584,6 +715,10 @@ const deleteStrategy = ref<DeptUserStrategy>('UNASSIGN')
 const deleteReason = ref('')
 
 const handleDelete = async (dept: DeptVO) => {
+  if (!canDelete.value) {
+    await dialog.alert('无权限删除部门')
+    return
+  }
   if (dept.children && dept.children.length > 0) {
     await dialog.alert('存在子部门，无法删除，请先删除或转移子部门')
     return
@@ -595,7 +730,7 @@ const handleDelete = async (dept: DeptVO) => {
   showDeleteModal.value = true
   
   try {
-    const res: any = await getDeptUsers(dept.id)
+    const res = await getDeptUsers(dept.id)
     deleteUsers.value = res || []
   } catch (error) {
     console.error(error)
@@ -625,14 +760,18 @@ const confirmDelete = async () => {
     })
     closeDeleteModal()
     fetchDeptTree(true)
-  } catch (error: any) {
-    await dialog.alert(error?.response?.data?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '删除失败')
   } finally {
     deleteLoading.value = false
   }
 }
 
 const handleStatusChange = async (dept: DeptVO) => {
+  if (!canEdit.value) {
+    await dialog.alert('无权限修改部门状态')
+    return
+  }
   const newStatus = dept.status === 0 ? 1 : 0
   const actionName = newStatus === 1 ? '停用' : '启用'
   
@@ -644,8 +783,8 @@ const handleStatusChange = async (dept: DeptVO) => {
   try {
     await updateDeptStatus(dept.id, newStatus)
     fetchDeptTree(true)
-  } catch (error: any) {
-    await dialog.alert(error?.response?.data?.message || '操作失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.response?.data?.message || '操作失败')
     fetchDeptTree(true)
   }
 }

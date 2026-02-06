@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
+@SuppressWarnings("serial")
 @TableName(value = "campus_heroes", autoResultMap = true)
 public class CampusHero implements Serializable {
 

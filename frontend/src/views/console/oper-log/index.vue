@@ -113,7 +113,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, reactive } from 'vue'
-import { clearOperLogs, deleteOperLog, exportOperLogs, getOperLogList, type OperLogVO } from '@/api/system'
+import { clearOperLogs, deleteOperLog, exportOperLogs, getOperLogList, type OperLogQuery, type OperLogVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
 
 const loading = ref(false)
@@ -174,7 +174,7 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const params: any = {
+    const params: OperLogQuery = {
       page: page.value,
       size: pageSize.value
     }
@@ -193,12 +193,12 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
     } else {
       hasMore.value = records.length >= pageSize.value
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!append) {
       logList.value = []
       total.value = 0
     }
-    await dialog.alert(error?.message || error?.response?.data?.message || '获取操作日志失败')
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '获取操作日志失败')
   } finally {
     append ? (loadingMore.value = false) : (loading.value = false)
   }
@@ -234,8 +234,8 @@ const handleDelete = async (log: OperLogVO) => {
   try {
     await deleteOperLog(log.id)
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '删除失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '删除失败')
   }
 }
 
@@ -244,8 +244,8 @@ const handleClear = async () => {
   try {
     await clearOperLogs()
     fetchData({ reset: true })
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '清空失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '清空失败')
   }
 }
 
@@ -259,8 +259,8 @@ const handleExport = async () => {
     link.download = '操作日志.xlsx'
     link.click()
     window.URL.revokeObjectURL(url)
-  } catch (error: any) {
-    await dialog.alert(error?.message || error?.response?.data?.message || '导出失败')
+  } catch (error: unknown) {
+    await dialog.alert((error as ApiErrorLike)?.message || (error as ApiErrorLike)?.response?.data?.message || '导出失败')
   }
 }
 
@@ -269,7 +269,7 @@ const formatDate = (dateStr?: string) => {
   return new Date(dateStr).toLocaleString()
 }
 
-const formatJson = (value: any) => {
+const formatJson = (value: unknown) => {
   if (value === null || value === undefined) return '-'
   if (typeof value === 'string') return value
   try {
