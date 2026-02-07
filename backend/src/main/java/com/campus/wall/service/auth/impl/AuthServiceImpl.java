@@ -25,6 +25,7 @@ import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.auth.AuthService;
 import com.campus.wall.service.security.RateLimitService;
 import com.campus.wall.service.system.AuthRuleService;
+import com.campus.wall.service.system.BlocklistService;
 import com.campus.wall.service.system.LoginLogService;
 import com.campus.wall.service.system.SysConfigService;
 import com.campus.wall.vo.auth.LoginVO;
@@ -55,6 +56,7 @@ public class AuthServiceImpl implements AuthService {
     private final IdentityVerificationMapper verificationMapper;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
     private final AuthRuleService authRuleService;
+    private final BlocklistService blocklistService;
     private final LoginLogService loginLogService;
     private final RateLimitService rateLimitService;
     private final SysConfigService sysConfigService;
@@ -63,6 +65,7 @@ public class AuthServiceImpl implements AuthService {
     private static final String EMAIL_CODE_PREFIX = "campus:verify:email:";
     private static final String REGISTER_EMAIL_CODE_PREFIX = "campus:register:email:";
     private static final long EMAIL_CODE_TTL = 5 * 60; // 5分钟
+    private static final String BLOCKLIST_TYPE_USER = "USER";
 
     @Override
     @Transactional
@@ -160,6 +163,10 @@ public class AuthServiceImpl implements AuthService {
 
         // 检查封禁状态
         if (user.getStatus() == 1) {
+            recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.USER_BANNED.getMessage());
+            throw new BusinessException(ResultCode.USER_BANNED);
+        }
+        if (blocklistService.isBlocked(BLOCKLIST_TYPE_USER, String.valueOf(user.getId()))) {
             recordLoginLog(user.getId(), user.getUsername(), 1, ResultCode.USER_BANNED.getMessage());
             throw new BusinessException(ResultCode.USER_BANNED);
         }
