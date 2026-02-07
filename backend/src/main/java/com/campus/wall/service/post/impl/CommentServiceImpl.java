@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.util.BoardUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
@@ -34,7 +35,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -61,6 +65,7 @@ public class CommentServiceImpl implements CommentService {
     private final RateLimitService rateLimitService;
     private final DataScopeService dataScopeService;
     private final OperLogService operLogService;
+    private final PlatformTransactionManager transactionManager;
     private final StringRedisTemplate redisTemplate;
 
     // 评论状态：0正常 1已删除
@@ -150,6 +155,9 @@ public class CommentServiceImpl implements CommentService {
         if (comment == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "评论不存在");
         }
+        if (comment.getStatus() != null && comment.getStatus() == STATUS_DELETED) {
+            return;
+        }
 
         // 权限校验：作者或管理员可删除
         boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
@@ -196,7 +204,6 @@ public class CommentServiceImpl implements CommentService {
     }
 
     @Override
-    @Transactional
     public void deleteCommentsByAdmin(CommentBatchDeleteDTO dto) {
         if (dto == null || dto.getIds() == null || dto.getIds().isEmpty()) {
             return;
@@ -215,7 +222,7 @@ public class CommentServiceImpl implements CommentService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "请填写操作原因");
         }
 
-        Map<Long, Integer> postDecrement = new HashMap<>();
+        List<Comment> deletable = new ArrayList<>();
         for (Comment comment : comments) {
             if (comment == null) {
                 continue;
@@ -230,15 +237,59 @@ public class CommentServiceImpl implements CommentService {
             if (comment.getStatus() != null && comment.getStatus() == STATUS_DELETED) {
                 continue;
             }
-            comment.setStatus(STATUS_DELETED);
-            commentMapper.updateById(comment);
-            postDecrement.merge(comment.getPostId(), 1, Integer::sum);
-            operLogService.log(operatorId, null, "comment", comment.getId(), "delete", dto.getReason(), null, null, null);
+            deletable.add(comment);
         }
-        for (Map.Entry<Long, Integer> entry : postDecrement.entrySet()) {
-            postMapper.updateCommentCount(entry.getKey(), -entry.getValue());
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        List<Long> failedIds = new ArrayList<>();
+        for (List<Comment> batch : partitionList(deletable, 200)) {
+            try {
+                txTemplate.execute(status -> {
+                    List<Long> batchIds = new ArrayList<>();
+                    Map<Long, Integer> postDecrement = new HashMap<>();
+                    for (Comment comment : batch) {
+                        batchIds.add(comment.getId());
+                        postDecrement.merge(comment.getPostId(), 1, Integer::sum);
+                        operLogService.log(operatorId, null, "comment", comment.getId(), "delete", dto.getReason(), null, null, null);
+                    }
+                    if (!batchIds.isEmpty()) {
+                        commentMapper.update(
+                            null,
+                            new LambdaUpdateWrapper<Comment>()
+                                .set(Comment::getStatus, STATUS_DELETED)
+                                .in(Comment::getId, batchIds)
+                                .ne(Comment::getStatus, STATUS_DELETED)
+                        );
+                    }
+                    for (Map.Entry<Long, Integer> entry : postDecrement.entrySet()) {
+                        postMapper.updateCommentCount(entry.getKey(), -entry.getValue());
+                    }
+                    return null;
+                });
+            } catch (Exception ex) {
+                for (Comment comment : batch) {
+                    failedIds.add(comment.getId());
+                }
+                log.warn("批量删除评论失败 size={} reason={}", batch.size(), ex.getMessage());
+            }
+        }
+        if (!failedIds.isEmpty()) {
+            throw new BusinessException("部分评论删除失败：" + failedIds.size() + " 条");
         }
         log.info("管理员批量删除评论: {}", dto.getIds().size());
+    }
+
+    private <T> List<List<T>> partitionList(List<T> source, int batchSize) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        int size = source.size();
+        List<List<T>> batches = new ArrayList<>((size + batchSize - 1) / batchSize);
+        for (int start = 0; start < size; start += batchSize) {
+            int end = Math.min(size, start + batchSize);
+            batches.add(source.subList(start, end));
+        }
+        return batches;
     }
 
     @Override
@@ -358,7 +409,7 @@ public class CommentServiceImpl implements CommentService {
                 })
                 .collect(Collectors.toList());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     @Override
@@ -405,7 +456,7 @@ public class CommentServiceImpl implements CommentService {
                 })
                 .collect(Collectors.toList());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     @Override
@@ -468,12 +519,20 @@ public class CommentServiceImpl implements CommentService {
         if (scope.isAllowAll()) {
             return;
         }
-        List<Long> allowedUserIds = dataScopeService.resolveAllowedUserIds(scope, userId);
-        if (allowedUserIds.isEmpty()) {
-            wrapper.eq(Comment::getId, -1L);
+        String deptScopeSql = dataScopeService.buildUserScopeExistsSql(scope, "comments.user_id");
+        if (deptScopeSql == null) {
+            if (scope.isAllowSelf() && userId != null) {
+                wrapper.eq(Comment::getUserId, userId);
+            } else {
+                wrapper.eq(Comment::getId, -1L);
+            }
             return;
         }
-        wrapper.in(Comment::getUserId, allowedUserIds);
+        if (scope.isAllowSelf() && userId != null) {
+            wrapper.and(w -> w.eq(Comment::getUserId, userId).or().apply(deptScopeSql));
+        } else {
+            wrapper.apply(deptScopeSql);
+        }
     }
 
     private List<CommentVO> buildCommentTree(List<Comment> comments, Post post, boolean isAnonymousPost, Map<Long, User> userMap) {

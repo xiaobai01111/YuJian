@@ -156,6 +156,7 @@ class AuthControllerIntegrationTest extends IntegrationTestBase {
         dto.setUsername(createUsername());
         dto.setPassword("Password@1");
         dto.setConfirmPassword("Password@2");
+        dto.setEmail("test_" + UUID.randomUUID().toString().substring(0, 8) + "@edu.cn");
 
         JsonNode result = postJson("/api/v1/auth/register", dto);
         assertThat(result.path("code").asInt(), not(200));
@@ -167,6 +168,7 @@ class AuthControllerIntegrationTest extends IntegrationTestBase {
         dto.setUsername("admin");
         dto.setPassword("Password@1");
         dto.setConfirmPassword("Password@1");
+        dto.setEmail("duplicate_" + UUID.randomUUID().toString().substring(0, 8) + "@edu.cn");
 
         JsonNode result = postJson("/api/v1/auth/register", dto);
         assertThat(result.path("code").asInt(), not(200));

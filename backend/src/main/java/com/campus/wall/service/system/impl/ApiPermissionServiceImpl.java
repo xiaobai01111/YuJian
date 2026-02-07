@@ -44,6 +44,7 @@ public class ApiPermissionServiceImpl implements ApiPermissionService {
     public SysApiPermission create(ApiPermissionDTO dto) {
         SysApiPermission entity = new SysApiPermission();
         fill(entity, dto);
+        assertUniqueRule(null, entity.getUrl(), entity.getHttpMethod());
         apiPermissionMapper.insert(entity);
         permissionService.refreshCache();
         return entity;
@@ -56,6 +57,7 @@ public class ApiPermissionServiceImpl implements ApiPermissionService {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
         fill(entity, dto);
+        assertUniqueRule(entity.getId(), entity.getUrl(), entity.getHttpMethod());
         apiPermissionMapper.updateById(entity);
         permissionService.refreshCache();
         return entity;
@@ -79,5 +81,20 @@ public class ApiPermissionServiceImpl implements ApiPermissionService {
         entity.setPermission(dto.getPermission().trim());
         entity.setDescription(StringUtils.hasText(dto.getDescription()) ? dto.getDescription().trim() : null);
         entity.setStatus(dto.getStatus() == null || dto.getStatus());
+    }
+
+    private void assertUniqueRule(Long id, String url, String method) {
+        if (!StringUtils.hasText(url) || !StringUtils.hasText(method)) {
+            return;
+        }
+        Long count = apiPermissionMapper.selectCount(
+            new LambdaQueryWrapper<SysApiPermission>()
+                .eq(SysApiPermission::getUrl, url)
+                .eq(SysApiPermission::getHttpMethod, method)
+                .ne(id != null, SysApiPermission::getId, id)
+        );
+        if (count != null && count > 0) {
+            throw new BusinessException("相同请求方式和路径的权限规则已存在");
+        }
     }
 }

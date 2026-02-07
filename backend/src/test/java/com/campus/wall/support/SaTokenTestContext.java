@@ -1,5 +1,8 @@
 package com.campus.wall.support;
 
+import cn.dev33.satoken.SaManager;
+import cn.dev33.satoken.context.SaTokenContext;
+import cn.dev33.satoken.context.SaTokenContextForThreadLocal;
 import cn.dev33.satoken.context.SaTokenContextForThreadLocalStorage;
 import cn.dev33.satoken.context.model.SaRequest;
 import cn.dev33.satoken.context.model.SaResponse;
@@ -11,10 +14,14 @@ import java.util.List;
 import java.util.Map;
 
 public final class SaTokenTestContext {
+    private static final ThreadLocal<SaTokenContext> PREVIOUS_CONTEXT = new ThreadLocal<>();
+
     private SaTokenTestContext() {
     }
 
     public static void bind() {
+        PREVIOUS_CONTEXT.set(SaManager.getSaTokenContext());
+        SaManager.setSaTokenContext(new SaTokenContextForThreadLocal());
         SaTokenContextForThreadLocalStorage.setBox(
                 new SimpleRequest(),
                 new SimpleResponse(),
@@ -24,6 +31,11 @@ public final class SaTokenTestContext {
 
     public static void clear() {
         SaTokenContextForThreadLocalStorage.clearBox();
+        SaTokenContext previousContext = PREVIOUS_CONTEXT.get();
+        if (previousContext != null) {
+            SaManager.setSaTokenContext(previousContext);
+        }
+        PREVIOUS_CONTEXT.remove();
     }
 
     private static final class SimpleRequest implements SaRequest {

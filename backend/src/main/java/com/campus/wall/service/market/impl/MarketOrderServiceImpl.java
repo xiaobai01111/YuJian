@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.util.BoardUtil;
 import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
@@ -24,11 +25,16 @@ import com.campus.wall.vo.post.PostVO;
 import com.campus.wall.vo.user.UserVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -92,7 +98,11 @@ public class MarketOrderServiceImpl implements MarketOrderService {
         order.setBuyerConfirmed(false);
         order.setSellerConfirmed(false);
 
-        marketOrderMapper.insert(order);
+        try {
+            marketOrderMapper.insert(order);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "该商品已有进行中的订单");
+        }
 
         log.info("买家 {} 创建订单: postId={}, orderId={}", buyerId, dto.getPostId(), order.getId());
         return order.getId();
@@ -113,11 +123,23 @@ public class MarketOrderServiceImpl implements MarketOrderService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "订单状态不允许确认");
         }
 
-        order.setBuyerConfirmed(true);
-        marketOrderMapper.updateById(order);
+        int updated = marketOrderMapper.update(
+            null,
+            new LambdaUpdateWrapper<MarketOrder>()
+                .eq(MarketOrder::getId, orderId)
+                .eq(MarketOrder::getStatus, STATUS_PENDING)
+                .eq(MarketOrder::getBuyerConfirmed, false)
+                .set(MarketOrder::getBuyerConfirmed, true)
+        );
+        if (updated == 0) {
+            MarketOrder latest = getOrderOrThrow(orderId);
+            if (latest.getStatus() != STATUS_PENDING) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "订单状态不允许确认");
+            }
+        }
 
         // 检查是否双方都已确认
-        checkAndCompleteOrder(order);
+        checkAndCompleteOrder(orderId);
 
         log.info("买家 {} 确认订单: {}", userId, orderId);
     }
@@ -137,11 +159,23 @@ public class MarketOrderServiceImpl implements MarketOrderService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "订单状态不允许确认");
         }
 
-        order.setSellerConfirmed(true);
-        marketOrderMapper.updateById(order);
+        int updated = marketOrderMapper.update(
+            null,
+            new LambdaUpdateWrapper<MarketOrder>()
+                .eq(MarketOrder::getId, orderId)
+                .eq(MarketOrder::getStatus, STATUS_PENDING)
+                .eq(MarketOrder::getSellerConfirmed, false)
+                .set(MarketOrder::getSellerConfirmed, true)
+        );
+        if (updated == 0) {
+            MarketOrder latest = getOrderOrThrow(orderId);
+            if (latest.getStatus() != STATUS_PENDING) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "订单状态不允许确认");
+            }
+        }
 
         // 检查是否双方都已确认
-        checkAndCompleteOrder(order);
+        checkAndCompleteOrder(orderId);
 
         log.info("卖家 {} 确认订单: {}", userId, orderId);
     }
@@ -161,8 +195,16 @@ public class MarketOrderServiceImpl implements MarketOrderService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "订单状态不允许取消");
         }
 
-        order.setStatus(STATUS_CANCELLED);
-        marketOrderMapper.updateById(order);
+        int updated = marketOrderMapper.update(
+            null,
+            new LambdaUpdateWrapper<MarketOrder>()
+                .eq(MarketOrder::getId, orderId)
+                .eq(MarketOrder::getStatus, STATUS_PENDING)
+                .set(MarketOrder::getStatus, STATUS_CANCELLED)
+        );
+        if (updated == 0) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "订单状态不允许取消");
+        }
 
         log.info("用户 {} 取消订单: {}", userId, orderId);
     }
@@ -189,11 +231,9 @@ public class MarketOrderServiceImpl implements MarketOrderService {
                         .orderByDesc(MarketOrder::getCreatedAt)
         );
 
-        List<MarketOrderVO> records = result.getRecords().stream()
-                .map(this::toOrderVO)
-                .collect(Collectors.toList());
+        List<MarketOrderVO> records = toOrderVOList(result.getRecords());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     @Override
@@ -207,23 +247,34 @@ public class MarketOrderServiceImpl implements MarketOrderService {
                         .orderByDesc(MarketOrder::getCreatedAt)
         );
 
-        List<MarketOrderVO> records = result.getRecords().stream()
-                .map(this::toOrderVO)
-                .collect(Collectors.toList());
+        List<MarketOrderVO> records = toOrderVOList(result.getRecords());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
-    private void checkAndCompleteOrder(MarketOrder order) {
+    private void checkAndCompleteOrder(Long orderId) {
         // 重新查询最新状态
-        order = marketOrderMapper.selectById(order.getId());
+        MarketOrder order = marketOrderMapper.selectById(orderId);
+        if (order == null) {
+            return;
+        }
 
         if (Boolean.TRUE.equals(order.getBuyerConfirmed()) 
                 && Boolean.TRUE.equals(order.getSellerConfirmed())) {
             // 双方都确认，订单完成
-            order.setStatus(STATUS_COMPLETED);
-            order.setCompletedAt(LocalDateTime.now());
-            marketOrderMapper.updateById(order);
+            int updated = marketOrderMapper.update(
+                null,
+                new LambdaUpdateWrapper<MarketOrder>()
+                    .eq(MarketOrder::getId, orderId)
+                    .eq(MarketOrder::getStatus, STATUS_PENDING)
+                    .eq(MarketOrder::getBuyerConfirmed, true)
+                    .eq(MarketOrder::getSellerConfirmed, true)
+                    .set(MarketOrder::getStatus, STATUS_COMPLETED)
+                    .set(MarketOrder::getCompletedAt, LocalDateTime.now())
+            );
+            if (updated == 0) {
+                return;
+            }
 
             // 双方都获得信用分 +5
             creditService.rewardForTransaction(order.getBuyerId());
@@ -242,7 +293,55 @@ public class MarketOrderServiceImpl implements MarketOrderService {
         return order;
     }
 
+    private List<MarketOrderVO> toOrderVOList(List<MarketOrder> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> postIdSet = new HashSet<>();
+        Set<Long> userIdSet = new HashSet<>();
+        for (MarketOrder order : orders) {
+            if (order == null) {
+                continue;
+            }
+            if (order.getPostId() != null) {
+                postIdSet.add(order.getPostId());
+            }
+            if (order.getSellerId() != null) {
+                userIdSet.add(order.getSellerId());
+            }
+            if (order.getBuyerId() != null) {
+                userIdSet.add(order.getBuyerId());
+            }
+        }
+        Map<Long, Post> postMap = postIdSet.isEmpty()
+            ? Map.of()
+            : postMapper.selectBatchIds(new ArrayList<>(postIdSet)).stream()
+                .collect(Collectors.toMap(Post::getId, post -> post, (a, b) -> a));
+        Map<Long, User> userMap = userIdSet.isEmpty()
+            ? Map.of()
+            : userMapper.selectBatchIds(new ArrayList<>(userIdSet)).stream()
+                .collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
+        List<MarketOrderVO> result = new ArrayList<>(orders.size());
+        for (MarketOrder order : orders) {
+            if (order == null) {
+                continue;
+            }
+            result.add(buildOrderVO(order,
+                order.getPostId() == null ? null : postMap.get(order.getPostId()),
+                order.getSellerId() == null ? null : userMap.get(order.getSellerId()),
+                order.getBuyerId() == null ? null : userMap.get(order.getBuyerId())));
+        }
+        return result;
+    }
+
     private MarketOrderVO toOrderVO(MarketOrder order) {
+        Post post = order.getPostId() == null ? null : postMapper.selectById(order.getPostId());
+        User seller = order.getSellerId() == null ? null : userMapper.selectById(order.getSellerId());
+        User buyer = order.getBuyerId() == null ? null : userMapper.selectById(order.getBuyerId());
+        return buildOrderVO(order, post, seller, buyer);
+    }
+
+    private MarketOrderVO buildOrderVO(MarketOrder order, Post post, User seller, User buyer) {
         MarketOrderVO vo = new MarketOrderVO();
         vo.setId(order.getId());
         vo.setPrice(order.getPrice());
@@ -253,7 +352,6 @@ public class MarketOrderServiceImpl implements MarketOrderService {
         vo.setCompletedAt(order.getCompletedAt());
 
         // 帖子信息
-        Post post = postMapper.selectById(order.getPostId());
         if (post != null) {
             PostVO postVO = new PostVO();
             postVO.setId(post.getId());
@@ -263,7 +361,6 @@ public class MarketOrderServiceImpl implements MarketOrderService {
         }
 
         // 卖家信息
-        User seller = userMapper.selectById(order.getSellerId());
         if (seller != null) {
             UserVO sellerVO = new UserVO();
             sellerVO.setId(seller.getId());
@@ -274,7 +371,6 @@ public class MarketOrderServiceImpl implements MarketOrderService {
         }
 
         // 买家信息
-        User buyer = userMapper.selectById(order.getBuyerId());
         if (buyer != null) {
             UserVO buyerVO = new UserVO();
             buyerVO.setId(buyer.getId());

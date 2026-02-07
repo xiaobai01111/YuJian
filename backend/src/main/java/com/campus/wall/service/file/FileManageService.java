@@ -16,6 +16,10 @@ public interface FileManageService {
 
     List<FileCategoryVO> listFileCategories();
 
+    PageResult<FileVO> queryResources(FileQueryDTO query);
+
+    List<FileCategoryVO> listResourceCategories();
+
     PageResult<FileVO> queryGallery(FileQueryDTO query);
 
     List<FileCategoryVO> listGalleryCategories();

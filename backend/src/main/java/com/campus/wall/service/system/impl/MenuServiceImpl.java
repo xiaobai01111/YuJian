@@ -1,6 +1,8 @@
 package com.campus.wall.service.system.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.campus.wall.common.BusinessException;
+import com.campus.wall.common.ResultCode;
 import com.campus.wall.util.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.wall.entity.system.SysMenu;
@@ -194,7 +196,7 @@ public class MenuServiceImpl implements MenuService {
         validateMenuPath(menuVO);
         SysMenu menu = sysMenuMapper.selectById(menuId);
         if (menu == null) {
-            throw new RuntimeException("菜单不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "菜单不存在");
         }
         BeanUtils.copyProperties(menuVO, menu);
         menu.setId(menuId);
@@ -217,7 +219,7 @@ public class MenuServiceImpl implements MenuService {
         // 顶级菜单（parentId为0或null）必须以/console开头
         if (parentId == null || parentId == 0L) {
             if (!path.startsWith("/console")) {
-                throw new RuntimeException("控制台顶级菜单路径必须以 /console 开头，当前路径: " + path);
+                throw new BusinessException(ResultCode.BAD_REQUEST, "控制台顶级菜单路径必须以 /console 开头");
             }
         } else {
             // 子菜单支持两种格式：
@@ -225,13 +227,13 @@ public class MenuServiceImpl implements MenuService {
             // 2) 相对路径：xxx/yyy
             // 其余绝对路径（如 /user）判定为非法，避免误挂到根级别。
             if (path.startsWith("/") && !path.startsWith("/console/")) {
-                throw new RuntimeException("子菜单绝对路径必须以 /console/ 开头，当前路径: " + path);
+                throw new BusinessException(ResultCode.BAD_REQUEST, "子菜单绝对路径必须以 /console/ 开头");
             }
         }
         
         // 路径长度限制
         if (path.length() > 200) {
-            throw new RuntimeException("菜单路径过长（最大200字符）");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "菜单路径过长（最大200字符）");
         }
     }
 
@@ -243,7 +245,7 @@ public class MenuServiceImpl implements MenuService {
                         .eq(SysMenu::getParentId, menuId)
         );
         if (childCount > 0) {
-            throw new RuntimeException("存在子菜单，无法删除");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "存在子菜单，无法删除");
         }
         sysMenuMapper.deleteById(menuId);
     }

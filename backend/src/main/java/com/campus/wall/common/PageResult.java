@@ -2,6 +2,7 @@ package com.campus.wall.common;
 
 import lombok.Data;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 
@@ -12,6 +13,7 @@ import java.util.List;
 @SuppressWarnings("serial")
 public class PageResult<T> implements Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private List<T> records;
@@ -26,9 +28,10 @@ public class PageResult<T> implements Serializable {
     public PageResult(List<T> records, long total, long size, long current) {
         this.records = records;
         this.total = total;
-        this.size = size;
+        long safeSize = size > 0 ? size : 1;
+        this.size = safeSize;
         this.current = current;
-        this.pages = (total + size - 1) / size;
+        this.pages = (total + safeSize - 1) / safeSize;
     }
 
     public static <T> PageResult<T> of(List<T> records, long total, long size, long current) {

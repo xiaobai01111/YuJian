@@ -2,8 +2,10 @@ package com.campus.wall.controller.console;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
 import com.campus.wall.common.R;
+import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.system.OperLogQueryDTO;
 import com.campus.wall.entity.system.SysOperLog;
 import com.campus.wall.mapper.system.SysOperLogMapper;
@@ -37,7 +39,7 @@ public class OperLogController {
     private final SysOperLogMapper operLogMapper;
 
     @GetMapping
-    public R<PageResult<OperLogVO>> list(OperLogQueryDTO query) {
+    public R<PageResult<OperLogVO>> list(@jakarta.validation.Valid OperLogQueryDTO query) {
         LambdaQueryWrapper<SysOperLog> wrapper = buildWrapper(query);
         wrapper.orderByDesc(SysOperLog::getCreatedAt);
         Page<SysOperLog> page = operLogMapper.selectPage(new Page<>(query.getPage(), query.getSize()), wrapper);
@@ -94,7 +96,7 @@ public class OperLogController {
             writer.flush(response.getOutputStream(), true);
             writer.close();
         } catch (IOException e) {
-            throw new RuntimeException("导出失败");
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "导出失败");
         }
     }
 
@@ -106,6 +108,9 @@ public class OperLogController {
 
     private LambdaQueryWrapper<SysOperLog> buildWrapper(OperLogQueryDTO query) {
         LambdaQueryWrapper<SysOperLog> wrapper = new LambdaQueryWrapper<>();
+        if (query == null) {
+            return wrapper;
+        }
         if (StringUtils.hasText(query.getOperatorName())) {
             wrapper.like(SysOperLog::getOperatorName, query.getOperatorName());
         }
@@ -116,13 +121,21 @@ public class OperLogController {
             wrapper.eq(SysOperLog::getAction, query.getAction());
         }
         if (StringUtils.hasText(query.getStartTime())) {
-            LocalDate start = LocalDate.parse(query.getStartTime());
+            LocalDate start = parseDateOrThrow(query.getStartTime(), "开始时间");
             wrapper.ge(SysOperLog::getCreatedAt, start.atStartOfDay());
         }
         if (StringUtils.hasText(query.getEndTime())) {
-            LocalDate end = LocalDate.parse(query.getEndTime());
+            LocalDate end = parseDateOrThrow(query.getEndTime(), "结束时间");
             wrapper.le(SysOperLog::getCreatedAt, end.plusDays(1).atStartOfDay().minusNanos(1));
         }
         return wrapper;
+    }
+
+    private LocalDate parseDateOrThrow(String value, String label) {
+        try {
+            return LocalDate.parse(value);
+        } catch (Exception ex) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, label + "格式错误");
+        }
     }
 }

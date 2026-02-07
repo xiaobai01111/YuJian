@@ -58,7 +58,7 @@ mybatis-plus:
       logic-not-delete-value: 0
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 # Sa-Token Configuration
 sa-token:
@@ -73,12 +73,6 @@ sa-token:
   is-read-cookie: false
   token-prefix: Bearer
 
-# Knife4j API Documentation
-knife4j:
-  enable: true
-  setting:
-    language: zh_cn
-
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -88,8 +82,9 @@ springdoc:
 # Logging Configuration
 logging:
   level:
-    com.campus.wall: debug
+    com.campus.wall: info
     org.springframework.web: info
+    org.mybatis: warn
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
 
@@ -116,14 +111,26 @@ app:
     cleanup-interval-ms: ${ANON_CACHE_CLEAN_INTERVAL_MS:600000}
   notice:
     sanitize-on-startup: ${NOTICE_SANITIZE_ON_STARTUP:false}
+  content-moderation:
+    image-audit-enabled: ${IMAGE_AUDIT_ENABLED:true}
+    image-audit-fail-closed: ${IMAGE_AUDIT_FAIL_CLOSED:true}
+    image-audit-api-url: ${IMAGE_AUDIT_API_URL:}
+    image-audit-api-token: ${IMAGE_AUDIT_API_TOKEN:}
+    image-audit-timeout-ms: ${IMAGE_AUDIT_TIMEOUT_MS:5000}
+    virus-scan-enabled: ${VIRUS_SCAN_ENABLED:true}
+    virus-scan-fail-closed: ${VIRUS_SCAN_FAIL_CLOSED:true}
+    clamav-host: ${CLAMAV_HOST:127.0.0.1}
+    clamav-port: ${CLAMAV_PORT:3310}
+    clamav-connect-timeout-ms: ${CLAMAV_CONNECT_TIMEOUT_MS:2000}
+    clamav-read-timeout-ms: ${CLAMAV_READ_TIMEOUT_MS:10000}
   security:
     # 加密密钥（用于SMTP密码等敏感信息加密，生产环境必须配置）
     crypto-key: ${CAMPUS_CRYPTO_KEY:}
     super-admin-role-key: ${SUPER_ADMIN_ROLE_KEY:console}
     api-public-permission-key: ${API_PUBLIC_PERMISSION_KEY:public}
     api-login-permission-key: ${API_LOGIN_PERMISSION_KEY:login}
-    api-default-mode: ${API_DEFAULT_MODE:login}
-    api-bootstrap-mode: ${API_BOOTSTRAP_MODE:login}
+    api-default-mode: ${API_DEFAULT_MODE:deny}
+    api-bootstrap-mode: ${API_BOOTSTRAP_MODE:deny}
     fail-fast-secrets: ${SECURITY_FAIL_FAST_SECRETS:true}
     fail-fast-permissions: ${SECURITY_FAIL_FAST_PERMISSIONS:true}
     permission-cache-ttl-seconds: ${PERMISSION_CACHE_TTL_SECONDS:1800}

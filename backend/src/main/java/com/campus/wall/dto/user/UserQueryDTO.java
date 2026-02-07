@@ -21,4 +21,5 @@ public class UserQueryDTO extends PageQueryDTO {
     private String loginDateStart;
     private String loginDateEnd;
     private Long lastId;
+    private String lastDeletedAt;
 }

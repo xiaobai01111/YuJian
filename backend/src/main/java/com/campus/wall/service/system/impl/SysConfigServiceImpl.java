@@ -1,6 +1,8 @@
 package com.campus.wall.service.system.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.campus.wall.common.BusinessException;
+import com.campus.wall.common.ResultCode;
 import com.campus.wall.constant.SysConfigKeys;
 import com.campus.wall.entity.system.SysConfig;
 import com.campus.wall.mapper.system.SysConfigMapper;
@@ -167,7 +169,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             }
         } catch (Exception e) {
             log.error("Failed to update {}", SysConfigKeys.EMAIL_ALLOWED_DOMAINS, e);
-            throw new RuntimeException("更新配置失败");
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "更新配置失败");
         }
     }
 
@@ -208,7 +210,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             }
         } catch (Exception e) {
             log.error("Failed to update {}", SysConfigKeys.STUDENT_ID_WHITELIST, e);
-            throw new RuntimeException("更新配置失败");
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "更新配置失败");
         }
     }
 
@@ -239,29 +241,29 @@ public class SysConfigServiceImpl implements SysConfigService {
         username = username == null ? "" : username.trim();
         Object portObj = config.get("port");
         if (portObj == null) {
-            throw new RuntimeException("SMTP端口必须是有效数字");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "SMTP端口必须是有效数字");
         }
         int port;
         try {
             port = portObj instanceof Number ? ((Number) portObj).intValue() : Integer.parseInt(String.valueOf(portObj));
         } catch (Exception e) {
-            throw new RuntimeException("SMTP端口必须是有效数字");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "SMTP端口必须是有效数字");
         }
         
         if (host.isBlank()) {
-            throw new RuntimeException("SMTP服务器地址不能为空");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "SMTP服务器地址不能为空");
         }
         if (host.length() > 255) {
-            throw new RuntimeException("SMTP服务器地址过长");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "SMTP服务器地址过长");
         }
         if (username.isBlank()) {
-            throw new RuntimeException("SMTP用户名不能为空");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "SMTP用户名不能为空");
         }
         if (username.length() > 255) {
-            throw new RuntimeException("SMTP用户名过长");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "SMTP用户名过长");
         }
         if (port < 1 || port > 65535) {
-            throw new RuntimeException("SMTP端口必须在1-65535范围内");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "SMTP端口必须在1-65535范围内");
         }
         
         saveConfig(SysConfigKeys.SMTP_HOST, host, "string", "SMTP服务器地址");
@@ -275,7 +277,7 @@ public class SysConfigServiceImpl implements SysConfigService {
         String fromName = toSafeString(config.get("fromName"));
         fromName = fromName == null ? "" : fromName.trim();
         if (fromName.length() > 100) {
-            throw new RuntimeException("发件人名称过长");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "发件人名称过长");
         }
         saveConfig(SysConfigKeys.SMTP_FROM_NAME, fromName, "string", "发件人名称");
         Object sslObj = config.getOrDefault("ssl", true);
@@ -296,7 +298,7 @@ public class SysConfigServiceImpl implements SysConfigService {
 
         SmtpConfigCache smtp = getCachedSmtpConfig();
         if (smtp.host() == null || smtp.host().isBlank() || smtp.username() == null || smtp.username().isBlank()) {
-            throw new RuntimeException("请先配置SMTP服务器信息");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请先配置SMTP服务器信息");
         }
         
         try {
@@ -313,7 +315,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             log.info("测试邮件发送成功: {}", maskEmail(email));
         } catch (Exception e) {
             log.error("发送测试邮件失败", e);
-            throw new RuntimeException("发送邮件失败: " + e.getMessage());
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "发送邮件失败");
         }
     }
 
@@ -436,7 +438,7 @@ public class SysConfigServiceImpl implements SysConfigService {
     public void updateEmailTemplates(Map<String, Object> templates) {
         // P2-1: 邮件模板强校验
         if (templates == null || templates.isEmpty()) {
-            throw new RuntimeException("邮件模板不能为空");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "邮件模板不能为空");
         }
         
         for (Map.Entry<String, Object> entry : templates.entrySet()) {
@@ -444,11 +446,11 @@ public class SysConfigServiceImpl implements SysConfigService {
             Object templateObj = entry.getValue();
             
             if (templateObj == null) {
-                throw new RuntimeException("模板 [" + templateName + "] 不能为空");
+                throw new BusinessException(ResultCode.BAD_REQUEST, "模板不能为空");
             }
             
             if (!(templateObj instanceof Map)) {
-                throw new RuntimeException("模板 [" + templateName + "] 格式错误，必须包含subject和body字段");
+                throw new BusinessException(ResultCode.BAD_REQUEST, "模板格式错误，必须包含subject和body字段");
             }
             
             Map<String, Object> template = (Map<String, Object>) templateObj;
@@ -456,17 +458,17 @@ public class SysConfigServiceImpl implements SysConfigService {
             Object bodyObj = template.get("body");
             
             if (!(subjectObj instanceof String subject) || subject.isBlank()) {
-                throw new RuntimeException("模板 [" + templateName + "] 缺少必填字段: subject");
+                throw new BusinessException(ResultCode.BAD_REQUEST, "模板缺少必填字段: subject");
             }
             if (!(bodyObj instanceof String body) || body.isBlank()) {
-                throw new RuntimeException("模板 [" + templateName + "] 缺少必填字段: body");
+                throw new BusinessException(ResultCode.BAD_REQUEST, "模板缺少必填字段: body");
             }
             
             if (subject.length() > 200) {
-                throw new RuntimeException("模板 [" + templateName + "] 的subject过长（最大200字符）");
+                throw new BusinessException(ResultCode.BAD_REQUEST, "模板subject过长（最大200字符）");
             }
             if (body.length() > 10000) {
-                throw new RuntimeException("模板 [" + templateName + "] 的body过长（最大10000字符）");
+                throw new BusinessException(ResultCode.BAD_REQUEST, "模板body过长（最大10000字符）");
             }
         }
         
@@ -477,7 +479,7 @@ public class SysConfigServiceImpl implements SysConfigService {
             emailTemplatesCache = null;
         } catch (Exception e) {
             log.error("Failed to update {}", SysConfigKeys.EMAIL_TEMPLATES, e);
-            throw new RuntimeException("更新邮件模板失败");
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "更新邮件模板失败");
         }
     }
 
@@ -561,10 +563,10 @@ public class SysConfigServiceImpl implements SysConfigService {
         
         // P2-1: 运行时模板字段校验
         if (subject == null || subject.isBlank()) {
-            throw new RuntimeException("邮件模板 [" + templateName + "] 缺少subject字段");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "邮件模板缺少subject字段");
         }
         if (body == null || body.isBlank()) {
-            throw new RuntimeException("邮件模板 [" + templateName + "] 缺少body字段");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "邮件模板缺少body字段");
         }
         
         // 变量替换
@@ -591,32 +593,32 @@ public class SysConfigServiceImpl implements SysConfigService {
             log.info("邮件发送成功: {} -> {}", templateName, maskEmail(to));
         } catch (Exception e) {
             log.error("发送邮件失败: {}", e.getMessage(), e);
-            throw new RuntimeException("发送邮件失败: " + e.getMessage());
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "发送邮件失败");
         }
     }
 
     private @NonNull Map<String, String> getStringStringMap(String templateName, SmtpConfigCache smtp) {
         if (smtp.host() == null || smtp.host().isBlank() || smtp.username() == null || smtp.username().isBlank()) {
-            throw new RuntimeException("请先配置SMTP服务器信息");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请先配置SMTP服务器信息");
         }
 
         // P2-2: 使用缓存获取模板
         Map<String, Object> templates = getCachedEmailTemplates();
         Object templateObj = templates.get(templateName);
         if (templateObj == null) {
-            throw new RuntimeException("邮件模板不存在: " + templateName);
+            throw new BusinessException(ResultCode.NOT_FOUND, "邮件模板不存在");
         }
 
         if (templateObj instanceof Map<?, ?> rawMap) {
             Map<String, String> template = new HashMap<>();
             for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
                 if (!(entry.getKey() instanceof String key) || !(entry.getValue() instanceof String value)) {
-                    throw new RuntimeException("邮件模板格式错误: " + templateName);
+                    throw new BusinessException(ResultCode.BAD_REQUEST, "邮件模板格式错误");
                 }
                 template.put(key, value);
             }
             return template;
         }
-        throw new RuntimeException("邮件模板格式错误: " + templateName);
+        throw new BusinessException(ResultCode.BAD_REQUEST, "邮件模板格式错误");
     }
 }

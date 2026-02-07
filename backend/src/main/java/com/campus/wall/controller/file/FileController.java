@@ -26,9 +26,10 @@ public class FileController {
     public R<FileVO> upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "type", defaultValue = "post") String targetType,
-            @RequestParam(value = "visibility", required = false) String visibility) {
+            @RequestParam(value = "visibility", required = false) String visibility,
+            @RequestParam(value = "scene", required = false) String scene) {
         StpUtil.checkLogin();
-        FileVO fileVO = fileService.uploadFile(file, targetType, visibility);
+        FileVO fileVO = fileService.uploadFile(file, targetType, visibility, scene);
         return R.ok(fileVO);
     }
 

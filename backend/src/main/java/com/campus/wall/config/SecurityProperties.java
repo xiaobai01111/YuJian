@@ -28,12 +28,12 @@ public class SecurityProperties {
     /**
      * API 默认策略（public/login/deny）
      */
-    private String apiDefaultMode = "login";
+    private String apiDefaultMode = "deny";
 
     /**
      * API 启动引导策略（public/login/deny）
      */
-    private String apiBootstrapMode = "login";
+    private String apiBootstrapMode = "deny";
 
     /**
      * 加密密钥（SMTP密码等敏感信息加密用）

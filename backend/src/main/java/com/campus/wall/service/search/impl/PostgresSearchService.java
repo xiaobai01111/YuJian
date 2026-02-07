@@ -71,7 +71,7 @@ public class PostgresSearchService implements SearchService {
                 .map(post -> toPostVO(post, boardsMap.get(post.getId()), userMap))
                 .collect(Collectors.toList());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     @Override

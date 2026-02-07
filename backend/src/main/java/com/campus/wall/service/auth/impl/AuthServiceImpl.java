@@ -474,16 +474,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public Long submitIdCard(SubmitIdCardDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
-
-        // 检查是否有待审核的记录
-        Long pendingCount = verificationMapper.selectCount(
-            new LambdaQueryWrapper<IdentityVerification>()
-                .eq(IdentityVerification::getUserId, userId)
-                .eq(IdentityVerification::getStatus, 0)
-        );
-        if (pendingCount > 0) {
-            throw new BusinessException("您已有待审核的申请，请耐心等待");
-        }
+        assertNoPendingVerification(userId);
 
         // 如果提供了学号，检查唯一性
         if (dto.getStudentId() != null && !dto.getStudentId().isEmpty()) {
@@ -502,13 +493,7 @@ public class AuthServiceImpl implements AuthService {
         verification.setStatus(0); // 待审核
         verificationMapper.insert(verification);
 
-        User user = userMapper.selectById(userId);
-        if (user != null) {
-            user.setVerifyStatus(1); // 审核中
-            user.setVerifyMethod("ID_CARD");
-            userMapper.updateById(user);
-        }
-
+        updateUserVerifyStatus(userId, 1, "ID_CARD");
         return verification.getId();
     }
 
@@ -516,15 +501,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public Long submitStudentId(SubmitStudentIdDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
-
-        Long pendingCount = verificationMapper.selectCount(
-            new LambdaQueryWrapper<IdentityVerification>()
-                .eq(IdentityVerification::getUserId, userId)
-                .eq(IdentityVerification::getStatus, 0)
-        );
-        if (pendingCount > 0) {
-            throw new BusinessException("您已有待审核的申请，请耐心等待");
-        }
+        assertNoPendingVerification(userId);
 
         assertStudentIdAvailable(dto.getStudentId(), userId);
 
@@ -536,13 +513,7 @@ public class AuthServiceImpl implements AuthService {
         verification.setStatus(0);
         verificationMapper.insert(verification);
 
-        User user = userMapper.selectById(userId);
-        if (user != null) {
-            user.setVerifyStatus(1);
-            user.setVerifyMethod("ID_LIST");
-            userMapper.updateById(user);
-        }
-
+        updateUserVerifyStatus(userId, 1, "ID_LIST");
         return verification.getId();
     }
 
@@ -565,10 +536,25 @@ public class AuthServiceImpl implements AuthService {
         verification.setReviewedAt(java.time.LocalDateTime.now());
         verificationMapper.updateById(verification);
 
+        updateUserVerifyStatus(userId, 0, null);
+    }
+
+    private void assertNoPendingVerification(Long userId) {
+        Long pendingCount = verificationMapper.selectCount(
+            new LambdaQueryWrapper<IdentityVerification>()
+                .eq(IdentityVerification::getUserId, userId)
+                .eq(IdentityVerification::getStatus, 0)
+        );
+        if (pendingCount > 0) {
+            throw new BusinessException("您已有待审核的申请，请耐心等待");
+        }
+    }
+
+    private void updateUserVerifyStatus(Long userId, int verifyStatus, String verifyMethod) {
         User user = userMapper.selectById(userId);
         if (user != null) {
-            user.setVerifyStatus(0);
-            user.setVerifyMethod(null);
+            user.setVerifyStatus(verifyStatus);
+            user.setVerifyMethod(verifyMethod);
             userMapper.updateById(user);
         }
     }

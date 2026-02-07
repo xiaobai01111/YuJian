@@ -13,8 +13,10 @@ import org.apache.ibatis.annotations.Param;
 public interface SysRoleMenuMapper extends BaseMapper<SysRoleMenu> {
 
     @Delete("DELETE FROM sys_role_menus WHERE role_id = #{roleId}")
+    @SuppressWarnings("UnusedReturnValue")
     int deleteByRoleId(@Param("roleId") Long roleId);
 
     @Delete("DELETE FROM sys_role_menus WHERE menu_id = #{menuId}")
+    @SuppressWarnings("UnusedReturnValue")
     int deleteByMenuId(@Param("menuId") Long menuId);
 }

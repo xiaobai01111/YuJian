@@ -45,13 +45,13 @@
     </appender>
     
     <!-- Application Logger -->
-    <logger name="com.campus.wall" level="DEBUG"/>
+    <logger name="com.campus.wall" level="INFO"/>
     
     <!-- Spring Framework Logger -->
     <logger name="org.springframework" level="INFO"/>
     
     <!-- MyBatis Logger -->
-    <logger name="org.mybatis" level="INFO"/>
+    <logger name="org.mybatis" level="WARN"/>
     
     <!-- Root Logger -->
     <root level="INFO">

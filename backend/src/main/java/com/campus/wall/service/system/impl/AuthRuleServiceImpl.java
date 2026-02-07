@@ -2,7 +2,9 @@ package com.campus.wall.service.system.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
+import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.system.AuthRuleDTO;
 import com.campus.wall.entity.system.SysAuthRule;
 import com.campus.wall.entity.system.SysRole;
@@ -54,7 +56,7 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     public AuthRuleVO getRuleById(Long id) {
         SysAuthRule rule = authRuleMapper.selectById(id);
         if (rule == null) {
-            throw new RuntimeException("规则不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "规则不存在");
         }
         return toVO(rule);
     }
@@ -71,7 +73,7 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     public void updateRule(Long id, AuthRuleDTO dto) {
         SysAuthRule rule = authRuleMapper.selectById(id);
         if (rule == null) {
-            throw new RuntimeException("规则不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "规则不存在");
         }
         copy(dto, rule);
         rule.setId(id);
@@ -87,7 +89,7 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     public void updateStatus(Long id, Boolean enabled) {
         SysAuthRule rule = authRuleMapper.selectById(id);
         if (rule == null) {
-            throw new RuntimeException("规则不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "规则不存在");
         }
         rule.setEnabled(enabled != null ? enabled : Boolean.TRUE);
         authRuleMapper.updateById(rule);
@@ -96,11 +98,11 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     @Override
     public void updatePriority(Long id, Integer priority) {
         if (priority == null) {
-            throw new RuntimeException("优先级不能为空");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "优先级不能为空");
         }
         SysAuthRule rule = authRuleMapper.selectById(id);
         if (rule == null) {
-            throw new RuntimeException("规则不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "规则不存在");
         }
         rule.setPriority(priority);
         authRuleMapper.updateById(rule);
@@ -110,7 +112,7 @@ public class AuthRuleServiceImpl implements AuthRuleService {
     public Long cloneRule(Long id) {
         SysAuthRule rule = authRuleMapper.selectById(id);
         if (rule == null) {
-            throw new RuntimeException("规则不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "规则不存在");
         }
         SysAuthRule copy = new SysAuthRule();
         copy.setName(buildCloneName(rule.getName()));

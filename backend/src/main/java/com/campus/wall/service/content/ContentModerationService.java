@@ -1,5 +1,7 @@
 package com.campus.wall.service.content;
 
+import org.springframework.web.multipart.MultipartFile;
+
 /**
  * 内容安全审核服务接口
  */
@@ -18,6 +20,13 @@ public interface ContentModerationService {
      * @return 是否通过审核
      */
     boolean moderateText(String text);
+
+    /**
+     * 病毒扫描
+     * @param file 待扫描文件
+     * @return 是否安全
+     */
+    boolean scanFile(MultipartFile file);
 
     /**
      * 异步审核图片

@@ -29,11 +29,18 @@ import com.campus.wall.vo.user.UserVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -53,6 +60,7 @@ public class ReportServiceImpl implements ReportService {
     private final CreditService creditService;
     private final DataScopeService dataScopeService;
     private final OperLogService operLogService;
+    private final PlatformTransactionManager transactionManager;
 
     // 举报状态：0待处理 1已处理
     private static final int STATUS_PENDING = 0;
@@ -170,13 +178,26 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    @Transactional
     public void handleReports(ReportBatchHandleDTO dto) {
         if (dto == null || dto.getIds() == null || dto.getIds().isEmpty()) {
             return;
         }
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        List<Long> failedIds = new ArrayList<>();
         for (Long reportId : dto.getIds()) {
-            handleReportInternal(reportId, dto.getResult(), dto.getRemark());
+            try {
+                txTemplate.execute(status -> {
+                    handleReportInternal(reportId, dto.getResult(), dto.getRemark());
+                    return null;
+                });
+            } catch (Exception ex) {
+                failedIds.add(reportId);
+                log.warn("批量处理举报失败 reportId={} reason={}", reportId, ex.getMessage());
+            }
+        }
+        if (!failedIds.isEmpty()) {
+            throw new BusinessException("部分举报处理失败：" + failedIds.size() + " 条");
         }
     }
 
@@ -274,11 +295,9 @@ public class ReportServiceImpl implements ReportService {
 
         Page<Report> result = reportMapper.selectPage(reportPage, wrapper);
 
-        List<ReportVO> records = result.getRecords().stream()
-                .map(this::toReportVO)
-                .collect(Collectors.toList());
+        List<ReportVO> records = toReportVOList(result.getRecords());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     @Override
@@ -294,11 +313,9 @@ public class ReportServiceImpl implements ReportService {
         wrapper.orderByDesc(Report::getCreatedAt);
 
         Page<Report> result = reportMapper.selectPage(reportPage, wrapper);
-        List<ReportVO> records = result.getRecords().stream()
-                .map(this::toReportVO)
-                .collect(Collectors.toList());
+        List<ReportVO> records = toReportVOList(result.getRecords());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     @Override
@@ -315,6 +332,110 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private ReportVO toReportVO(Report report) {
+        if (report == null) {
+            return null;
+        }
+        Map<Long, User> userMap = new HashMap<>();
+        Map<Long, Post> postMap = new HashMap<>();
+        Map<Long, List<String>> boardMap = new HashMap<>();
+
+        if (report.getReporterId() != null) {
+            User reporter = userMapper.selectById(report.getReporterId());
+            if (reporter != null) {
+                userMap.put(reporter.getId(), reporter);
+            }
+        }
+        if (report.getHandlerId() != null) {
+            User handler = userMapper.selectById(report.getHandlerId());
+            if (handler != null) {
+                userMap.put(handler.getId(), handler);
+            }
+        }
+        if (report.getPostId() != null) {
+            Post post = postMapper.selectById(report.getPostId());
+            if (post != null) {
+                postMap.put(post.getId(), post);
+                List<PostBoard> boards = postBoardMapper.selectList(
+                    new LambdaQueryWrapper<PostBoard>().eq(PostBoard::getPostId, post.getId())
+                );
+                if (boards != null && !boards.isEmpty()) {
+                    List<String> boardNames = new ArrayList<>();
+                    for (PostBoard board : boards) {
+                        if (board != null && board.getBoard() != null) {
+                            boardNames.add(board.getBoard());
+                        }
+                    }
+                    if (!boardNames.isEmpty()) {
+                        boardMap.put(post.getId(), boardNames);
+                    }
+                }
+            }
+        }
+        return toReportVO(report, userMap, postMap, boardMap);
+    }
+
+    private List<ReportVO> toReportVOList(List<Report> reports) {
+        if (reports == null || reports.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> userIdSet = new HashSet<>();
+        Set<Long> postIdSet = new HashSet<>();
+        for (Report report : reports) {
+            if (report == null) {
+                continue;
+            }
+            if (report.getReporterId() != null) {
+                userIdSet.add(report.getReporterId());
+            }
+            if (report.getHandlerId() != null) {
+                userIdSet.add(report.getHandlerId());
+            }
+            if (report.getPostId() != null) {
+                postIdSet.add(report.getPostId());
+            }
+        }
+        Map<Long, User> userMap = userIdSet.isEmpty()
+            ? Map.of()
+            : userMapper.selectBatchIds(new ArrayList<>(userIdSet)).stream()
+                .collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
+        Map<Long, Post> postMap = postIdSet.isEmpty()
+            ? Map.of()
+            : postMapper.selectBatchIds(new ArrayList<>(postIdSet)).stream()
+                .collect(Collectors.toMap(Post::getId, post -> post, (a, b) -> a));
+        Map<Long, List<String>> boardMap = loadBoardsByPostIds(new ArrayList<>(postIdSet));
+        return reports.stream()
+            .map(report -> toReportVO(report, userMap, postMap, boardMap))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+    }
+
+    private Map<Long, List<String>> loadBoardsByPostIds(List<Long> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return Map.of();
+        }
+        List<PostBoard> boards = postBoardMapper.selectList(
+            new LambdaQueryWrapper<PostBoard>().in(PostBoard::getPostId, postIds)
+        );
+        if (boards == null || boards.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<String>> result = new HashMap<>();
+        for (PostBoard board : boards) {
+            if (board == null || board.getPostId() == null || board.getBoard() == null) {
+                continue;
+            }
+            result.computeIfAbsent(board.getPostId(), key -> new ArrayList<>()).add(board.getBoard());
+        }
+        return result;
+    }
+
+    private ReportVO toReportVO(Report report,
+                                Map<Long, User> userMap,
+                                Map<Long, Post> postMap,
+                                Map<Long, List<String>> boardMap) {
+        if (report == null) {
+            return null;
+        }
         ReportVO vo = new ReportVO();
         vo.setId(report.getId());
         vo.setReason(report.getReason());
@@ -324,7 +445,7 @@ public class ReportServiceImpl implements ReportService {
         vo.setHandledAt(report.getHandledAt());
 
         // 举报者信息
-        User reporter = userMapper.selectById(report.getReporterId());
+        User reporter = report.getReporterId() == null ? null : userMap.get(report.getReporterId());
         if (reporter != null) {
             UserVO reporterVO = new UserVO();
             reporterVO.setId(reporter.getId());
@@ -334,18 +455,13 @@ public class ReportServiceImpl implements ReportService {
         }
 
         // 帖子信息（简化）
-        Post post = postMapper.selectById(report.getPostId());
+        Post post = report.getPostId() == null ? null : postMap.get(report.getPostId());
         if (post != null) {
             PostVO postVO = new PostVO();
             postVO.setId(post.getId());
             postVO.setTitle(post.getTitle());
-            List<String> boards = postBoardMapper.selectList(
-                            new LambdaQueryWrapper<PostBoard>()
-                                    .eq(PostBoard::getPostId, post.getId())
-                    ).stream()
-                    .map(PostBoard::getBoard)
-                    .collect(Collectors.toList());
-            if (!boards.isEmpty()) {
+            List<String> boards = boardMap.get(post.getId());
+            if (boards != null && !boards.isEmpty()) {
                 postVO.setBoard(boards.getFirst());
                 postVO.setBoards(boards);
             } else {
@@ -357,7 +473,7 @@ public class ReportServiceImpl implements ReportService {
 
         // 处理者信息
         if (report.getHandlerId() != null) {
-            User handler = userMapper.selectById(report.getHandlerId());
+            User handler = userMap.get(report.getHandlerId());
             if (handler != null) {
                 UserVO handlerVO = new UserVO();
                 handlerVO.setId(handler.getId());
@@ -376,12 +492,20 @@ public class ReportServiceImpl implements ReportService {
         if (scope.isAllowAll()) {
             return;
         }
-        List<Long> allowedUserIds = dataScopeService.resolveAllowedUserIds(scope, userId);
-        if (allowedUserIds.isEmpty()) {
-            wrapper.eq(Report::getId, -1L);
+        String deptScopeSql = dataScopeService.buildUserScopeExistsSql(scope, "reports.reporter_id");
+        if (deptScopeSql == null) {
+            if (scope.isAllowSelf() && userId != null) {
+                wrapper.eq(Report::getReporterId, userId);
+            } else {
+                wrapper.eq(Report::getId, -1L);
+            }
             return;
         }
-        wrapper.in(Report::getReporterId, allowedUserIds);
+        if (scope.isAllowSelf() && userId != null) {
+            wrapper.and(w -> w.eq(Report::getReporterId, userId).or().apply(deptScopeSql));
+        } else {
+            wrapper.apply(deptScopeSql);
+        }
     }
 
     private void ensureCanAccessReport(Report report) {

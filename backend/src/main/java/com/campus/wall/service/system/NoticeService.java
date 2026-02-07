@@ -16,7 +16,7 @@ public interface NoticeService {
     /**
      * 获取用户可见公告
      */
-    PageResult<NoticeVO> getVisibleNotices(int page, int size);
+    PageResult<NoticeVO> getVisibleNotices(int size, Integer lastPinned, String lastPublishedAt, Long lastId);
 
     /**
      * 获取公告详情（公开）

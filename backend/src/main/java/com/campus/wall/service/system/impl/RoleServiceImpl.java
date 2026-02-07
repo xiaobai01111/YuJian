@@ -14,6 +14,7 @@ import com.campus.wall.mapper.system.SysRoleDeptMapper;
 import com.campus.wall.mapper.system.SysRoleMenuMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
+import com.campus.wall.service.security.DataScopeService;
 import com.campus.wall.service.system.OperLogService;
 import com.campus.wall.service.system.PermissionService;
 import com.campus.wall.util.SecurityUtil;
@@ -26,9 +27,11 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -47,6 +50,7 @@ public class RoleServiceImpl implements RoleService {
     private final SysRoleDeptMapper sysRoleDeptMapper;
     private final UserMapper userMapper;
     private final UserService userService;
+    private final DataScopeService dataScopeService;
     private final OperLogService operLogService;
     private final PermissionService permissionService;
 
@@ -60,7 +64,7 @@ public class RoleServiceImpl implements RoleService {
                 new LambdaQueryWrapper<SysRole>()
                         .orderByAsc(SysRole::getSortOrder)
         );
-        return roles.stream().map(role -> toRoleVO(role, false)).collect(Collectors.toList());
+        return toRoleVOList(roles);
     }
 
     @Override
@@ -95,9 +99,7 @@ public class RoleServiceImpl implements RoleService {
                 new Page<>(page, size),
                 wrapper
         );
-        List<RoleVO> records = pageResult.getRecords().stream()
-                .map(role -> toRoleVO(role, false))
-                .collect(Collectors.toList());
+        List<RoleVO> records = toRoleVOList(pageResult.getRecords());
         return PageResult.of(records, pageResult.getTotal(), pageResult.getSize(), pageResult.getCurrent());
     }
 
@@ -347,12 +349,17 @@ public class RoleServiceImpl implements RoleService {
         if (isAdminRole(role)) {
             throw new BusinessException("管理员角色不允许修改数据权限");
         }
+        requireCurrentUserPermission(PERM_ROLE_ASSIGN, "缺少角色授权权限");
+
+        List<Long> normalizedDeptIds = deptIds == null ? List.of() : deptIds.stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        ensureAssignableDeptScope(normalizedDeptIds);
+
         sysRoleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, roleId));
 
-        if (deptIds == null) {
-            deptIds = List.of();
-        }
-        for (Long deptId : deptIds) {
+        for (Long deptId : normalizedDeptIds) {
             SysRoleDept roleDept = new SysRoleDept();
             roleDept.setRoleId(roleId);
             roleDept.setDeptId(deptId);
@@ -360,11 +367,11 @@ public class RoleServiceImpl implements RoleService {
         }
 
         HashMap<String, Object> after = new HashMap<>();
-        after.put("deptIds", deptIds);
+        after.put("deptIds", normalizedDeptIds);
         operLogService.log(StpUtil.getLoginIdAsLong(), null, "role", roleId, "dept_assign", null, null, after, null);
 
         RoleVO vo = toRoleVO(role, false);
-        vo.setDeptIds(deptIds);
+        vo.setDeptIds(normalizedDeptIds);
         return vo;
     }
 
@@ -462,7 +469,37 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
+    private void ensureAssignableDeptScope(List<Long> deptIds) {
+        if (deptIds == null || deptIds.isEmpty()) {
+            return;
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (isSystemAdminUserId(operatorId)) {
+            return;
+        }
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(operatorId);
+        if (scope.isAllowAll()) {
+            return;
+        }
+        List<Long> allowedDeptIds = scope.getScopedDeptIds();
+        if (allowedDeptIds == null || allowedDeptIds.isEmpty()) {
+            throw new BusinessException("不能分配超出当前账号数据权限范围的部门");
+        }
+        List<Long> overGranted = deptIds.stream()
+            .filter(Objects::nonNull)
+            .filter(deptId -> !allowedDeptIds.contains(deptId))
+            .distinct()
+            .collect(Collectors.toList());
+        if (!overGranted.isEmpty()) {
+            throw new BusinessException("不能分配超出当前账号数据权限范围的部门");
+        }
+    }
+
     private RoleVO toRoleVO(SysRole role, boolean withMenuIds) {
+        return toRoleVO(role, withMenuIds, null);
+    }
+
+    private RoleVO toRoleVO(SysRole role, boolean withMenuIds, List<Long> deptIds) {
         Objects.requireNonNull(role, "角色不能为空");
         RoleVO vo = new RoleVO();
         BeanUtils.copyProperties(role, vo);
@@ -470,8 +507,47 @@ public class RoleServiceImpl implements RoleService {
             List<Long> menuIds = sysMenuMapper.selectMenuIdsByRoleId(role.getId());
             vo.setMenuIds(menuIds);
         }
-        List<Long> deptIds = sysRoleDeptMapper.selectDeptIdsByRoleId(role.getId());
-        vo.setDeptIds(deptIds);
+        if (deptIds == null) {
+            deptIds = sysRoleDeptMapper.selectDeptIdsByRoleId(role.getId());
+        }
+        vo.setDeptIds(deptIds == null ? List.of() : deptIds);
         return vo;
+    }
+
+    private List<RoleVO> toRoleVOList(List<SysRole> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
+        List<Long> roleIds = roles.stream()
+            .filter(Objects::nonNull)
+            .map(SysRole::getId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        Map<Long, List<Long>> deptMap = loadDeptIdsByRoleIds(roleIds);
+        return roles.stream()
+            .filter(Objects::nonNull)
+            .map(role -> toRoleVO(role, false, deptMap.get(role.getId())))
+            .collect(Collectors.toList());
+    }
+
+    private Map<Long, List<Long>> loadDeptIdsByRoleIds(List<Long> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return Map.of();
+        }
+        List<SysRoleDept> roleDepts = sysRoleDeptMapper.selectList(
+            new LambdaQueryWrapper<SysRoleDept>().in(SysRoleDept::getRoleId, roleIds)
+        );
+        if (roleDepts == null || roleDepts.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<Long>> result = new HashMap<>();
+        for (SysRoleDept roleDept : roleDepts) {
+            if (roleDept == null || roleDept.getRoleId() == null || roleDept.getDeptId() == null) {
+                continue;
+            }
+            result.computeIfAbsent(roleDept.getRoleId(), ignore -> new ArrayList<>()).add(roleDept.getDeptId());
+        }
+        return result;
     }
 }

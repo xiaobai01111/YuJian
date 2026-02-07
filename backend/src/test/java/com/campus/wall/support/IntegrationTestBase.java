@@ -17,10 +17,7 @@ public abstract class IntegrationTestBase {
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine")
-                    .withDatabaseName("campus_test")
-                    .withUsername("campus")
-                    .withPassword("campus");
+            SingletonPostgresContainer.getInstance();
 
     @DynamicPropertySource
     static void registerProps(DynamicPropertyRegistry registry) {

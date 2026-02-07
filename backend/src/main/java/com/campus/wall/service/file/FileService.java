@@ -16,7 +16,7 @@ public interface FileService {
     /**
      * 上传文件
      */
-    FileVO uploadFile(MultipartFile file, String targetType, String visibility);
+    FileVO uploadFile(MultipartFile file, String targetType, String visibility, String scene);
 
     /**
      * 删除文件

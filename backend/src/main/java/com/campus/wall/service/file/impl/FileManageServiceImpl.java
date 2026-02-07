@@ -7,13 +7,16 @@ import com.campus.wall.common.PageResult;
 import com.campus.wall.common.ResultCode;
 import com.campus.wall.dto.system.FileQueryDTO;
 import com.campus.wall.entity.file.FileRecord;
+import cn.dev33.satoken.stp.StpUtil;
 import com.campus.wall.entity.user.User;
+import com.campus.wall.enums.file.FileTargetType;
 import com.campus.wall.enums.file.FileVisibility;
 import com.campus.wall.mapper.file.FileRecordMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.file.FileAccessService;
 import com.campus.wall.service.file.FileManageService;
 import com.campus.wall.service.storage.StorageProvider;
+import com.campus.wall.util.SecurityUtil;
 import com.campus.wall.vo.file.FileCategoryVO;
 import com.campus.wall.vo.file.FileVO;
 import lombok.RequiredArgsConstructor;
@@ -67,9 +70,30 @@ public class FileManageServiceImpl implements FileManageService {
 
     @Override
     public PageResult<FileVO> queryFiles(FileQueryDTO query) {
+        return queryByAssetType(query, FileTargetType.FILE.getCode());
+    }
+
+    @Override
+    public List<FileCategoryVO> listFileCategories() {
+        return listFileCategoriesByAssetType(FileTargetType.FILE.getCode());
+    }
+
+    @Override
+    public PageResult<FileVO> queryResources(FileQueryDTO query) {
+        return queryByAssetType(query, FileTargetType.RESOURCE.getCode());
+    }
+
+    @Override
+    public List<FileCategoryVO> listResourceCategories() {
+        return listFileCategoriesByAssetType(FileTargetType.RESOURCE.getCode());
+    }
+
+    private PageResult<FileVO> queryByAssetType(FileQueryDTO query, String assetType) {
         LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<>();
+        applyAssetTypeFilter(wrapper, assetType);
         applyKeywordFilter(wrapper, query.getKeyword());
         applyFileCategoryFilter(wrapper, query.getCategory());
+        applyVisibilityScope(wrapper);
         wrapper.orderByDesc(FileRecord::getCreatedAt);
 
         Page<FileRecord> page = fileRecordMapper.selectPage(
@@ -86,33 +110,13 @@ public class FileManageServiceImpl implements FileManageService {
     }
 
     @Override
-    public List<FileCategoryVO> listFileCategories() {
-        List<FileRecord> records = fileRecordMapper.selectList(
-            new LambdaQueryWrapper<FileRecord>().select(FileRecord::getMimeType)
-        );
-
-        Map<String, Long> counts = new HashMap<>();
-        long total = 0;
-        for (FileRecord record : records) {
-            total++;
-            String category = resolveFileCategory(record.getMimeType());
-            counts.put(category, counts.getOrDefault(category, 0L) + 1);
-        }
-
-        List<FileCategoryVO> result = new ArrayList<>();
-        result.add(buildCategory("all", "全部", total));
-        for (String key : FILE_CATEGORY_ORDER) {
-            result.add(buildCategory(key, FILE_CATEGORY_LABELS.getOrDefault(key, key), counts.getOrDefault(key, 0L)));
-        }
-        return result;
-    }
-
-    @Override
     public PageResult<FileVO> queryGallery(FileQueryDTO query) {
         LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<>();
+        applyAssetTypeFilter(wrapper, FileTargetType.GALLERY.getCode());
         wrapper.likeRight(FileRecord::getMimeType, "image/");
         applyKeywordFilter(wrapper, query.getKeyword());
         applyGalleryCategoryFilter(wrapper, query.getCategory());
+        applyVisibilityScope(wrapper);
         wrapper.orderByDesc(FileRecord::getCreatedAt);
 
         Page<FileRecord> page = fileRecordMapper.selectPage(
@@ -130,11 +134,12 @@ public class FileManageServiceImpl implements FileManageService {
 
     @Override
     public List<FileCategoryVO> listGalleryCategories() {
-        List<FileRecord> records = fileRecordMapper.selectList(
-            new LambdaQueryWrapper<FileRecord>()
-                .select(FileRecord::getMimeType)
-                .likeRight(FileRecord::getMimeType, "image/")
-        );
+        LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
+            .select(FileRecord::getMimeType)
+            .likeRight(FileRecord::getMimeType, "image/")
+            .eq(FileRecord::getAssetType, FileTargetType.GALLERY.getCode());
+        applyVisibilityScope(wrapper);
+        List<FileRecord> records = fileRecordMapper.selectList(wrapper);
 
         Map<String, Long> counts = new HashMap<>();
         long total = 0;
@@ -179,23 +184,16 @@ public class FileManageServiceImpl implements FileManageService {
 
     @Override
     public void updateVisibility(Long fileId, String visibility) {
-        if (fileId == null) {
-            return;
-        }
-        FileRecord record = fileRecordMapper.selectById(fileId);
-        if (record == null) {
-            return;
-        }
-        FileVisibility target = parseVisibility(visibility);
-        if (target.getCode().equalsIgnoreCase(record.getVisibility())) {
-            return;
-        }
-        record.setVisibility(target.getCode());
-        fileRecordMapper.updateById(record);
+        throw new BusinessException(ResultCode.BAD_REQUEST, "文件可见性由上传策略统一管理");
     }
 
     private void deleteRecord(FileRecord record) {
         try {
+            if (record.getVisibility() != null
+                    && FileVisibility.PRIVATE.getCode().equalsIgnoreCase(record.getVisibility())
+                    && !canAccessPrivate(record)) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "无权操作该私有文件");
+            }
             if (StringUtils.hasText(record.getPath())) {
                 StorageProvider provider = fileAccessService.getProvider(record.getStorageProvider());
                 if (provider != null) {
@@ -220,6 +218,35 @@ public class FileManageServiceImpl implements FileManageService {
         if (StringUtils.hasText(keyword)) {
             wrapper.like(FileRecord::getFilename, keyword.trim());
         }
+    }
+
+    private void applyAssetTypeFilter(LambdaQueryWrapper<FileRecord> wrapper, String assetType) {
+        if (StringUtils.hasText(assetType)) {
+            wrapper.eq(FileRecord::getAssetType, assetType);
+        }
+    }
+
+    private List<FileCategoryVO> listFileCategoriesByAssetType(String assetType) {
+        LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
+            .select(FileRecord::getMimeType);
+        applyAssetTypeFilter(wrapper, assetType);
+        applyVisibilityScope(wrapper);
+        List<FileRecord> records = fileRecordMapper.selectList(wrapper);
+
+        Map<String, Long> counts = new HashMap<>();
+        long total = 0;
+        for (FileRecord record : records) {
+            total++;
+            String category = resolveFileCategory(record.getMimeType());
+            counts.put(category, counts.getOrDefault(category, 0L) + 1);
+        }
+
+        List<FileCategoryVO> result = new ArrayList<>();
+        result.add(buildCategory("all", "全部", total));
+        for (String key : FILE_CATEGORY_ORDER) {
+            result.add(buildCategory(key, FILE_CATEGORY_LABELS.getOrDefault(key, key), counts.getOrDefault(key, 0L)));
+        }
+        return result;
     }
 
     private void applyFileCategoryFilter(LambdaQueryWrapper<FileRecord> wrapper, String category) {
@@ -255,6 +282,30 @@ public class FileManageServiceImpl implements FileManageService {
             default -> {
             }
         }
+    }
+
+    private void applyVisibilityScope(LambdaQueryWrapper<FileRecord> wrapper) {
+        if (wrapper == null) {
+            return;
+        }
+        boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
+        if (isAdmin) {
+            return;
+        }
+        Long userId = StpUtil.getLoginIdAsLong();
+        wrapper.and(w -> w.eq(FileRecord::getVisibility, FileVisibility.PUBLIC.getCode())
+            .or().eq(FileRecord::getUserId, userId));
+    }
+
+    private boolean canAccessPrivate(FileRecord record) {
+        if (record == null) {
+            return false;
+        }
+        if (StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())) {
+            return true;
+        }
+        Long userId = StpUtil.getLoginIdAsLong();
+        return record.getUserId() != null && record.getUserId().equals(userId);
     }
 
     private void applyGalleryCategoryFilter(LambdaQueryWrapper<FileRecord> wrapper, String category) {
@@ -354,15 +405,4 @@ public class FileManageServiceImpl implements FileManageService {
         return user.getUsername();
     }
 
-    private FileVisibility parseVisibility(String visibility) {
-        if (!StringUtils.hasText(visibility)) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "visibility不能为空");
-        }
-        for (FileVisibility item : FileVisibility.values()) {
-            if (item.getCode().equalsIgnoreCase(visibility.trim())) {
-                return item;
-            }
-        }
-        throw new BusinessException(ResultCode.BAD_REQUEST, "visibility不合法");
-    }
 }

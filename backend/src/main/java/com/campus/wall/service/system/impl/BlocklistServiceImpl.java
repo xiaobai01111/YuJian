@@ -20,6 +20,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.net.InetAddress;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -125,8 +126,14 @@ public class BlocklistServiceImpl implements BlocklistService {
                 continue;
             }
 
-            String targetValue = parsed.value;
-            if (existing.contains(targetValue)) {
+            String targetValue = normalizeTargetValue(type, parsed.value);
+            if (!StringUtils.hasText(targetValue)) {
+                invalid.add(line);
+                continue;
+            }
+            Set<String> candidates = buildTargetCandidates(type, parsed.value);
+            boolean duplicated = candidates.stream().anyMatch(existing::contains);
+            if (duplicated) {
                 skipped.add(targetValue);
                 continue;
             }
@@ -139,7 +146,7 @@ public class BlocklistServiceImpl implements BlocklistService {
             entity.setExpireAt(dto.getExpireAt());
             entity.setCreatedBy(SecurityUtil.getCurrentUserId());
             blocklistMapper.insert(entity);
-            existing.add(targetValue);
+            existing.addAll(candidates);
             added.add(targetValue);
         }
 
@@ -151,6 +158,28 @@ public class BlocklistServiceImpl implements BlocklistService {
         result.setSkipped(skipped);
         result.setInvalid(invalid);
         return result;
+    }
+
+    @Override
+    public boolean isBlocked(String targetType, String targetValue) {
+        String type = normalizeType(targetType);
+        if (!StringUtils.hasText(type) || !ALLOWED_TYPES.contains(type) || !StringUtils.hasText(targetValue)) {
+            return false;
+        }
+
+        Set<String> candidates = buildTargetCandidates(type, targetValue);
+        if (candidates.isEmpty()) {
+            return false;
+        }
+
+        LambdaQueryWrapper<SysBlocklist> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysBlocklist::getTargetType, type)
+            .in(SysBlocklist::getTargetValue, candidates)
+            .eq(SysBlocklist::getStatus, 0)
+            .and(w -> w.isNull(SysBlocklist::getExpireAt)
+                .or()
+                .gt(SysBlocklist::getExpireAt, LocalDateTime.now()));
+        return blocklistMapper.selectCount(wrapper) > 0;
     }
 
     private LambdaQueryWrapper<SysBlocklist> buildQueryWrapper(BlocklistQueryDTO query) {
@@ -172,7 +201,7 @@ public class BlocklistServiceImpl implements BlocklistService {
 
     private void fillEntity(SysBlocklist entity, BlocklistDTO dto) {
         String type = normalizeType(dto.getTargetType());
-        String value = dto.getTargetValue() != null ? dto.getTargetValue().trim() : null;
+        String value = normalizeTargetValue(type, dto.getTargetValue());
         if (!StringUtils.hasText(type) || !ALLOWED_TYPES.contains(type)) {
             throw new BusinessException("类型不合法");
         }
@@ -194,9 +223,13 @@ public class BlocklistServiceImpl implements BlocklistService {
     }
 
     private boolean existsTarget(String targetType, String targetValue, Long excludeId) {
+        Set<String> candidates = buildTargetCandidates(targetType, targetValue);
+        if (candidates.isEmpty()) {
+            return false;
+        }
         LambdaQueryWrapper<SysBlocklist> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysBlocklist::getTargetType, targetType)
-            .eq(SysBlocklist::getTargetValue, targetValue);
+            .in(SysBlocklist::getTargetValue, candidates);
         if (excludeId != null) {
             wrapper.ne(SysBlocklist::getId, excludeId);
         }
@@ -212,6 +245,10 @@ public class BlocklistServiceImpl implements BlocklistService {
         for (SysBlocklist item : list) {
             if (StringUtils.hasText(item.getTargetValue())) {
                 result.add(item.getTargetValue());
+                String normalized = normalizeTargetValue(targetType, item.getTargetValue());
+                if (StringUtils.hasText(normalized)) {
+                    result.add(normalized);
+                }
             }
         }
         return result;
@@ -222,6 +259,76 @@ public class BlocklistServiceImpl implements BlocklistService {
         String value = parts[0].trim();
         String reason = parts.length > 1 ? parts[1].trim() : null;
         return new ParsedLine(value, reason);
+    }
+
+    private Set<String> buildTargetCandidates(String type, String value) {
+        if (!StringUtils.hasText(value)) {
+            return Collections.emptySet();
+        }
+        Set<String> candidates = new LinkedHashSet<>();
+        String trimmed = value.trim();
+        if (StringUtils.hasText(trimmed)) {
+            candidates.add(trimmed);
+        }
+        String normalized = normalizeTargetValue(type, value);
+        if (StringUtils.hasText(normalized)) {
+            candidates.add(normalized);
+        }
+        return candidates;
+    }
+
+    private String normalizeTargetValue(String type, String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalizedType = normalizeType(type);
+        if (!StringUtils.hasText(normalizedType)) {
+            return value.trim();
+        }
+
+        String trimmed = value.trim();
+        return switch (normalizedType) {
+            case "IP" -> normalizeIp(trimmed);
+            case "USER" -> normalizeUserId(trimmed);
+            default -> trimmed;
+        };
+    }
+
+    private String normalizeUserId(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Long.toString(Long.parseLong(value.trim()));
+        } catch (NumberFormatException ignored) {
+            return value.trim();
+        }
+    }
+
+    private String normalizeIp(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.contains(",")) {
+            normalized = normalized.split(",")[0].trim();
+        }
+        if (normalized.startsWith("[") && normalized.contains("]")) {
+            normalized = normalized.substring(1, normalized.indexOf(']'));
+        } else {
+            int colonIndex = normalized.indexOf(':');
+            if (colonIndex > -1 && normalized.indexOf(':', colonIndex + 1) == -1) {
+                normalized = normalized.substring(0, colonIndex);
+            }
+        }
+        if (normalized.startsWith("::ffff:")) {
+            normalized = normalized.substring(7);
+        }
+        try {
+            return InetAddress.getByName(normalized).getHostAddress();
+        } catch (Exception ignored) {
+            return normalized;
+        }
     }
 
     private String normalizeReason(String reason) {

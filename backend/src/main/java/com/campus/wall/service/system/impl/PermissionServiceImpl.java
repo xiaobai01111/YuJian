@@ -75,12 +75,26 @@ public class PermissionServiceImpl implements PermissionService {
         if (permissions == null || permissions.isEmpty()) {
             return null;
         }
+        SysApiPermission best = null;
+        java.util.Comparator<String> comparator = pathMatcher.getPatternComparator(url);
         for (SysApiPermission permission : permissions) {
-            if (pathMatcher.match(permission.getUrl(), url)) {
-                return permission;
+            if (permission == null || permission.getUrl() == null) {
+                continue;
+            }
+            String pattern = permission.getUrl();
+            if (!pathMatcher.match(pattern, url)) {
+                continue;
+            }
+            if (best == null) {
+                best = permission;
+                continue;
+            }
+            String bestPattern = best.getUrl();
+            if (bestPattern == null || comparator.compare(pattern, bestPattern) < 0) {
+                best = permission;
             }
         }
-        return null;
+        return best;
     }
 
     @Override
@@ -126,11 +140,22 @@ public class PermissionServiceImpl implements PermissionService {
         List<SysApiPermission> apiPerms = apiPermissionMapper.selectList(
             new LambdaQueryWrapper<SysApiPermission>()
                 .eq(SysApiPermission::getStatus, true)
+                .orderByDesc(SysApiPermission::getUpdatedAt)
+                .orderByDesc(SysApiPermission::getId)
         );
 
+        Map<String, List<SysApiPermission>> duplicates = new LinkedHashMap<>();
         for (SysApiPermission ap : apiPerms) {
-            String method = ap.getHttpMethod() != null ? ap.getHttpMethod().toUpperCase() : "*";
-            String key = method + ":" + ap.getUrl();
+            if (ap == null || ap.getUrl() == null) {
+                continue;
+            }
+            String method = ap.getHttpMethod() != null ? ap.getHttpMethod().trim().toUpperCase() : "*";
+            String url = ap.getUrl().trim();
+            String key = method + ":" + url;
+            if (permissionCache.containsKey(key)) {
+                duplicates.computeIfAbsent(key, ignore -> new ArrayList<>()).add(ap);
+                continue;
+            }
             permissionCache.put(key, ap);
             if (pathMatcher.isPattern(ap.getUrl())) {
                 permissionPatternCache.computeIfAbsent(method, ignore -> new ArrayList<>()).add(ap);
@@ -138,6 +163,12 @@ public class PermissionServiceImpl implements PermissionService {
         }
 
         sortPatternCache();
+        if (!duplicates.isEmpty()) {
+            log.error("检测到重复的API权限规则: {}", duplicates.keySet());
+            if (securityProperties.isFailFastPermissions()) {
+                throw new IllegalStateException("API权限规则存在重复，已阻止启动");
+            }
+        }
         log.info("权限缓存已刷新，共加载 {} 条URL权限映射", permissionCache.size());
     }
 

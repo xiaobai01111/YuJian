@@ -3,6 +3,7 @@ package com.campus.wall.entity.file;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 @TableName("files")
 public class FileRecord implements Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     @TableId(type = IdType.AUTO)
@@ -23,6 +25,10 @@ public class FileRecord implements Serializable {
     private Long targetId;
 
     private String targetType;
+
+    private String assetType;
+
+    private String publicKey;
 
     private String filename;
 
@@ -43,6 +49,8 @@ public class FileRecord implements Serializable {
     private String visibility;
 
     private LocalDateTime lastAccessedAt;
+
+    private LocalDateTime orphanMarkedAt;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

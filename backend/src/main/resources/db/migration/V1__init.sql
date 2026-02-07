@@ -1,3 +1,4 @@
+-- noinspection SpellCheckingInspection
 -- 校园墙数据库初始化（重置版）
 
 -- =========================
@@ -142,6 +143,7 @@ COMMENT ON TABLE sys_api_permissions IS 'API权限配置表';
 
 CREATE INDEX idx_api_perm_url ON sys_api_permissions(url);
 CREATE INDEX idx_api_perm_status ON sys_api_permissions(status);
+CREATE UNIQUE INDEX uk_api_permissions_method_url ON sys_api_permissions(http_method, url);
 
 CREATE TABLE sys_oper_log (
     id BIGSERIAL PRIMARY KEY,
@@ -215,7 +217,7 @@ CREATE TABLE sys_notice (
     content TEXT NOT NULL,
     status SMALLINT NOT NULL DEFAULT 0,
     scope_type VARCHAR(20) NOT NULL DEFAULT 'ALL',
-    scope_ids TEXT,
+    scope_ids JSONB DEFAULT '[]'::jsonb,
     is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
     start_at TIMESTAMP,
     end_at TIMESTAMP,
@@ -358,6 +360,9 @@ COMMENT ON COLUMN posts.show_on_home IS '是否同步首页展示';
 CREATE INDEX idx_posts_user ON posts(user_id);
 CREATE INDEX idx_posts_board ON posts(board);
 CREATE INDEX idx_posts_status ON posts(status);
+CREATE INDEX idx_posts_status_created_at ON posts(status, created_at DESC);
+CREATE INDEX idx_posts_status_last_interaction ON posts(status, last_interaction_at DESC);
+CREATE INDEX idx_posts_show_on_home_created_at ON posts(show_on_home, created_at DESC);
 CREATE INDEX idx_posts_search_vector ON posts USING GIN (search_vector);
 
 CREATE OR REPLACE FUNCTION posts_search_vector_update() RETURNS trigger AS $$
@@ -382,6 +387,7 @@ COMMENT ON TABLE post_boards IS '帖子-板块关联表';
 
 CREATE INDEX idx_post_boards_post ON post_boards(post_id);
 CREATE INDEX idx_post_boards_board ON post_boards(board);
+CREATE INDEX idx_post_boards_board_post ON post_boards(board, post_id);
 
 CREATE TABLE comments (
     id BIGSERIAL PRIMARY KEY,
@@ -399,6 +405,7 @@ COMMENT ON TABLE comments IS '评论表';
 
 CREATE INDEX idx_comments_post ON comments(post_id);
 CREATE INDEX idx_comments_user ON comments(user_id);
+CREATE INDEX idx_comments_post_status_created_at ON comments(post_id, status, created_at);
 
 CREATE TABLE likes (
     id BIGSERIAL PRIMARY KEY,
@@ -449,17 +456,6 @@ COMMENT ON TABLE notifications IS '通知表';
 
 CREATE INDEX idx_notifications_user ON notifications(user_id);
 
-CREATE TABLE announcements (
-    id BIGSERIAL PRIMARY KEY,
-    title VARCHAR(200) NOT NULL,
-    content TEXT NOT NULL,
-    publisher_id BIGINT,
-    status SMALLINT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-COMMENT ON TABLE announcements IS '旧公告表（兼容）';
-
 CREATE TABLE reports (
     id BIGSERIAL PRIMARY KEY,
     reporter_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -506,6 +502,7 @@ CREATE TABLE files (
     storage_provider VARCHAR(32) NOT NULL DEFAULT 'LOCAL',
     visibility VARCHAR(16) NOT NULL DEFAULT 'PRIVATE',
     last_accessed_at TIMESTAMP,
+    orphan_marked_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -513,6 +510,7 @@ COMMENT ON TABLE files IS '文件记录表';
 
 CREATE INDEX idx_files_user ON files(user_id);
 CREATE INDEX idx_files_target ON files(target_type, target_id);
+CREATE INDEX idx_files_orphan_marked ON files(status, orphan_marked_at);
 
 CREATE TABLE market_orders (
     id BIGSERIAL PRIMARY KEY,
@@ -531,6 +529,11 @@ COMMENT ON TABLE market_orders IS '市集订单表';
 
 CREATE INDEX idx_market_orders_post ON market_orders(post_id);
 CREATE INDEX idx_market_orders_seller ON market_orders(seller_id);
+CREATE INDEX idx_market_orders_buyer_created_at ON market_orders(buyer_id, created_at DESC);
+CREATE INDEX idx_market_orders_seller_created_at ON market_orders(seller_id, created_at DESC);
+CREATE UNIQUE INDEX ux_market_orders_post_pending
+    ON market_orders(post_id)
+    WHERE status = 0;
 
 CREATE TABLE sys_site_settings (
     id BIGSERIAL PRIMARY KEY,

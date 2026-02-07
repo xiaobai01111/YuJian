@@ -8,13 +8,16 @@
         </div>
         <div class="flex items-center gap-2">
           <input ref="fileInput" type="file" class="hidden" accept="image/*" multiple @change="handleUpload" />
-          <select v-if="canUpload" v-model="uploadVisibility" class="select select-sm">
-            <option value="PUBLIC">公有</option>
-            <option value="PRIVATE">私有</option>
-          </select>
           <button v-if="canUpload" class="btn btn-sm btn-primary" :disabled="uploading" @click="openUpload">
             {{ uploading ? '上传中...' : '上传图片' }}
           </button>
+          <router-link
+            v-if="canUpload"
+            to="/console/asset/upload-policy"
+            class="text-xs text-slate-500 hover:text-primary"
+          >
+            权限由上传策略控制
+          </router-link>
           <button
             v-if="canDelete"
             class="btn btn-sm btn-ghost"
@@ -98,16 +101,7 @@
                       <div class="text-xs text-slate-500">上传者：{{ image.uploaderName || '-' }}</div>
                       <div class="text-xs text-slate-500 flex items-center gap-1">
                         <span>权限：</span>
-                        <select
-                          v-if="canEditVisibility"
-                          class="select select-xs"
-                          :value="image.visibility || 'PRIVATE'"
-                          @change="event => handleVisibilityChange(image, (event.target as HTMLSelectElement).value)"
-                        >
-                          <option value="PUBLIC">公有</option>
-                          <option value="PRIVATE">私有</option>
-                        </select>
-                        <span v-else>{{ getVisibilityLabel(image.visibility) }}</span>
+                        <span>{{ getVisibilityLabel(image.visibility) }}</span>
                       </div>
                       <div v-if="canDelete" class="mt-2">
                         <button class="btn btn-xs btn-error btn-outline" @click="handleDelete(image.id)">删除</button>
@@ -134,7 +128,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, nextTick, ref } from 'vue'
 import { usePermissionStore } from '@/stores/permission'
-import { batchDeleteConsoleGallery, deleteConsoleGallery, getGalleryCategories, getGalleryList, updateConsoleGalleryVisibility, uploadConsoleGallery, type FileCategoryVO, type FileManageVO } from '@/api/system'
+import { batchDeleteConsoleGallery, deleteConsoleGallery, getGalleryCategories, getGalleryList, uploadConsoleGallery, type FileCategoryVO, type FileManageVO } from '@/api/system'
 import { resolveFileUrl } from '@/utils/file'
 import { useDialog } from '@/composables/useDialog'
 
@@ -155,13 +149,11 @@ const selectedIds = ref<number[]>([])
 const uploading = ref(false)
 const deleting = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
-const uploadVisibility = ref<'PUBLIC' | 'PRIVATE'>('PUBLIC')
 
 const permissionStore = usePermissionStore()
 const dialog = useDialog()
 const canUpload = computed(() => permissionStore.hasPermission(['system:gallery:upload']))
 const canDelete = computed(() => permissionStore.hasPermission(['system:gallery:delete']))
-const canEditVisibility = computed(() => permissionStore.hasPermission(['system:gallery:permission']))
 const isAllSelected = computed(() => images.value.length > 0 && images.value.every(image => selectedIds.value.includes(image.id)))
 
 const reloadAll = () => {
@@ -276,7 +268,7 @@ const handleUpload = async (event: Event) => {
   if (fileList.length === 0) return
   uploading.value = true
   try {
-    await Promise.allSettled(fileList.map(file => uploadConsoleGallery(file, undefined, uploadVisibility.value)))
+    await Promise.allSettled(fileList.map(file => uploadConsoleGallery(file)))
     reloadAll()
   } finally {
     uploading.value = false
@@ -322,19 +314,6 @@ const handleBatchDelete = async () => {
     reloadAll()
   } finally {
     deleting.value = false
-  }
-}
-
-const handleVisibilityChange = async (image: FileManageVO, visibility: string) => {
-  if (!canEditVisibility.value) return
-  const next = visibility.toUpperCase()
-  if (image.visibility === next) return
-  try {
-    await updateConsoleGalleryVisibility(image.id, next)
-    image.visibility = next
-    fetchImages({ reset: true })
-  } catch (error) {
-    fetchImages({ reset: true })
   }
 }
 

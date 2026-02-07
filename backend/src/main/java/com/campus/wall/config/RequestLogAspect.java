@@ -22,6 +22,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Slf4j
@@ -58,7 +60,7 @@ public class RequestLogAspect {
 
         Map<String, Object> params = sanitizeArgs(joinPoint.getArgs());
         if (StringUtils.hasText(query)) {
-            params.put("_query", query);
+            params.put("_query", sanitizeQueryString(query));
         }
 
         long start = System.currentTimeMillis();
@@ -181,6 +183,53 @@ public class RequestLogAspect {
             count++;
         }
         return sanitized;
+    }
+
+    private Map<String, Object> sanitizeQueryString(String query) {
+        if (!StringUtils.hasText(query)) {
+            return Map.of();
+        }
+        Map<String, List<String>> raw = new LinkedHashMap<>();
+        int count = 0;
+        for (String pair : query.split("&")) {
+            if (count >= MAX_COLLECTION_SIZE) {
+                raw.put("_truncated", List.of("true"));
+                break;
+            }
+            String[] parts = pair.split("=", 2);
+            String key = decodeQueryPart(parts[0]);
+            String value = parts.length > 1 ? decodeQueryPart(parts[1]) : "";
+            raw.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
+            count++;
+        }
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : raw.entrySet()) {
+            String key = entry.getKey();
+            List<String> values = entry.getValue();
+            if (isSensitiveKey(key)) {
+                sanitized.put(key, MASK);
+                continue;
+            }
+            if (values == null || values.isEmpty()) {
+                sanitized.put(key, "");
+            } else if (values.size() == 1) {
+                sanitized.put(key, sanitizeValue(values.get(0)));
+            } else {
+                sanitized.put(key, sanitizeCollection(values));
+            }
+        }
+        return sanitized;
+    }
+
+    private String decodeQueryPart(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ex) {
+            return value;
+        }
     }
 
     private List<Object> sanitizeCollection(Collection<?> collection) {

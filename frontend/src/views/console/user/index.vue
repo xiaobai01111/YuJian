@@ -282,7 +282,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, onUnmounted, nextTick } from 'vue'
 import { getUserList, getDeletedUserList, banUser, unbanUser, restoreUser, purgeUser, getRoleList, deleteUsers, exportUsers } from '@/api/system'
-import type { UserVO, RoleVO } from '@/api/system'
+import type { UserVO, RoleVO, DeletedUserQuery } from '@/api/system'
 import { useUserStore } from '@/stores/user'
 import { useDialog } from '@/composables/useDialog'
 import UserFormModal from './components/UserFormModal.vue'
@@ -318,6 +318,11 @@ const queryParams = reactive({
   phone: '',
   loginDateStart: '',
   loginDateEnd: ''
+})
+
+const deletedCursor = reactive({
+  lastDeletedAt: undefined as string | undefined,
+  lastId: undefined as number | undefined
 })
 
 const selectedIds = ref<number[]>([])
@@ -364,6 +369,25 @@ const setupObserver = () => {
   observer.observe(loadMoreTrigger.value)
 }
 
+const resetDeletedCursor = () => {
+  deletedCursor.lastDeletedAt = undefined
+  deletedCursor.lastId = undefined
+}
+
+const buildDeletedQuery = (): DeletedUserQuery => {
+  const params: DeletedUserQuery = {
+    size: queryParams.size
+  }
+  if (queryParams.username) params.username = queryParams.username
+  if (queryParams.nickname) params.nickname = queryParams.nickname
+  if (queryParams.phone) params.phone = queryParams.phone
+  if (queryParams.loginDateStart) params.loginDateStart = queryParams.loginDateStart
+  if (queryParams.loginDateEnd) params.loginDateEnd = queryParams.loginDateEnd
+  if (deletedCursor.lastDeletedAt) params.lastDeletedAt = deletedCursor.lastDeletedAt
+  if (deletedCursor.lastId) params.lastId = deletedCursor.lastId
+  return params
+}
+
 const fetchData = async ({ append = false, reset = false } = {}) => {
   if (append && (loadingMore.value || loading.value)) return
   if (!append && loading.value) return
@@ -372,21 +396,40 @@ const fetchData = async ({ append = false, reset = false } = {}) => {
     userList.value = []
     selectedIds.value = []
     hasMore.value = true
+    if (viewMode.value === 'deleted') {
+      resetDeletedCursor()
+    }
   }
   append ? (loadingMore.value = true) : (loading.value = true)
   try {
-    const fetcher = viewMode.value === 'active' ? getUserList : getDeletedUserList
-    const res = await fetcher(queryParams)
-    const records = res.records || []
-    total.value = res.total || 0
-    if (append) {
-      userList.value = [...userList.value, ...records]
+    if (viewMode.value === 'active') {
+      const res = await getUserList(queryParams)
+      const records = res.records || []
+      total.value = res.total || 0
+      if (append) {
+        userList.value = [...userList.value, ...records]
+      } else {
+        userList.value = records
+      }
+      if (total.value) {
+        hasMore.value = userList.value.length < total.value
+      } else {
+        hasMore.value = records.length >= queryParams.size
+      }
     } else {
-      userList.value = records
-    }
-    if (total.value) {
-      hasMore.value = userList.value.length < total.value
-    } else {
+      const res = await getDeletedUserList(buildDeletedQuery())
+      const records = res.records || []
+      total.value = res.total || 0
+      if (append) {
+        userList.value = [...userList.value, ...records]
+      } else {
+        userList.value = records
+      }
+      const lastRecord = records[records.length - 1]
+      if (lastRecord) {
+        deletedCursor.lastDeletedAt = lastRecord.deletedAt
+        deletedCursor.lastId = lastRecord.id
+      }
       hasMore.value = records.length >= queryParams.size
     }
   } catch (error) {
@@ -408,7 +451,15 @@ const switchView = (mode: 'active' | 'deleted') => {
 
 const loadMore = async () => {
   if (!hasMore.value || loading.value || loadingMore.value) return
-  queryParams.page += 1
+  if (viewMode.value === 'active') {
+    queryParams.page += 1
+    await fetchData({ append: true })
+    return
+  }
+  if (!deletedCursor.lastDeletedAt || !deletedCursor.lastId) {
+    hasMore.value = false
+    return
+  }
   await fetchData({ append: true })
 }
 

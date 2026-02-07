@@ -37,13 +37,13 @@ public class UserController {
 
     @Operation(summary = "用户列表", description = "分页查询用户列表")
     @GetMapping
-    public R<PageResult<UserVO>> list(UserQueryDTO query) {
+    public R<PageResult<UserVO>> list(@Valid UserQueryDTO query) {
         return R.ok(userService.queryUsers(query));
     }
 
     @Operation(summary = "已删除用户列表", description = "分页查询已删除用户")
     @GetMapping("/deleted")
-    public R<PageResult<UserVO>> listDeleted(UserQueryDTO query) {
+    public R<PageResult<UserVO>> listDeleted(@Valid UserQueryDTO query) {
         return R.ok(userService.queryDeletedUsers(query));
     }
 

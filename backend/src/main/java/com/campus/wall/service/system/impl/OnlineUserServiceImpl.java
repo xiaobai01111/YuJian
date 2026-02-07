@@ -12,6 +12,8 @@ import com.campus.wall.service.system.OnlineUserService;
 import com.campus.wall.vo.system.OnlineUserVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -20,8 +22,13 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,50 +40,59 @@ public class OnlineUserServiceImpl implements OnlineUserService {
 
     @Override
     public PageResult<OnlineUserVO> queryOnlineUsers(OnlineUserQueryDTO query) {
-        List<String> tokenValues = resolveTokenValues();
         String keyword = query.getKeyword();
         String ipaddr = query.getIpaddr();
+        String lowerKeyword = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase() : null;
+        String ipFilter = StringUtils.hasText(ipaddr) ? ipaddr.trim() : null;
 
-        List<OnlineUserVO> allUsers = new ArrayList<>();
-        for (String token : tokenValues) {
-            OnlineUserVO vo = buildOnlineUser(token);
-            if (vo != null) {
-                allUsers.add(vo);
-            } else {
-                removeOnlineToken(token);
+        int pageSize = Math.max(query.getSize(), 1);
+        int offset = Math.max(query.getOffset(), 0);
+        int targetCount = Math.max(1, offset + pageSize);
+        Comparator<OnlineUserVO> orderComparator = Comparator
+            .comparing(OnlineUserVO::getLastActiveTime, Comparator.nullsLast(Long::compareTo))
+            .reversed();
+        PriorityQueue<OnlineUserVO> topUsers = new PriorityQueue<>(targetCount, orderComparator.reversed());
+        Set<String> seenTokens = new HashSet<>();
+        Set<Long> seenUserIds = new HashSet<>();
+        long[] total = {0L};
+
+        scanTokenValues(token -> {
+            String normalizedToken = normalizeTokenValue(token);
+            if (!StringUtils.hasText(normalizedToken) || !seenTokens.add(normalizedToken)) {
+                return;
+            }
+            OnlineUserVO vo = buildOnlineUser(normalizedToken);
+            if (vo == null) {
+                removeOnlineToken(normalizedToken);
+                return;
+            }
+            if (vo.getUserId() != null) {
+                seenUserIds.add(vo.getUserId());
+            }
+            if (!matchesFilter(vo, lowerKeyword, ipFilter)) {
+                return;
+            }
+            total[0]++;
+            offerTopUsers(topUsers, vo, targetCount, orderComparator);
+        });
+
+        OnlineUserVO currentUser = buildCurrentOnlineUser();
+        if (currentUser != null) {
+            boolean exists = seenTokens.contains(currentUser.getToken())
+                || (currentUser.getUserId() != null && seenUserIds.contains(currentUser.getUserId()));
+            if (!exists && matchesFilter(currentUser, lowerKeyword, ipFilter)) {
+                total[0]++;
+                offerTopUsers(topUsers, currentUser, targetCount, orderComparator);
             }
         }
 
-        OnlineUserVO currentUser = buildCurrentOnlineUser();
-        if (currentUser != null && allUsers.stream().noneMatch(item ->
-            Objects.equals(item.getToken(), currentUser.getToken()) || Objects.equals(item.getUserId(), currentUser.getUserId()))) {
-            allUsers.add(currentUser);
-        }
+        List<OnlineUserVO> sorted = new ArrayList<>(topUsers);
+        sorted.sort(orderComparator);
+        int start = Math.min(offset, sorted.size());
+        int end = Math.min(start + pageSize, sorted.size());
+        List<OnlineUserVO> pageRecords = sorted.subList(start, end);
 
-        if (StringUtils.hasText(keyword)) {
-            String lowerKeyword = keyword.trim().toLowerCase();
-            allUsers = allUsers.stream()
-                .filter(item -> containsIgnoreCase(item.getUsername(), lowerKeyword)
-                    || containsIgnoreCase(item.getNickname(), lowerKeyword)
-                    || Objects.toString(item.getUserId(), "").contains(lowerKeyword))
-                .collect(Collectors.toList());
-        }
-
-        if (StringUtils.hasText(ipaddr)) {
-            String ip = ipaddr.trim();
-            allUsers = allUsers.stream()
-                .filter(item -> item.getIpaddr() != null && item.getIpaddr().contains(ip))
-                .collect(Collectors.toList());
-        }
-
-        allUsers.sort(Comparator.comparing(OnlineUserVO::getLastActiveTime, Comparator.nullsLast(Long::compareTo)).reversed());
-
-        int total = allUsers.size();
-        int start = Math.min(query.getOffset(), total);
-        int end = Math.min(start + query.getSize(), total);
-        List<OnlineUserVO> pageRecords = allUsers.subList(start, end);
-
-        return PageResult.of(pageRecords, total, query.getSize(), query.getPage());
+        return PageResult.of(pageRecords, total[0], pageSize, query.getPage());
     }
 
     @Override
@@ -147,13 +163,39 @@ public class OnlineUserServiceImpl implements OnlineUserService {
         return value.toLowerCase().contains(keyword);
     }
 
-    private List<String> normalizeTokenValues(List<String> rawValues) {
-        if (rawValues == null || rawValues.isEmpty()) {
-            return new ArrayList<>();
+    private boolean matchesFilter(OnlineUserVO user, String lowerKeyword, String ipFilter) {
+        if (user == null) {
+            return false;
         }
-        return rawValues.stream()
-            .map(this::normalizeTokenValue)
-            .collect(Collectors.toList());
+        if (lowerKeyword != null && !lowerKeyword.isEmpty()) {
+            if (!containsIgnoreCase(user.getUsername(), lowerKeyword)
+                && !containsIgnoreCase(user.getNickname(), lowerKeyword)
+                && !Objects.toString(user.getUserId(), "").contains(lowerKeyword)) {
+                return false;
+            }
+        }
+        if (StringUtils.hasText(ipFilter)) {
+            return user.getIpaddr() != null && user.getIpaddr().contains(ipFilter);
+        }
+        return true;
+    }
+
+    private void offerTopUsers(PriorityQueue<OnlineUserVO> heap,
+                               OnlineUserVO candidate,
+                               int limit,
+                               Comparator<OnlineUserVO> orderComparator) {
+        if (limit <= 0 || candidate == null) {
+            return;
+        }
+        if (heap.size() < limit) {
+            heap.offer(candidate);
+            return;
+        }
+        OnlineUserVO worst = heap.peek();
+        if (worst != null && orderComparator.compare(candidate, worst) > 0) {
+            heap.poll();
+            heap.offer(candidate);
+        }
     }
 
     private List<String> normalizeSessionIds(List<String> rawValues) {
@@ -176,47 +218,83 @@ public class OnlineUserServiceImpl implements OnlineUserService {
             .collect(Collectors.toList());
     }
 
-    private List<String> resolveTokenValues() {
-        List<String> tokenValues = normalizeTokenValues(
-            StpUtil.searchTokenValue("", 0, Integer.MAX_VALUE, false)
-        );
-        java.util.LinkedHashSet<String> merged = new java.util.LinkedHashSet<>(tokenValues);
+    private void scanTokenValues(Consumer<String> consumer) {
+        if (consumer == null) {
+            return;
+        }
+        scanTokensFromRedis(consumer);
+        scanTokensFromStp(consumer);
+    }
 
+    private void scanTokensFromRedis(Consumer<String> consumer) {
         try {
-            var cachedTokens = redisTemplate.opsForSet().members(CacheConstants.ONLINE_TOKENS);
-            if (cachedTokens != null) {
-                for (String token : cachedTokens) {
-                    merged.add(normalizeTokenValue(token));
+            Long size = redisTemplate.opsForSet().size(CacheConstants.ONLINE_TOKENS);
+            if (size == null || size == 0) {
+                return;
+            }
+            try (Cursor<String> cursor = redisTemplate.opsForSet().scan(
+                CacheConstants.ONLINE_TOKENS, ScanOptions.scanOptions().count(500).build())) {
+                while (cursor.hasNext()) {
+                    consumer.accept(cursor.next());
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            // ignore
         }
+    }
 
-        List<String> tokenSessionIds = normalizeTokenSessionIds(
-            StpUtil.searchTokenSessionId("", 0, Integer.MAX_VALUE, false)
-        );
-        for (String token : tokenSessionIds) {
-            if (StringUtils.hasText(token)) {
-                merged.add(normalizeTokenValue(token));
+    private void scanTokensFromStp(Consumer<String> consumer) {
+        scanTokenValuesBySearch(consumer, (start, size) -> StpUtil.searchTokenValue("", start, size, false));
+        scanTokenValuesBySearch(consumer, (start, size) ->
+            normalizeTokenSessionIds(StpUtil.searchTokenSessionId("", start, size, false)));
+
+        int start = 0;
+        int batchSize = 500;
+        while (true) {
+            List<String> sessionIds = StpUtil.searchSessionId("", start, batchSize, false);
+            if (sessionIds == null || sessionIds.isEmpty()) {
+                break;
             }
-        }
-
-        List<String> sessionIds = normalizeSessionIds(
-            StpUtil.searchSessionId("", 0, Integer.MAX_VALUE, false)
-        );
-        for (String loginId : sessionIds) {
-            if (!StringUtils.hasText(loginId)) {
-                continue;
+            List<String> loginIds = normalizeSessionIds(sessionIds);
+            for (String loginId : loginIds) {
+                if (!StringUtils.hasText(loginId)) {
+                    continue;
+                }
+                List<String> tokens = StpUtil.getTokenValueListByLoginId(loginId);
+                if (tokens == null || tokens.isEmpty()) {
+                    continue;
+                }
+                for (String token : tokens) {
+                    consumer.accept(token);
+                }
             }
-            merged.addAll(StpUtil.getTokenValueListByLoginId(loginId));
+            if (sessionIds.size() < batchSize) {
+                break;
+            }
+            start += batchSize;
         }
+    }
 
-        String currentToken = normalizeTokenValue(getCurrentTokenSafe());
-        if (StringUtils.hasText(currentToken)) {
-            merged.add(currentToken);
+    private void scanTokenValuesBySearch(Consumer<String> consumer,
+                                         BiFunction<Integer, Integer, List<String>> fetcher) {
+        if (fetcher == null) {
+            return;
         }
-
-        return new ArrayList<>(merged);
+        int start = 0;
+        int batchSize = 500;
+        while (true) {
+            List<String> values = fetcher.apply(start, batchSize);
+            if (values == null || values.isEmpty()) {
+                break;
+            }
+            for (String value : values) {
+                consumer.accept(value);
+            }
+            if (values.size() < batchSize) {
+                break;
+            }
+            start += batchSize;
+        }
     }
 
     private String getCurrentTokenSafe() {

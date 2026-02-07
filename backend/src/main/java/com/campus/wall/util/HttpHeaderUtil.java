@@ -25,6 +25,10 @@ public final class HttpHeaderUtil {
         }
         String sanitized = filename.replace("\r", "").replace("\n", "");
         sanitized = sanitized.replace("/", "_").replace("\\", "_").replace("\"", "");
+        sanitized = sanitized.replaceAll("\\.\\.+", ".");
+        if (sanitized.isBlank() || ".".equals(sanitized)) {
+            return "file";
+        }
         return sanitized;
     }
 

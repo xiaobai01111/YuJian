@@ -9,6 +9,7 @@ import com.campus.wall.config.FileCleanupProperties;
 import com.campus.wall.config.StorageProperties;
 import com.campus.wall.dto.system.FileCleanupRequestDTO;
 import com.campus.wall.entity.file.FileRecord;
+import com.campus.wall.enums.file.FileAuditStatus;
 import com.campus.wall.enums.file.FileVisibility;
 import com.campus.wall.enums.file.FileTargetType;
 import com.campus.wall.enums.file.StorageProviderType;
@@ -16,11 +17,13 @@ import com.campus.wall.mapper.file.FileRecordMapper;
 import com.campus.wall.service.file.FileAccessService;
 import com.campus.wall.service.content.ContentModerationService;
 import com.campus.wall.service.file.FileService;
+import com.campus.wall.service.system.UploadPolicyService;
 import com.campus.wall.service.storage.StorageProvider;
 import com.campus.wall.service.storage.StorageProviderRegistry;
 import com.campus.wall.vo.file.FileVO;
 import com.campus.wall.vo.system.FileCleanupConfigVO;
 import com.campus.wall.vo.system.FileCleanupResultVO;
+import com.campus.wall.entity.system.SysUploadPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -30,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.List;
@@ -50,10 +54,12 @@ public class FileServiceImpl implements FileService {
     private final StorageProperties storageProperties;
     private final FileAccessService fileAccessService;
     private final FileCleanupProperties cleanupProperties;
+    private final UploadPolicyService uploadPolicyService;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
             "image/jpeg", "image/png", "image/webp"
     );
+    private static final Set<String> ASSET_TYPES = Set.of("file", "gallery", "resource");
     private static final long MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final long MAX_FILE_SIZE = 200L * 1024 * 1024; // 200MB
 
@@ -63,10 +69,16 @@ public class FileServiceImpl implements FileService {
     private static final byte[] WEBP_MAGIC = new byte[]{0x52, 0x49, 0x46, 0x46}; // RIFF
 
     @Override
-    public FileVO uploadFile(MultipartFile file, String targetType, String visibility) {
+    public FileVO uploadFile(MultipartFile file, String targetType, String visibility, String scene) {
         String normalizedTargetType = normalizeTargetType(targetType);
         validateFile(file, normalizedTargetType);
 
+        String resolvedScene = StringUtils.hasText(scene) ? scene.trim() : normalizedTargetType;
+        SysUploadPolicy policy = uploadPolicyService.findByScene(resolvedScene);
+        StorageProvider provider = null;
+        String storedPath = null;
+        boolean inserted = false;
+        Long persistedFileId = null;
         try {
             Long userId = StpUtil.getLoginIdAsLong();
 
@@ -74,9 +86,9 @@ public class FileServiceImpl implements FileService {
             String originalFilename = file.getOriginalFilename();
             String extension = getFileExtension(originalFilename);
             String objectName = generateObjectName(normalizedTargetType, extension);
-            FileVisibility resolvedVisibility = resolveVisibility(normalizedTargetType, visibility);
-            StorageProvider provider = resolvePrimaryProvider();
-            String storedPath;
+            String assetType = resolveAssetType(policy, normalizedTargetType, file.getContentType());
+            FileVisibility resolvedVisibility = resolveVisibility(normalizedTargetType, visibility, policy);
+            provider = resolvePrimaryProvider();
             try {
                 storedPath = provider.store(file, objectName);
             } catch (Exception primaryError) {
@@ -96,21 +108,50 @@ public class FileServiceImpl implements FileService {
             record.setSize(file.getSize());
             record.setMimeType(file.getContentType());
             record.setTargetType(normalizedTargetType);
+            record.setAssetType(assetType);
+            record.setPublicKey(UUID.randomUUID().toString().replace("-", ""));
             record.setStatus(0);
-            record.setAuditStatus(0); // 待审核
+            record.setAuditStatus(FileAuditStatus.PENDING.getCode());
             record.setStorageClass("STANDARD");
             record.setStorageProvider(provider.getType().getCode());
             record.setVisibility(resolvedVisibility.getCode());
             fileRecordMapper.insert(record);
+            inserted = true;
+            persistedFileId = record.getId();
 
             String fileUrl = fileAccessService.buildAccessUrl(record);
+            boolean passed = true;
             if (isAllowedImageType(record.getMimeType())) {
-                contentModerationService.asyncModerateImage(record.getId(), fileUrl);
+                passed = contentModerationService.moderateImage(fileUrl);
+            }
+            int auditStatus = passed ? FileAuditStatus.PASSED.getCode() : FileAuditStatus.REJECTED.getCode();
+            fileRecordMapper.updateAuditStatus(record.getId(), auditStatus);
+            record.setAuditStatus(auditStatus);
+
+            if (!passed) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "图片审核未通过");
             }
 
             return toFileVO(record);
 
         } catch (Exception e) {
+            if (provider != null && StringUtils.hasText(storedPath)) {
+                try {
+                    provider.delete(storedPath);
+                } catch (Exception cleanupError) {
+                    log.warn("清理上传文件失败: {}", storedPath, cleanupError);
+                }
+            }
+            if (inserted && persistedFileId != null) {
+                try {
+                    fileRecordMapper.deleteById(persistedFileId);
+                } catch (Exception cleanupError) {
+                    log.warn("清理上传记录失败: fileId={}", persistedFileId, cleanupError);
+                }
+            }
+            if (e instanceof BusinessException businessException) {
+                throw businessException;
+            }
             log.error("文件上传失败", e);
             throw new BusinessException(ResultCode.FILE_UPLOAD_FAILED);
         }
@@ -311,6 +352,10 @@ public class FileServiceImpl implements FileService {
                 throw new BusinessException(ResultCode.BAD_REQUEST, "无法读取文件内容");
             }
         }
+
+        if (!contentModerationService.scanFile(file)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "文件安全扫描未通过");
+        }
     }
 
     private String normalizeTargetType(String targetType) {
@@ -381,7 +426,7 @@ public class FileServiceImpl implements FileService {
         };
     }
 
-    private FileVisibility resolveVisibility(String targetType, String requestedVisibility) {
+    private FileVisibility resolveVisibility(String targetType, String requestedVisibility, SysUploadPolicy policy) {
         if (StringUtils.hasText(requestedVisibility) && canOverrideVisibility()) {
             for (FileVisibility item : FileVisibility.values()) {
                 if (item.getCode().equalsIgnoreCase(requestedVisibility.trim())) {
@@ -390,19 +435,59 @@ public class FileServiceImpl implements FileService {
             }
             throw new BusinessException(ResultCode.BAD_REQUEST, "visibility不合法");
         }
+        FileVisibility policyVisibility = resolvePolicyVisibility(policy);
+        if (policyVisibility != null) {
+            return policyVisibility;
+        }
         return resolveVisibility(targetType);
+    }
+
+    private FileVisibility resolvePolicyVisibility(SysUploadPolicy policy) {
+        if (policy == null || !StringUtils.hasText(policy.getVisibility())) {
+            return null;
+        }
+        for (FileVisibility item : FileVisibility.values()) {
+            if (item.getCode().equalsIgnoreCase(policy.getVisibility().trim())) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private String resolveAssetType(SysUploadPolicy policy, String targetType, String contentType) {
+        String policyAssetType = normalizeAssetType(policy == null ? null : policy.getAssetType());
+        if (policyAssetType != null) {
+            return policyAssetType;
+        }
+        if (ASSET_TYPES.contains(targetType)) {
+            return targetType;
+        }
+        if (contentType != null && contentType.startsWith("image/")) {
+            return "gallery";
+        }
+        return "file";
+    }
+
+    private String normalizeAssetType(String assetType) {
+        if (!StringUtils.hasText(assetType)) {
+            return null;
+        }
+        String normalized = assetType.trim().toLowerCase(Locale.ROOT);
+        return ASSET_TYPES.contains(normalized) ? normalized : null;
     }
 
     private boolean canOverrideVisibility() {
         return StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())
                 || StpUtil.hasPermission("system:file:upload")
-                || StpUtil.hasPermission("system:gallery:upload");
+                || StpUtil.hasPermission("system:gallery:upload")
+                || StpUtil.hasPermission("system:resource:upload");
     }
 
     private boolean isPrivilegedUploader() {
         return StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey())
                 || StpUtil.hasPermission("system:file:upload")
-                || StpUtil.hasPermission("system:gallery:upload");
+                || StpUtil.hasPermission("system:gallery:upload")
+                || StpUtil.hasPermission("system:resource:upload");
     }
 
     private boolean requiresImageOnly(String targetType) {

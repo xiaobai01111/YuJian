@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "app.notice.sanitize-on-startup",
+      "type": "java.lang.Boolean",
+      "description": "是否在应用启动时清洗公告内容中的不安全 HTML",
+      "defaultValue": false
+    }
+  ]
+}

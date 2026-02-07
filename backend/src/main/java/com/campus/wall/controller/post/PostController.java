@@ -43,7 +43,7 @@ public class PostController {
 
     @Operation(summary = "获取帖子列表")
     @GetMapping
-    public R<PageResult<PostVO>> list(PostQueryDTO query) {
+    public R<PageResult<PostVO>> list(@Valid PostQueryDTO query) {
         return R.ok(postService.queryPosts(query));
     }
 

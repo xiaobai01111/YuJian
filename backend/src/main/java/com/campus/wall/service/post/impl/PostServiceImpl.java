@@ -142,7 +142,27 @@ public class PostServiceImpl implements PostService {
             throw new BusinessException(ResultCode.FORBIDDEN, "请先完成身份验证后再发帖");
         }
         
-        // 规范化板块列表（兼容旧字段 board）
+        List<String> boards = resolveBoards(dto);
+
+        // 市集板块额外需要信用分达标
+        if (boards.contains(BOARD_MARKET)) {
+            if (!creditService.canPostInMarket(userId)) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "信用分不足，无法在市集发帖（需要60分以上）");
+            }
+        }
+
+        return doCreatePost(dto, boards);
+    }
+
+    @Override
+    @Transactional
+    public Long createPostByAdmin(PostCreateDTO dto) {
+        List<String> boards = resolveBoards(dto);
+        assertCanManageBoards(boards);
+        return doCreatePost(dto, boards);
+    }
+
+    private List<String> resolveBoards(PostCreateDTO dto) {
         List<String> boards = BoardUtil.normalizeBoardKeys(dto.getBoards());
         if (boards.isEmpty()) {
             String singleBoard = BoardUtil.normalizeBoardKey(dto.getBoard());
@@ -153,13 +173,11 @@ public class PostServiceImpl implements PostService {
         if (boards.isEmpty()) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "板块不能为空或无效");
         }
+        return boards;
+    }
 
-        // 市集板块额外需要信用分达标
-        if (boards.contains(BOARD_MARKET)) {
-            if (!creditService.canPostInMarket(userId)) {
-                throw new BusinessException(ResultCode.FORBIDDEN, "信用分不足，无法在市集发帖（需要60分以上）");
-            }
-        }
+    private Long doCreatePost(PostCreateDTO dto, List<String> boards) {
+        Long userId = StpUtil.getLoginIdAsLong();
 
         // 敏感词检测
         if (sensitiveWordService.containsSensitiveWord(dto.getTitle())) {
@@ -206,23 +224,6 @@ public class PostServiceImpl implements PostService {
 
         log.info("用户 {} 创建帖子: {}", userId, post.getId());
         return post.getId();
-    }
-
-    @Override
-    @Transactional
-    public Long createPostByAdmin(PostCreateDTO dto) {
-        List<String> boards = BoardUtil.normalizeBoardKeys(dto.getBoards());
-        if (boards.isEmpty()) {
-            String singleBoard = BoardUtil.normalizeBoardKey(dto.getBoard());
-            if (singleBoard != null) {
-                boards = List.of(singleBoard);
-            }
-        }
-        if (boards.isEmpty()) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "板块不能为空或无效");
-        }
-        assertCanManageBoards(boards);
-        return createPost(dto);
     }
 
     @Override
@@ -479,7 +480,7 @@ public class PostServiceImpl implements PostService {
                 .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context, applyDataScope))
                 .collect(Collectors.toList());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     private LambdaQueryWrapper<Post> buildWrapper(PostQueryDTO query, boolean defaultVisibleStatus) {
@@ -498,16 +499,10 @@ public class PostServiceImpl implements PostService {
             return wrapper;
         }
         if (normalizedBoard != null) {
-            List<Long> postIds = postBoardMapper.selectList(
-                    new LambdaQueryWrapper<PostBoard>()
-                            .select(PostBoard::getPostId)
-                            .eq(PostBoard::getBoard, normalizedBoard)
-            ).stream().map(PostBoard::getPostId).collect(Collectors.toList());
-            if (postIds.isEmpty()) {
-                wrapper.eq(Post::getId, -1L);
-                return wrapper;
-            }
-            wrapper.in(Post::getId, postIds);
+            wrapper.exists(
+                "select 1 from post_boards pb where pb.post_id = posts.id and pb.board = {0}",
+                normalizedBoard
+            );
         }
 
         if (query.getCategory() != null && !query.getCategory().isEmpty()) {
@@ -543,12 +538,20 @@ public class PostServiceImpl implements PostService {
         if (scope.isAllowAll()) {
             return;
         }
-        List<Long> allowedUserIds = dataScopeService.resolveAllowedUserIds(scope, userId);
-        if (allowedUserIds.isEmpty()) {
-            wrapper.eq(Post::getUserId, -1L);
+        String deptScopeSql = dataScopeService.buildUserScopeExistsSql(scope, "posts.user_id");
+        if (deptScopeSql == null) {
+            if (scope.isAllowSelf() && userId != null) {
+                wrapper.eq(Post::getUserId, userId);
+            } else {
+                wrapper.eq(Post::getId, -1L);
+            }
             return;
         }
-        wrapper.in(Post::getUserId, allowedUserIds);
+        if (scope.isAllowSelf() && userId != null) {
+            wrapper.and(w -> w.eq(Post::getUserId, userId).or().apply(deptScopeSql));
+        } else {
+            wrapper.apply(deptScopeSql);
+        }
     }
 
     private void applyPostChannelScope(LambdaQueryWrapper<Post> wrapper, String boardFilter) {
@@ -569,16 +572,23 @@ public class PostServiceImpl implements PostService {
             return;
         }
 
-        List<Long> postIds = postBoardMapper.selectList(
-                new LambdaQueryWrapper<PostBoard>()
-                        .select(PostBoard::getPostId)
-                        .in(PostBoard::getBoard, allowedBoards)
-        ).stream().map(PostBoard::getPostId).distinct().collect(Collectors.toList());
-        if (postIds.isEmpty()) {
+        String boardInSql = buildBoardInSql(allowedBoards);
+        if (boardInSql == null) {
             wrapper.eq(Post::getId, -1L);
             return;
         }
-        wrapper.in(Post::getId, postIds);
+        wrapper.exists("select 1 from post_boards pb where pb.post_id = posts.id and pb.board in (" + boardInSql + ")");
+    }
+
+    private String buildBoardInSql(Set<String> boards) {
+        if (boards == null || boards.isEmpty()) {
+            return null;
+        }
+        String joined = boards.stream()
+            .filter(StringUtils::hasText)
+            .map(board -> "'" + board.replace("'", "''") + "'")
+            .collect(Collectors.joining(","));
+        return joined.isEmpty() ? null : joined;
     }
 
     private void assertCanManagePost(Post post, String reason, String action) {
@@ -862,7 +872,7 @@ public class PostServiceImpl implements PostService {
                 .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context, false))
                 .collect(Collectors.toList());
 
-        return PageResult.of(records, bookmarks.getTotal(), bookmarks.getCurrent(), bookmarks.getSize());
+        return PageResult.of(records, bookmarks.getTotal(), bookmarks.getSize(), bookmarks.getCurrent());
     }
 
     @Override
@@ -1053,7 +1063,7 @@ public class PostServiceImpl implements PostService {
                 .map(post -> toPostVO(post, false, boardsMap.get(post.getId()), context, false))
                 .collect(Collectors.toList());
 
-        return PageResult.of(records, result.getTotal(), result.getCurrent(), result.getSize());
+        return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
 
     private Post getPostOrThrow(Long postId) {

@@ -3,6 +3,7 @@ package com.campus.wall.service.user.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.PageResult;
@@ -22,7 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,9 +52,7 @@ public class VerificationServiceImpl implements VerificationService {
             new Page<>(page, size), wrapper
         );
 
-        List<VerificationVO> records = result.getRecords().stream()
-            .map(this::toVO)
-            .collect(Collectors.toList());
+        List<VerificationVO> records = toVOList(result.getRecords());
 
         return PageResult.of(records, result.getTotal(), result.getSize(), result.getCurrent());
     }
@@ -80,21 +84,24 @@ public class VerificationServiceImpl implements VerificationService {
         verification.setReviewerId(reviewerId);
         verification.setReviewedAt(LocalDateTime.now());
 
+        User user = null;
         if (dto.getStatus() == 2) {
             // 拒绝
             if (dto.getRejectReason() == null || dto.getRejectReason().isEmpty()) {
                 throw new BusinessException("拒绝时必须填写原因");
             }
             verification.setRejectReason(dto.getRejectReason());
-            User user = userMapper.selectById(verification.getUserId());
+            user = userMapper.selectById(verification.getUserId());
             if (user != null) {
                 user.setVerifyStatus(0);
                 user.setVerifyMethod(null);
-                userMapper.updateById(user);
             }
         } else if (dto.getStatus() == 1) {
             // 通过 - 更新用户验证状态
-            User user = userMapper.selectById(verification.getUserId());
+            user = userMapper.selectById(verification.getUserId());
+            if (user == null) {
+                throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在");
+            }
             user.setVerifyStatus(2); // 已验证
             String verifyMethod = dto.getVerifyMethod();
             if (!StringUtils.hasText(verifyMethod)) {
@@ -125,16 +132,90 @@ public class VerificationServiceImpl implements VerificationService {
                 verification.setStudentIdHash(studentIdHash);
             }
 
-            userMapper.updateById(user);
-
-            // 认证通过后应用规则
-            authRuleService.applyRules(user, "VERIFY", verifyMethod);
+        } else {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "审核结果不合法");
         }
 
-        verificationMapper.updateById(verification);
+        LambdaUpdateWrapper<IdentityVerification> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(IdentityVerification::getId, verification.getId())
+            .eq(IdentityVerification::getStatus, 0)
+            .set(IdentityVerification::getStatus, verification.getStatus())
+            .set(IdentityVerification::getReviewerId, verification.getReviewerId())
+            .set(IdentityVerification::getReviewedAt, verification.getReviewedAt());
+        if (verification.getRejectReason() != null) {
+            updateWrapper.set(IdentityVerification::getRejectReason, verification.getRejectReason());
+        }
+        if (verification.getVerifyMethod() != null) {
+            updateWrapper.set(IdentityVerification::getVerifyMethod, verification.getVerifyMethod());
+        }
+        if (verification.getStudentId() != null) {
+            updateWrapper.set(IdentityVerification::getStudentId, verification.getStudentId());
+        }
+        if (verification.getStudentIdHash() != null) {
+            updateWrapper.set(IdentityVerification::getStudentIdHash, verification.getStudentIdHash());
+        }
+        int updated = verificationMapper.update(null, updateWrapper);
+        if (updated == 0) {
+            throw new BusinessException("该申请已处理");
+        }
+
+        if (user != null) {
+            userMapper.updateById(user);
+        }
+        if (dto.getStatus() == 1 && user != null) {
+            String verifyMethod = verification.getVerifyMethod();
+            authRuleService.applyRules(user, "VERIFY", verifyMethod);
+        }
     }
 
     private VerificationVO toVO(IdentityVerification verification) {
+        Map<Long, User> userMap = new HashMap<>();
+        if (verification.getUserId() != null) {
+            User user = userMapper.selectById(verification.getUserId());
+            if (user != null) {
+                userMap.put(user.getId(), user);
+            }
+        }
+        if (verification.getReviewerId() != null) {
+            User reviewer = userMapper.selectById(verification.getReviewerId());
+            if (reviewer != null) {
+                userMap.put(reviewer.getId(), reviewer);
+            }
+        }
+        return toVO(verification, userMap);
+    }
+
+    private List<VerificationVO> toVOList(List<IdentityVerification> verifications) {
+        if (verifications == null || verifications.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> userIdSet = new HashSet<>();
+        for (IdentityVerification verification : verifications) {
+            if (verification == null) {
+                continue;
+            }
+            if (verification.getUserId() != null) {
+                userIdSet.add(verification.getUserId());
+            }
+            if (verification.getReviewerId() != null) {
+                userIdSet.add(verification.getReviewerId());
+            }
+        }
+        Map<Long, User> userMap = userIdSet.isEmpty()
+            ? Map.of()
+            : userMapper.selectBatchIds(new ArrayList<>(userIdSet)).stream()
+                .collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
+        List<VerificationVO> result = new ArrayList<>(verifications.size());
+        for (IdentityVerification verification : verifications) {
+            if (verification == null) {
+                continue;
+            }
+            result.add(toVO(verification, userMap));
+        }
+        return result;
+    }
+
+    private VerificationVO toVO(IdentityVerification verification, Map<Long, User> userMap) {
         VerificationVO vo = new VerificationVO();
         vo.setId(verification.getId());
         vo.setUserId(verification.getUserId());
@@ -155,7 +236,7 @@ public class VerificationServiceImpl implements VerificationService {
         vo.setReviewedAt(verification.getReviewedAt());
 
         // 获取用户信息
-        User user = userMapper.selectById(verification.getUserId());
+        User user = verification.getUserId() == null ? null : userMap.get(verification.getUserId());
         if (user != null) {
             vo.setUsername(user.getUsername());
             vo.setNickname(user.getNickname());
@@ -163,7 +244,7 @@ public class VerificationServiceImpl implements VerificationService {
 
         // 获取审核员信息
         if (verification.getReviewerId() != null) {
-            User reviewer = userMapper.selectById(verification.getReviewerId());
+            User reviewer = userMap.get(verification.getReviewerId());
             if (reviewer != null) {
                 vo.setReviewerName(reviewer.getNickname());
             }

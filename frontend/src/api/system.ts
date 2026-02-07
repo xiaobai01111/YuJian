@@ -58,6 +58,7 @@ export interface UserVO {
     verifyStatus?: number
     status: number
     deleted?: number
+    deletedAt?: string
     creditScore?: number
     loginDate?: string
     createdAt: string
@@ -255,11 +256,22 @@ export interface UserQuery {
     loginDateEnd?: string
 }
 
+export interface DeletedUserQuery {
+    size?: number
+    username?: string
+    nickname?: string
+    phone?: string
+    loginDateStart?: string
+    loginDateEnd?: string
+    lastDeletedAt?: string
+    lastId?: number
+}
+
 export function getUserList(params?: UserQuery) {
     return request.get<PageResult<UserVO>>('/api/v1/console/users', { params })
 }
 
-export function getDeletedUserList(params?: UserQuery) {
+export function getDeletedUserList(params?: DeletedUserQuery) {
     return request.get<PageResult<UserVO>>('/api/v1/console/users/deleted', { params })
 }
 
@@ -604,6 +616,19 @@ export interface FileCleanupResult {
     failed: number
 }
 
+export interface UploadPolicyVO {
+    sceneCode: string
+    sceneName: string
+    assetType: string
+    visibility?: string
+    updatedAt?: string
+}
+
+export interface UploadPolicyUpdateDTO {
+    assetType: string
+    visibility?: string
+}
+
 export function getFileCategories() {
     return request.get<FileCategoryVO[]>('/api/v1/console/files/categories')
 }
@@ -618,6 +643,14 @@ export function getGalleryCategories() {
 
 export function getGalleryList(params?: FileQuery) {
     return request.get<PageResult<FileManageVO>>('/api/v1/console/gallery', { params })
+}
+
+export function getResourceCategories() {
+    return request.get<FileCategoryVO[]>('/api/v1/console/resources/categories')
+}
+
+export function getResourceList(params?: FileQuery) {
+    return request.get<PageResult<FileManageVO>>('/api/v1/console/resources', { params })
 }
 
 export function uploadConsoleFile(file: File, targetType?: string, visibility?: string) {
@@ -638,6 +671,28 @@ export function deleteConsoleFile(id: number) {
 
 export function batchDeleteConsoleFiles(ids: number[]) {
     return request.post('/api/v1/console/files/batch-delete', { ids })
+}
+
+export function uploadConsoleResource(file: File, visibility?: string) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', 'resource')
+    if (visibility) {
+        formData.append('visibility', visibility)
+    }
+    return request.post<FileManageVO>('/api/v1/console/resources/upload', formData)
+}
+
+export function deleteConsoleResource(id: number) {
+    return request.delete(`/api/v1/console/resources/${id}`)
+}
+
+export function batchDeleteConsoleResources(ids: number[]) {
+    return request.post('/api/v1/console/resources/batch-delete', { ids })
+}
+
+export function updateConsoleResourceVisibility(id: number, visibility: string) {
+    return request.post(`/api/v1/console/resources/${id}/visibility`, { visibility })
 }
 
 export function uploadConsoleGallery(file: File, targetType?: string, visibility?: string) {
@@ -678,6 +733,14 @@ export function updateFileCleanupConfig(data: Partial<FileCleanupConfig>) {
 
 export function runFileCleanup(data?: Partial<FileCleanupConfig>) {
     return request.post<FileCleanupResult>('/api/v1/console/files/cleanup', data || {})
+}
+
+export function getUploadPolicies() {
+    return request.get<UploadPolicyVO[]>('/api/v1/console/upload-policies')
+}
+
+export function updateUploadPolicy(sceneCode: string, data: UploadPolicyUpdateDTO) {
+    return request.put<UploadPolicyVO>(`/api/v1/console/upload-policies/${sceneCode}`, data)
 }
 
 // --- Oper Log ---
@@ -811,6 +874,13 @@ export interface NoticeDTO {
     endAt?: string
 }
 
+export interface VisibleNoticeQuery {
+    size?: number
+    lastPinned?: number
+    lastPublishedAt?: string
+    lastId?: number
+}
+
 // 公开接口（未登录可访问）
 export function getPublicNotices(limit: number = 10) {
     return request.get<NoticeVO[]>('/api/v1/notices/public', { params: { limit } })
@@ -821,8 +891,8 @@ export function getPublicNoticeDetail(id: number) {
 }
 
 // 登录用户接口
-export function getVisibleNotices(page: number = 1, size: number = 10) {
-    return request.get<PageResult<NoticeVO>>('/api/v1/notices', { params: { page, size } })
+export function getVisibleNotices(params: VisibleNoticeQuery = { size: 10 }) {
+    return request.get<PageResult<NoticeVO>>('/api/v1/notices', { params })
 }
 
 export function getVisibleNoticeDetail(id: number) {

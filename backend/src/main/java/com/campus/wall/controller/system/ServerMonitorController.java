@@ -73,12 +73,10 @@ public class ServerMonitorController {
         var osBean = ManagementFactory.getOperatingSystemMXBean();
         long total = 0;
         long free = 0;
-        long available = 0;
         long[] memInfo = readLinuxMemInfo();
         if (memInfo != null) {
             total = memInfo[0];
-            available = memInfo[1];
-            free = available;
+            free = memInfo[1];
         } else if (osBean instanceof com.sun.management.OperatingSystemMXBean bean) {
             total = bean.getTotalMemorySize();
             free = bean.getFreeMemorySize();

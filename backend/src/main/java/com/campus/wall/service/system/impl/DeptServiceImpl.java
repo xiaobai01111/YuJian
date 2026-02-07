@@ -23,7 +23,10 @@ import com.campus.wall.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -45,6 +48,7 @@ public class DeptServiceImpl implements DeptService {
     private final SysRoleMapper roleMapper;
     private final UserMapper userMapper;
     private final UserService userService;
+    private final PlatformTransactionManager transactionManager;
     private final OperLogService operLogService;
 
     @Override
@@ -576,7 +580,6 @@ public class DeptServiceImpl implements DeptService {
     }
 
     @Override
-    @Transactional
     public String importDepts(MultipartFile file, boolean updateExisting) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException("文件不能为空");
@@ -584,87 +587,127 @@ public class DeptServiceImpl implements DeptService {
         int successCount = 0;
         int failCount = 0;
         StringBuilder errorMsg = new StringBuilder();
+        int batchSize = 200;
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         try {
             ExcelReader reader = ExcelUtil.getReader(file.getInputStream());
             List<Map<String, Object>> rows = reader.readAll();
-            for (int i = 0; i < rows.size(); i++) {
-                Map<String, Object> row = rows.get(i);
-                try {
-                    String deptName = stringValue(row.get("部门名称"));
-                    if (!StringUtils.hasText(deptName)) {
-                        failCount++;
-                        errorMsg.append("第").append(i + 2).append("行：部门名称为空\n");
-                        continue;
-                    }
-                    Long parentId = parseLong(row.get("上级部门ID"));
-                    if (parentId == null) {
-                        String parentName = stringValue(row.get("上级部门"));
-                        if (StringUtils.hasText(parentName)) {
-                            SysDept parent = deptMapper.selectOne(
-                                new LambdaQueryWrapper<SysDept>().eq(SysDept::getDeptName, parentName.trim())
-                            );
-                            if (parent == null) {
-                                failCount++;
-                                errorMsg.append("第").append(i + 2).append("行：上级部门不存在\n");
+            List<SysDept> existingDepts = deptMapper.selectList(null);
+            Map<Long, SysDept> deptById = new HashMap<>();
+            Map<String, SysDept> deptByName = new HashMap<>();
+            Map<String, SysDept> deptByParentAndName = new HashMap<>();
+            for (SysDept dept : existingDepts) {
+                if (dept == null || dept.getId() == null) {
+                    continue;
+                }
+                deptById.put(dept.getId(), dept);
+                if (StringUtils.hasText(dept.getDeptName())) {
+                    deptByName.putIfAbsent(dept.getDeptName().trim(), dept);
+                }
+                if (dept.getParentId() != null && StringUtils.hasText(dept.getDeptName())) {
+                    deptByParentAndName.put(buildDeptKey(dept.getParentId(), dept.getDeptName()), dept);
+                }
+            }
+
+            for (int start = 0; start < rows.size(); start += batchSize) {
+                int end = Math.min(rows.size(), start + batchSize);
+                int batchStart = start;
+                int batchEnd = end;
+                BatchImportResult batchResult = txTemplate.execute(status -> {
+                    int batchSuccess = 0;
+                    int batchFail = 0;
+                    StringBuilder batchErrors = new StringBuilder();
+                    for (int i = batchStart; i < batchEnd; i++) {
+                        Map<String, Object> row = rows.get(i);
+                        try {
+                            String deptName = stringValue(row.get("部门名称"));
+                            if (!StringUtils.hasText(deptName)) {
+                                batchFail++;
+                                batchErrors.append("第").append(i + 2).append("行：部门名称为空\n");
                                 continue;
                             }
-                            parentId = parent.getId();
-                        }
-                    }
-                    if (parentId == null || parentId == 0L) {
-                        parentId = SecurityConstants.SYSTEM_DEPT_ID;
-                    }
-                    if (!isSystemDept(parentId)) {
-                        SysDept parent = deptMapper.selectById(parentId);
-                        if (parent == null) {
-                            failCount++;
-                            errorMsg.append("第").append(i + 2).append("行：上级部门不存在\n");
-                            continue;
-                        }
-                    }
-                    Integer sortOrder = parseInteger(row.get("排序"));
-                    Integer status = parseStatus(row.get("状态"));
-                    Integer dataScope = parseDataScope(row.get("数据范围"));
-                    String leader = stringValue(row.get("负责人"));
-                    String phone = stringValue(row.get("联系电话"));
-                    String email = stringValue(row.get("邮箱"));
+                            Long parentId = parseLong(row.get("上级部门ID"));
+                            if (parentId == null) {
+                                String parentName = stringValue(row.get("上级部门"));
+                                if (StringUtils.hasText(parentName)) {
+                                    SysDept parent = deptByName.get(parentName.trim());
+                                    if (parent == null) {
+                                        batchFail++;
+                                        batchErrors.append("第").append(i + 2).append("行：上级部门不存在\n");
+                                        continue;
+                                    }
+                                    parentId = parent.getId();
+                                }
+                            }
+                            if (parentId == null || parentId == 0L) {
+                                parentId = SecurityConstants.SYSTEM_DEPT_ID;
+                            }
+                            if (!isSystemDept(parentId)) {
+                                SysDept parent = deptById.get(parentId);
+                                if (parent == null) {
+                                    batchFail++;
+                                    batchErrors.append("第").append(i + 2).append("行：上级部门不存在\n");
+                                    continue;
+                                }
+                            }
+                            Integer sortOrder = parseInteger(row.get("排序"));
+                            Integer statusValue = parseStatus(row.get("状态"));
+                            Integer dataScope = parseDataScope(row.get("数据范围"));
+                            String leader = stringValue(row.get("负责人"));
+                            String phone = stringValue(row.get("联系电话"));
+                            String email = stringValue(row.get("邮箱"));
 
-                    SysDept existing = deptMapper.selectOne(
-                        new LambdaQueryWrapper<SysDept>()
-                            .eq(SysDept::getParentId, parentId)
-                            .eq(SysDept::getDeptName, deptName.trim())
-                    );
+                            SysDept existing = deptByParentAndName.get(buildDeptKey(parentId, deptName));
 
-                    if (existing != null) {
-                        if (!updateExisting) {
-                            failCount++;
-                            errorMsg.append("第").append(i + 2).append("行：部门已存在\n");
-                            continue;
+                            if (existing != null) {
+                                if (!updateExisting) {
+                                    batchFail++;
+                                    batchErrors.append("第").append(i + 2).append("行：部门已存在\n");
+                                    continue;
+                                }
+                                existing.setLeader(StringUtils.hasText(leader) ? leader.trim() : existing.getLeader());
+                                existing.setPhone(StringUtils.hasText(phone) ? phone.trim() : existing.getPhone());
+                                existing.setEmail(StringUtils.hasText(email) ? email.trim() : existing.getEmail());
+                                if (sortOrder != null) existing.setSortOrder(sortOrder);
+                                if (statusValue != null) existing.setStatus(statusValue);
+                                if (dataScope != null) existing.setDataScope(dataScope);
+                                deptMapper.updateById(existing);
+                                deptById.put(existing.getId(), existing);
+                                batchSuccess++;
+                            } else {
+                                SysDept dept = new SysDept();
+                                dept.setParentId(parentId);
+                                dept.setDeptName(deptName.trim());
+                                dept.setSortOrder(sortOrder != null ? sortOrder : 0);
+                                dept.setLeader(StringUtils.hasText(leader) ? leader.trim() : null);
+                                dept.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
+                                dept.setEmail(StringUtils.hasText(email) ? email.trim() : null);
+                                dept.setStatus(statusValue != null ? statusValue : 0);
+                                dept.setDataScope(dataScope != null ? dataScope : SecurityConstants.DATA_SCOPE_DEPT);
+                                deptMapper.insert(dept);
+                                if (dept.getId() != null) {
+                                    deptById.put(dept.getId(), dept);
+                                    deptByParentAndName.put(buildDeptKey(parentId, dept.getDeptName()), dept);
+                                }
+                                if (StringUtils.hasText(dept.getDeptName())) {
+                                    deptByName.putIfAbsent(dept.getDeptName().trim(), dept);
+                                }
+                                batchSuccess++;
+                            }
+                        } catch (Exception e) {
+                            batchFail++;
+                            batchErrors.append("第").append(i + 2).append("行：").append(e.getMessage()).append("\n");
                         }
-                        existing.setLeader(StringUtils.hasText(leader) ? leader.trim() : existing.getLeader());
-                        existing.setPhone(StringUtils.hasText(phone) ? phone.trim() : existing.getPhone());
-                        existing.setEmail(StringUtils.hasText(email) ? email.trim() : existing.getEmail());
-                        if (sortOrder != null) existing.setSortOrder(sortOrder);
-                        if (status != null) existing.setStatus(status);
-                        if (dataScope != null) existing.setDataScope(dataScope);
-                        deptMapper.updateById(existing);
-                        successCount++;
-                    } else {
-                        SysDept dept = new SysDept();
-                        dept.setParentId(parentId);
-                        dept.setDeptName(deptName.trim());
-                        dept.setSortOrder(sortOrder != null ? sortOrder : 0);
-                        dept.setLeader(StringUtils.hasText(leader) ? leader.trim() : null);
-                        dept.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
-                        dept.setEmail(StringUtils.hasText(email) ? email.trim() : null);
-                        dept.setStatus(status != null ? status : 0);
-                        dept.setDataScope(dataScope != null ? dataScope : SecurityConstants.DATA_SCOPE_DEPT);
-                        deptMapper.insert(dept);
-                        successCount++;
                     }
-                } catch (Exception e) {
-                    failCount++;
-                    errorMsg.append("第").append(i + 2).append("行：").append(e.getMessage()).append("\n");
+                    return new BatchImportResult(batchSuccess, batchFail, batchErrors.toString());
+                });
+                if (batchResult != null) {
+                    successCount += batchResult.successCount();
+                    failCount += batchResult.failCount();
+                    if (StringUtils.hasText(batchResult.errorMsg())) {
+                        errorMsg.append(batchResult.errorMsg());
+                    }
                 }
             }
         } catch (IOException e) {
@@ -674,7 +717,16 @@ public class DeptServiceImpl implements DeptService {
             successCount, failCount, failCount > 0 ? "\n" + errorMsg : "");
     }
 
+    private String buildDeptKey(Long parentId, String deptName) {
+        String name = deptName == null ? "" : deptName.trim();
+        return parentId + ":" + name;
+    }
+
+    private record BatchImportResult(int successCount, int failCount, String errorMsg) {
+    }
+
     @Override
+    //noinspection SameReturnValue
     public String syncDepts() {
         return "未配置同步源，未执行";
     }

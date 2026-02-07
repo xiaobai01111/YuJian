@@ -8,13 +8,16 @@
         </div>
         <div class="flex items-center gap-2">
           <input ref="fileInput" type="file" class="hidden" multiple @change="handleUpload" />
-          <select v-if="canUpload" v-model="uploadVisibility" class="select select-sm">
-            <option value="PUBLIC">公有</option>
-            <option value="PRIVATE">私有</option>
-          </select>
           <button v-if="canUpload" class="btn btn-sm btn-primary" :disabled="uploading" @click="openUpload">
             {{ uploading ? '上传中...' : '上传文件' }}
           </button>
+          <router-link
+            v-if="canUpload"
+            to="/console/asset/upload-policy"
+            class="text-xs text-slate-500 hover:text-primary"
+          >
+            权限由上传策略控制
+          </router-link>
           <button v-if="canCleanup" class="btn btn-sm btn-secondary btn-outline" @click="openCleanupModal">
             孤儿清理
           </button>
@@ -73,6 +76,7 @@
                         </th>
                         <th class="w-16">ID</th>
                         <th>文件名</th>
+                        <th class="w-20">预览</th>
                         <th class="w-32">分类</th>
                         <th class="w-32">类型</th>
                         <th class="w-28">权限</th>
@@ -84,10 +88,10 @@
                     </thead>
                     <tbody>
                       <tr v-if="loading">
-                        <td colspan="10" class="text-center py-6">加载中...</td>
+                        <td colspan="11" class="text-center py-6">加载中...</td>
                       </tr>
                       <tr v-else-if="files.length === 0">
-                        <td colspan="10" class="text-center py-6">暂无数据</td>
+                        <td colspan="11" class="text-center py-6">暂无数据</td>
                       </tr>
                       <tr v-else v-for="file in files" :key="file.id">
                         <td>
@@ -104,20 +108,29 @@
                           <div class="text-xs text-slate-500 truncate max-w-xs">{{ file.path }}</div>
                         </td>
                         <td>
+                          <div class="h-10 w-10 rounded bg-base-200 overflow-hidden flex items-center justify-center">
+                            <a
+                              v-if="isImageFile(file.mimeType) && file.url"
+                              :href="resolveFileUrl(file.url)"
+                              target="_blank"
+                              rel="noopener"
+                            >
+                              <img
+                                :src="resolveFileUrl(file.url)"
+                                :alt="file.filename"
+                                class="h-10 w-10 object-cover"
+                                loading="lazy"
+                              />
+                            </a>
+                            <span v-else class="text-xs text-slate-400">-</span>
+                          </div>
+                        </td>
+                        <td>
                           <span class="badge badge-ghost badge-sm">{{ getCategoryLabel(file.mimeType) }}</span>
                         </td>
                         <td class="text-sm text-slate-500">{{ file.mimeType || '-' }}</td>
                         <td>
-                          <select
-                            v-if="canEditVisibility"
-                            class="select select-xs"
-                            :value="file.visibility || 'PRIVATE'"
-                            @change="event => handleVisibilityChange(file, (event.target as HTMLSelectElement).value)"
-                          >
-                            <option value="PUBLIC">公有</option>
-                            <option value="PRIVATE">私有</option>
-                          </select>
-                          <span v-else class="badge badge-ghost badge-sm">{{ getVisibilityLabel(file.visibility) }}</span>
+                          <span class="badge badge-ghost badge-sm">{{ getVisibilityLabel(file.visibility) }}</span>
                         </td>
                         <td class="text-sm text-slate-500">{{ file.uploaderName || '-' }}</td>
                         <td>{{ formatSize(file.size) }}</td>
@@ -206,8 +219,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, nextTick, ref } from 'vue'
 import { usePermissionStore } from '@/stores/permission'
-import { batchDeleteConsoleFiles, deleteConsoleFile, getFileCategories, getFileCleanupConfig, getFileList, runFileCleanup, updateConsoleFileVisibility, updateFileCleanupConfig, uploadConsoleFile, type FileCategoryVO, type FileCleanupConfig, type FileCleanupResult, type FileManageVO } from '@/api/system'
+import { batchDeleteConsoleFiles, deleteConsoleFile, getFileCategories, getFileCleanupConfig, getFileList, runFileCleanup, updateFileCleanupConfig, uploadConsoleFile, type FileCategoryVO, type FileCleanupConfig, type FileCleanupResult, type FileManageVO } from '@/api/system'
 import { useDialog } from '@/composables/useDialog'
+import { resolveFileUrl } from '@/utils/file'
 
 const categories = ref<FileCategoryVO[]>([])
 const activeCategory = ref('all')
@@ -226,7 +240,6 @@ const selectedIds = ref<number[]>([])
 const uploading = ref(false)
 const deleting = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
-const uploadVisibility = ref<'PUBLIC' | 'PRIVATE'>('PUBLIC')
 const showCleanupModal = ref(false)
 const cleanupForm = ref<FileCleanupConfig>({ markOrphanHours: 24, retainDays: 7, deleteLimit: 200 })
 const cleanupSaving = ref(false)
@@ -237,7 +250,6 @@ const permissionStore = usePermissionStore()
 const dialog = useDialog()
 const canUpload = computed(() => permissionStore.hasPermission(['system:file:upload']))
 const canDelete = computed(() => permissionStore.hasPermission(['system:file:delete']))
-const canEditVisibility = computed(() => permissionStore.hasPermission(['system:file:permission']))
 const canCleanup = computed(() => permissionStore.hasPermission(['system:file:cleanup']))
 const isAllSelected = computed(() => files.value.length > 0 && files.value.every(file => selectedIds.value.includes(file.id)))
 
@@ -400,7 +412,7 @@ const handleUpload = async (event: Event) => {
   if (fileList.length === 0) return
   uploading.value = true
   try {
-    await Promise.allSettled(fileList.map(file => uploadConsoleFile(file, undefined, uploadVisibility.value)))
+    await Promise.allSettled(fileList.map(file => uploadConsoleFile(file)))
     reloadAll()
   } finally {
     uploading.value = false
@@ -449,19 +461,6 @@ const handleBatchDelete = async () => {
   }
 }
 
-const handleVisibilityChange = async (file: FileManageVO, visibility: string) => {
-  if (!canEditVisibility.value) return
-  const next = visibility.toUpperCase()
-  if (file.visibility === next) return
-  try {
-    await updateConsoleFileVisibility(file.id, next)
-    file.visibility = next
-    fetchFiles({ reset: true })
-  } catch (error) {
-    fetchFiles({ reset: true })
-  }
-}
-
 const getVisibilityLabel = (visibility?: string) => {
   return visibility?.toUpperCase() === 'PUBLIC' ? '公有' : '私有'
 }
@@ -479,6 +478,10 @@ const formatDate = (value?: string) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
+}
+
+const isImageFile = (mimeType?: string) => {
+  return Boolean(mimeType && mimeType.toLowerCase().startsWith('image/'))
 }
 
 const getCategoryLabel = (mimeType?: string) => {

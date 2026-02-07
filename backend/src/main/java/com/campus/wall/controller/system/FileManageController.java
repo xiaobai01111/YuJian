@@ -50,8 +50,9 @@ public class FileManageController {
     @PostMapping("/files/upload")
     public R<FileVO> uploadFile(@RequestParam("file") MultipartFile file,
                                 @RequestParam(value = "type", defaultValue = "file") String targetType,
-                                @RequestParam(value = "visibility", required = false) String visibility) {
-        return R.ok(fileService.uploadFile(file, targetType, visibility));
+                                @RequestParam(value = "visibility", required = false) String visibility,
+                                @RequestParam(value = "scene", required = false) String scene) {
+        return R.ok(fileService.uploadFile(file, targetType, visibility, scene));
     }
 
     @DeleteMapping("/files/{id}")
@@ -79,8 +80,9 @@ public class FileManageController {
     @PostMapping("/gallery/upload")
     public R<FileVO> uploadGallery(@RequestParam("file") MultipartFile file,
                                    @RequestParam(value = "type", defaultValue = "gallery") String targetType,
-                                   @RequestParam(value = "visibility", required = false) String visibility) {
-        return R.ok(fileService.uploadFile(file, targetType, visibility));
+                                   @RequestParam(value = "visibility", required = false) String visibility,
+                                   @RequestParam(value = "scene", required = false) String scene) {
+        return R.ok(fileService.uploadFile(file, targetType, visibility, scene));
     }
 
     @DeleteMapping("/gallery/{id}")
@@ -92,6 +94,43 @@ public class FileManageController {
     @PostMapping("/gallery/batch-delete")
     public R<Void> batchDeleteGallery(@RequestBody @Validated FileBatchDeleteDTO dto) {
         fileManageService.deleteFiles(dto.getIds());
+        return R.ok();
+    }
+
+    @GetMapping("/resources")
+    public R<PageResult<FileVO>> listResources(@Validated FileQueryDTO query) {
+        return R.ok(fileManageService.queryResources(query));
+    }
+
+    @GetMapping("/resources/categories")
+    public R<List<FileCategoryVO>> listResourceCategories() {
+        return R.ok(fileManageService.listResourceCategories());
+    }
+
+    @PostMapping("/resources/upload")
+    public R<FileVO> uploadResource(@RequestParam("file") MultipartFile file,
+                                    @RequestParam(value = "type", defaultValue = "resource") String targetType,
+                                    @RequestParam(value = "visibility", required = false) String visibility,
+                                    @RequestParam(value = "scene", required = false) String scene) {
+        return R.ok(fileService.uploadFile(file, targetType, visibility, scene));
+    }
+
+    @DeleteMapping("/resources/{id}")
+    public R<Void> deleteResource(@PathVariable Long id) {
+        fileManageService.deleteFile(id);
+        return R.ok();
+    }
+
+    @PostMapping("/resources/batch-delete")
+    public R<Void> batchDeleteResources(@RequestBody @Validated FileBatchDeleteDTO dto) {
+        fileManageService.deleteFiles(dto.getIds());
+        return R.ok();
+    }
+
+    @PostMapping("/resources/{id}/visibility")
+    public R<Void> updateResourceVisibility(@PathVariable Long id,
+                                            @RequestBody @Validated com.campus.wall.dto.system.FileVisibilityUpdateDTO dto) {
+        fileManageService.updateVisibility(id, dto.getVisibility());
         return R.ok();
     }
 

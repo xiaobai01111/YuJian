@@ -99,6 +99,31 @@ public class DataScopeService {
         return scope.getScopedDeptIds().contains(targetUser.getDeptId());
     }
 
+    public String buildDeptIdInSql(DataScope scope) {
+        if (scope == null || scope.isAllowAll() || scope.getScopedDeptIds().isEmpty()) {
+            return null;
+        }
+        String joined = scope.getScopedDeptIds().stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .map(String::valueOf)
+            .collect(Collectors.joining(","));
+        return joined.isEmpty() ? null : joined;
+    }
+
+    public String buildUserScopeExistsSql(DataScope scope, String userIdColumn) {
+        if (userIdColumn == null || userIdColumn.trim().isEmpty()) {
+            return null;
+        }
+        String deptIdsSql = buildDeptIdInSql(scope);
+        if (deptIdsSql == null) {
+            return null;
+        }
+        return "exists (select 1 from users u where u.id = " + userIdColumn
+            + " and u.deleted = 0 and u.dept_id in (" + deptIdsSql + "))";
+    }
+
+    @Deprecated
     public List<Long> resolveScopedUserIds(DataScope scope) {
         if (scope == null || scope.isAllowAll() || scope.getScopedDeptIds().isEmpty()) {
             return List.of();
@@ -115,6 +140,7 @@ public class DataScopeService {
                 .collect(Collectors.toList());
     }
 
+    @Deprecated
     public List<Long> resolveAllowedUserIds(DataScope scope, Long userId) {
         if (scope == null || scope.isAllowAll()) {
             return List.of();

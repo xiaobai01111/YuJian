@@ -3,11 +3,15 @@ package com.campus.wall.controller.file;
 import com.campus.wall.common.BusinessException;
 import com.campus.wall.common.ResultCode;
 import com.campus.wall.entity.file.FileRecord;
+import com.campus.wall.enums.file.FileAuditStatus;
 import com.campus.wall.enums.file.FileVisibility;
 import com.campus.wall.mapper.file.FileRecordMapper;
+import cn.dev33.satoken.stp.StpUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.wall.service.file.FileAccessService;
 import com.campus.wall.service.storage.StorageProvider;
 import com.campus.wall.util.HttpHeaderUtil;
+import com.campus.wall.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -28,15 +32,22 @@ public class FileAccessController {
     private final FileRecordMapper fileRecordMapper;
     private final FileAccessService fileAccessService;
 
-    @GetMapping("/preview/{id}")
-    public void preview(@PathVariable Long id,
+    @GetMapping("/preview/{publicKey}")
+    public void preview(@PathVariable String publicKey,
                         @RequestParam(required = false) Long expires,
                         @RequestParam(required = false) String sig,
                         @RequestParam(required = false, defaultValue = "false") boolean download,
                         HttpServletResponse response) {
-        FileRecord record = fileRecordMapper.selectById(id);
+        if (!StringUtils.hasText(publicKey)) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "文件不存在");
+        }
+        FileRecord record = fileRecordMapper.selectOne(new LambdaQueryWrapper<FileRecord>()
+                .eq(FileRecord::getPublicKey, publicKey.trim()));
         if (record == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "文件不存在");
+        }
+        if (record.getAuditStatus() == null || record.getAuditStatus() != FileAuditStatus.PASSED.getCode()) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "文件审核未通过");
         }
 
         FileVisibility visibility = FileVisibility.fromCode(record.getVisibility());
@@ -44,7 +55,14 @@ public class FileAccessController {
             if (expires == null || !StringUtils.hasText(sig)) {
                 throw new BusinessException(ResultCode.FORBIDDEN, "缺少访问签名");
             }
-            fileAccessService.verifySignature(id, expires, sig);
+            fileAccessService.verifySignature(publicKey.trim(), expires, sig);
+            if (StpUtil.isLogin()) {
+                Long userId = StpUtil.getLoginIdAsLong();
+                boolean isAdmin = StpUtil.hasRole(SecurityUtil.getSuperAdminRoleKey());
+                if (!isAdmin && (record.getUserId() == null || !record.getUserId().equals(userId))) {
+                    throw new BusinessException(ResultCode.FORBIDDEN, "无权访问该文件");
+                }
+            }
             download = false;
         }
 
@@ -53,7 +71,7 @@ public class FileAccessController {
             throw new BusinessException(ResultCode.INTERNAL_ERROR);
         }
 
-        String filename = record.getFilename() != null ? record.getFilename() : ("file-" + id);
+        String filename = record.getFilename() != null ? record.getFilename() : ("file-" + record.getId());
         String contentType = record.getMimeType();
         if (!StringUtils.hasText(contentType)) {
             contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;

@@ -14,17 +14,16 @@ import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.service.system.NoticeService;
 import com.campus.wall.service.system.OperLogService;
 import com.campus.wall.vo.system.NoticeVO;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,7 +34,6 @@ public class NoticeServiceImpl implements NoticeService {
     private final SysNoticeMapper noticeMapper;
     private final UserMapper userMapper;
     private final OperLogService operLogService;
-    private final ObjectMapper objectMapper;
 
     private static final int STATUS_DRAFT = 0;
     private static final int STATUS_PUBLISHED = 1;
@@ -76,8 +74,7 @@ public class NoticeServiceImpl implements NoticeService {
     }
 
     @Override
-    public PageResult<NoticeVO> getVisibleNotices(int page, int size) {
-        int currentPage = normalizePage(page);
+    public PageResult<NoticeVO> getVisibleNotices(int size, Integer lastPinned, String lastPublishedAt, Long lastId) {
         int pageSize = normalizeSize(size, 10);
         
         Long userId = StpUtil.getLoginIdAsLong();
@@ -85,12 +82,22 @@ public class NoticeServiceImpl implements NoticeService {
         Long deptId = user != null ? user.getDeptId() : null;
         LocalDateTime now = LocalDateTime.now();
         
-        int offset = (currentPage - 1) * pageSize;
-        List<SysNotice> notices = noticeMapper.selectVisibleNotices(userId, deptId, now, pageSize, offset);
+        boolean hasLastPublishedAt = StringUtils.hasText(lastPublishedAt);
+        boolean hasCursor = lastPinned != null || lastId != null || hasLastPublishedAt;
+        if (hasCursor && (lastPinned == null || lastId == null)) {
+            throw new BusinessException("游标参数不完整");
+        }
+        LocalDateTime lastPublishedAtTime = parseDateTime(lastPublishedAt);
+        if (hasLastPublishedAt && lastPublishedAtTime == null) {
+            throw new BusinessException("lastPublishedAt 格式错误");
+        }
+        List<SysNotice> notices = noticeMapper.selectVisibleNoticesAfter(
+            userId, deptId, now, lastPinned, lastPublishedAtTime, lastId, pageSize
+        );
         long total = noticeMapper.countVisibleNotices(userId, deptId, now);
 
         List<NoticeVO> pageData = toVOList(notices);
-        return PageResult.of(pageData, total, pageSize, currentPage);
+        return PageResult.of(pageData, total, pageSize, 1);
     }
 
     @Override
@@ -168,7 +175,7 @@ public class NoticeServiceImpl implements NoticeService {
         notice.setTitle(dto.getTitle());
         notice.setContent(sanitizeContent(dto.getContent()));
         notice.setScopeType(dto.getScopeType() != null ? dto.getScopeType() : "ALL");
-        notice.setScopeIds(toJson(dto.getScopeIds()));
+        notice.setScopeIds(normalizeScopeIds(dto.getScopeIds()));
         notice.setIsPinned(dto.getIsPinned() != null ? dto.getIsPinned() : false);
         notice.setStartAt(dto.getStartAt());
         notice.setEndAt(dto.getEndAt());
@@ -204,7 +211,7 @@ public class NoticeServiceImpl implements NoticeService {
         notice.setTitle(dto.getTitle());
         notice.setContent(sanitizeContent(dto.getContent()));
         notice.setScopeType(dto.getScopeType() != null ? dto.getScopeType() : "ALL");
-        notice.setScopeIds(toJson(dto.getScopeIds()));
+        notice.setScopeIds(normalizeScopeIds(dto.getScopeIds()));
         notice.setIsPinned(dto.getIsPinned() != null ? dto.getIsPinned() : false);
         notice.setStartAt(dto.getStartAt());
         notice.setEndAt(dto.getEndAt());
@@ -312,14 +319,15 @@ public class NoticeServiceImpl implements NoticeService {
             throw new BusinessException("内容长度不能超过" + MAX_CONTENT_LENGTH + "字符");
         }
         String scopeType = dto.getScopeType();
+        List<Long> normalizedScopeIds = normalizeScopeIds(dto.getScopeIds());
         if (scopeType != null && !List.of("ALL", "DEPT", "USERS").contains(scopeType)) {
             throw new BusinessException("可见范围类型无效");
         }
-        if (("DEPT".equals(scopeType) || "USERS".equals(scopeType)) 
-                && (dto.getScopeIds() == null || dto.getScopeIds().isEmpty())) {
+        if (("DEPT".equals(scopeType) || "USERS".equals(scopeType))
+                && normalizedScopeIds.isEmpty()) {
             throw new BusinessException("部门/用户可见范围必须指定ID列表");
         }
-        if (dto.getScopeIds() != null && dto.getScopeIds().size() > MAX_SCOPE_IDS) {
+        if (!normalizedScopeIds.isEmpty() && normalizedScopeIds.size() > MAX_SCOPE_IDS) {
             throw new BusinessException("可见范围ID数量不能超过" + MAX_SCOPE_IDS);
         }
         if (dto.getStartAt() != null && dto.getEndAt() != null && dto.getStartAt().isAfter(dto.getEndAt())) {
@@ -347,7 +355,7 @@ public class NoticeServiceImpl implements NoticeService {
         
         Long userId = StpUtil.getLoginIdAsLong();
         User user = userMapper.selectById(userId);
-        List<Long> scopeIds = fromJsonStrict(notice.getScopeIds());
+        List<Long> scopeIds = normalizeScopeIds(notice.getScopeIds());
         
         if ("DEPT".equals(scopeType)) {
             return user != null && user.getDeptId() != null && scopeIds.contains(user.getDeptId());
@@ -358,38 +366,29 @@ public class NoticeServiceImpl implements NoticeService {
         return false;
     }
 
-    private String toJson(List<Long> ids) {
+    private LocalDateTime parseDateTime(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value);
+        } catch (Exception ignored) {
+        }
+        try {
+            return LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private List<Long> normalizeScopeIds(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
-            return null;
-        }
-        try {
-            return objectMapper.writeValueAsString(ids);
-        } catch (JsonProcessingException e) {
-            return null;
-        }
-    }
-
-    private List<Long> fromJson(String json) {
-        if (json == null || json.isEmpty()) {
             return Collections.emptyList();
         }
-        try {
-            return objectMapper.readValue(json, new TypeReference<>() {});
-        } catch (JsonProcessingException e) {
-            // 返回空列表而非抛异常，避免单条坏数据拖垮整个列表
-            return Collections.emptyList();
-        }
-    }
-
-    private List<Long> fromJsonStrict(String json) {
-        if (json == null || json.isEmpty()) {
-            return Collections.emptyList();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<>() {});
-        } catch (JsonProcessingException e) {
-            throw new BusinessException("公告可见范围数据损坏，请联系管理员");
-        }
+        return ids.stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
     }
 
     private List<NoticeVO> toVOList(List<SysNotice> notices) {
@@ -424,7 +423,7 @@ public class NoticeServiceImpl implements NoticeService {
         BeanUtils.copyProperties(notice, vo);
         vo.setStatusText(getStatusText(notice.getStatus()));
         vo.setScopeTypeText(getScopeTypeText(notice.getScopeType()));
-        vo.setScopeIds(fromJson(notice.getScopeIds()));
+        vo.setScopeIds(normalizeScopeIds(notice.getScopeIds()));
         vo.setContent(sanitizeContent(vo.getContent()));
 
         if (notice.getCreatedByName() != null && !notice.getCreatedByName().isBlank()) {

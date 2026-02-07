@@ -25,14 +25,18 @@ public interface PostMapper extends BaseMapper<Post> {
     IPage<Post> fullTextSearch(Page<Post> page, @Param("keyword") String keyword);
 
     @Update("UPDATE posts SET view_count = view_count + 1 WHERE id = #{postId}")
+    @SuppressWarnings("UnusedReturnValue")
     int incrementViewCount(@Param("postId") Long postId);
 
     @Update("UPDATE posts SET like_count = like_count + #{delta} WHERE id = #{postId}")
+    @SuppressWarnings("UnusedReturnValue")
     int updateLikeCount(@Param("postId") Long postId, @Param("delta") int delta);
 
     @Update("UPDATE posts SET comment_count = comment_count + #{delta} WHERE id = #{postId}")
+    @SuppressWarnings("UnusedReturnValue")
     int updateCommentCount(@Param("postId") Long postId, @Param("delta") int delta);
 
     @Update("UPDATE posts SET last_interaction_at = NOW() WHERE id = #{postId}")
+    @SuppressWarnings("UnusedReturnValue")
     int updateLastInteractionAt(@Param("postId") Long postId);
 }

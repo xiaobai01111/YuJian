@@ -241,6 +241,7 @@ public class SensitiveWordController {
         return word.trim().toLowerCase();
     }
 
+    //noinspection SameReturnValue
     private int normalizeLevel(Integer level) {
         // 已移除警告级别，统一使用拦截
         return LEVEL_BLOCK;

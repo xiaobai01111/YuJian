@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -99,6 +100,16 @@ public class GlobalExceptionHandler {
     public R<Void> handleBindException(BindException e) {
         FieldError fieldError = e.getFieldError();
         String message = fieldError != null ? fieldError.getDefaultMessage() : "参数绑定失败";
+        return R.fail(ResultCode.BAD_REQUEST.getCode(), message);
+    }
+
+    /**
+     * 参数类型转换异常
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public R<Void> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException e) {
+        String message = e.getName() + " 参数类型错误";
         return R.fail(ResultCode.BAD_REQUEST.getCode(), message);
     }
 

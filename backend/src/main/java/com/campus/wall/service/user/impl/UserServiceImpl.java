@@ -12,17 +12,21 @@ import com.campus.wall.dto.user.UserUpdateDTO;
 import com.campus.wall.dto.user.UserBatchAssignDTO;
 import com.campus.wall.dto.user.UserProfileUpdateDTO;
 import com.campus.wall.entity.system.SysUserRole;
+import com.campus.wall.entity.system.SysRoleWithUserId;
 import com.campus.wall.entity.user.User;
 import com.campus.wall.entity.user.IdentityVerification;
 import com.campus.wall.mapper.system.SysRoleMapper;
+import com.campus.wall.mapper.system.SysMenuMapper;
 import com.campus.wall.mapper.system.SysUserRoleMapper;
 import com.campus.wall.mapper.user.UserMapper;
 import com.campus.wall.mapper.user.IdentityVerificationMapper;
 import com.campus.wall.entity.system.SysRole;
+import com.campus.wall.service.security.DataScopeService;
 import com.campus.wall.service.system.PermissionService;
 import com.campus.wall.service.user.UserService;
 import com.campus.wall.vo.user.UserDetailVO;
 import com.campus.wall.vo.user.UserVO;
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
@@ -33,14 +37,19 @@ import lombok.extern.slf4j.Slf4j;
 import cn.hutool.crypto.digest.BCrypt;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,13 +65,18 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleMapper sysRoleMapper;
+    private final SysMenuMapper sysMenuMapper;
     private final IdentityVerificationMapper verificationMapper;
     private final com.campus.wall.service.system.OperLogService operLogService;
     private final PermissionService permissionService;
+    private final DataScopeService dataScopeService;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     public PageResult<UserVO> queryUsers(UserQueryDTO query) {
         LambdaQueryWrapper<User> wrapper = buildUserQuery(query);
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        applyUserDataScope(wrapper, operatorId);
 
         if (query.getLastId() != null) {
             wrapper.lt(User::getId, query.getLastId());
@@ -75,8 +89,15 @@ public class UserServiceImpl implements UserService {
             new Page<>(query.getPage(), query.getSize()), wrapper
         );
 
-        List<UserVO> records = page.getRecords().stream()
-            .map(this::toUserVO)
+        List<User> users = page.getRecords();
+        if (users == null || users.isEmpty()) {
+            return PageResult.of(List.of(), page.getTotal(), page.getSize(), page.getCurrent());
+        }
+        Map<Long, List<String>> rolesMap = loadRoleLabelsByUserIds(
+            users.stream().map(User::getId).collect(Collectors.toList())
+        );
+        List<UserVO> records = users.stream()
+            .map(user -> toUserVO(user, rolesMap.get(user.getId())))
             .collect(Collectors.toList());
 
         return PageResult.of(records, page.getTotal(), page.getSize(), page.getCurrent());
@@ -87,17 +108,26 @@ public class UserServiceImpl implements UserService {
         LocalDateTime loginDateStart = parseDateStart(query.getLoginDateStart());
         LocalDateTime loginDateEnd = parseDateEnd(query.getLoginDateEnd());
         long size = query.getSize() == null ? 20L : query.getSize();
-        long page = query.getPage() == null ? 1L : query.getPage();
-        long offset = Math.max(0L, (page - 1L) * size);
+        LocalDateTime lastDeletedAt = parseDateTime(query.getLastDeletedAt());
+        Long lastId = query.getLastId();
+        boolean hasLastDeletedAt = StringUtils.hasText(query.getLastDeletedAt());
+        boolean hasLastId = lastId != null;
+        if (hasLastDeletedAt != hasLastId) {
+            throw new BusinessException("游标参数不完整");
+        }
+        if (hasLastDeletedAt && lastDeletedAt == null) {
+            throw new BusinessException("lastDeletedAt 格式错误");
+        }
 
-        List<User> users = userMapper.selectDeletedUsersPage(
+        List<User> users = userMapper.selectDeletedUsersAfter(
             query.getUsername(),
             query.getNickname(),
             query.getPhone(),
             loginDateStart,
             loginDateEnd,
-            size,
-            offset
+            lastDeletedAt,
+            lastId,
+            size
         );
         long total = userMapper.countDeletedUsers(
             query.getUsername(),
@@ -106,12 +136,22 @@ public class UserServiceImpl implements UserService {
             loginDateStart,
             loginDateEnd
         );
-        List<UserVO> records = users.stream().map(this::toUserVO).collect(Collectors.toList());
-        return PageResult.of(records, total, size, page);
+        if (users == null || users.isEmpty()) {
+            return PageResult.of(List.of(), total, size, 1);
+        }
+        Map<Long, List<String>> rolesMap = loadRoleLabelsByUserIds(
+            users.stream().map(User::getId).collect(Collectors.toList())
+        );
+        List<UserVO> records = users.stream()
+            .map(user -> toUserVO(user, rolesMap.get(user.getId())))
+            .collect(Collectors.toList());
+        return PageResult.of(records, total, size, 1);
     }
 
     @Override
     public UserDetailVO getUserDetail(Long userId) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        ensureCanAccessUser(operatorId, userId, "无权查看该用户");
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.NOT_FOUND);
@@ -121,10 +161,8 @@ public class UserServiceImpl implements UserService {
         BeanUtils.copyProperties(user, vo);
 
         // 获取用户角色ID列表
-        List<SysUserRole> userRoles = userRoleMapper.selectList(
-            new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, userId)
-        );
-        vo.setRoleIds(userRoles.stream().map(SysUserRole::getRoleId).collect(Collectors.toList()));
+        List<Long> roleIds = userRoleMapper.selectRoleIdsByUserId(userId);
+        vo.setRoleIds(roleIds == null ? List.of() : roleIds);
 
         if (user.getVerifyStatus() != null && user.getVerifyStatus() == 0) {
             IdentityVerification rejected = verificationMapper.selectOne(
@@ -144,6 +182,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserVO getUserById(Long userId) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        ensureCanAccessUser(operatorId, userId, "无权查看该用户");
         User user = userMapper.selectById(userId);
         if (user == null) {
             return null;
@@ -158,17 +198,22 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
 
+        if (dto.getEmail() != null) {
+            String email = dto.getEmail().trim();
+            ensureEmailUnique(userId, email);
+            user.setEmail(email);
+        }
         if (dto.getNickname() != null) {
             user.setNickname(dto.getNickname());
         }
         if (dto.getAvatar() != null) {
             user.setAvatar(dto.getAvatar());
         }
-        if (dto.getEmail() != null) {
-            user.setEmail(dto.getEmail());
-        }
 
-        userMapper.updateById(user);
+        int updated = userMapper.updateById(user);
+        if (updated == 0) {
+            throw new BusinessException("更新用户失败，请重试");
+        }
     }
 
     @Override
@@ -180,7 +225,9 @@ public class UserServiceImpl implements UserService {
 
         user.setNickname(dto.getNickname());
         if (dto.getEmail() != null) {
-            user.setEmail(dto.getEmail());
+            String email = dto.getEmail().trim();
+            ensureEmailUnique(userId, email);
+            user.setEmail(email);
         }
         if (dto.getPhone() != null) {
             user.setPhone(dto.getPhone());
@@ -189,10 +236,14 @@ public class UserServiceImpl implements UserService {
             user.setSex(dto.getSex());
         }
 
-        userMapper.updateById(user);
+        int updated = userMapper.updateById(user);
+        if (updated == 0) {
+            throw new BusinessException("更新个人资料失败，请重试");
+        }
     }
 
     @Override
+    @Transactional
     public void updateUserStatus(Long userId, Integer status) {
         updateUserStatusWithReason(userId, status, null, null);
     }
@@ -200,6 +251,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void updateUserStatusWithReason(Long userId, Integer status, String reason, Long operatorId) {
+        Long effectiveOperatorId = operatorId != null ? operatorId : StpUtil.getLoginIdAsLong();
+        ensureCanAccessUser(effectiveOperatorId, userId, "无权操作该用户");
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.NOT_FOUND);
@@ -209,7 +262,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("管理员账号不允许操作");
         }
         // 禁止操作自己
-        if (operatorId != null && operatorId.equals(userId)) {
+        if (effectiveOperatorId.equals(userId)) {
             throw new BusinessException("不能操作自己的账号");
         }
         // 封禁时必须提供理由
@@ -222,25 +275,36 @@ public class UserServiceImpl implements UserService {
         if (updated == 0) {
             throw new BusinessException("更新用户状态失败，请重试");
         }
-        User updatedUser = userMapper.selectById(userId);
-        if (updatedUser == null || !Objects.equals(updatedUser.getStatus(), status)) {
-            log.warn("用户状态更新后读取不一致 userId={} expect={} actual={}", userId, status,
-                updatedUser != null ? updatedUser.getStatus() : null);
-            throw new BusinessException("用户状态更新失败，请稍后重试");
-        }
 
         // 记录审计日志
         String action = status == 1 ? "ban" : "unban";
-        operLogService.log(operatorId, null, "user", userId, action, reason, 
+        operLogService.log(effectiveOperatorId, null, "user", userId, action, reason,
                 java.util.Map.of("status", oldStatus), java.util.Map.of("status", status), null);
     }
 
     @Override
     @Transactional
     public void assignRoles(Long userId, List<Long> roleIds) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        ensureCanAccessUser(operatorId, userId, "无权操作该用户");
+        ensureAssignableRoles(roleIds);
+        doAssignRoles(userId, roleIds);
+    }
+
+    @Override
+    @Transactional
+    public void batchAssignRoles(List<Long> userIds, List<Long> roleIds) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        ensureAssignableRoles(roleIds);
+        for (Long userId : userIds) {
+            ensureCanAccessUser(operatorId, userId, "无权操作该用户");
+            doAssignRoles(userId, roleIds);
+        }
+    }
+
+    private void doAssignRoles(Long userId, List<Long> roleIds) {
         // 删除原有角色
         userRoleMapper.deleteByUserId(userId);
-
         // 添加新角色
         for (Long roleId : roleIds) {
             SysUserRole userRole = new SysUserRole();
@@ -248,34 +312,14 @@ public class UserServiceImpl implements UserService {
             userRole.setRoleId(roleId);
             userRoleMapper.insert(userRole);
         }
-
         permissionService.clearUserCache(userId);
-
         // 记录审计日志
         operLogService.log("user", userId, "role_assign", null);
     }
 
     @Override
-    @Transactional
-    public void batchAssignRoles(List<Long> userIds, List<Long> roleIds) {
-        for (Long userId : userIds) {
-            // 删除原有角色
-            userRoleMapper.deleteByUserId(userId);
-            // 添加新角色
-            for (Long roleId : roleIds) {
-                SysUserRole userRole = new SysUserRole();
-                userRole.setUserId(userId);
-                userRole.setRoleId(roleId);
-                userRoleMapper.insert(userRole);
-            }
-            permissionService.clearUserCache(userId);
-            // 记录审计日志
-            operLogService.log("user", userId, "role_assign", null);
-        }
-    }
-
-    @Override
     public int batchAssignByQuery(UserBatchAssignDTO dto, Long operatorId) {
+        Long effectiveOperatorId = operatorId != null ? operatorId : StpUtil.getLoginIdAsLong();
         if (dto.getRoleIds() == null || dto.getRoleIds().isEmpty()) {
             throw new BusinessException("请选择要分配的角色");
         }
@@ -284,9 +328,18 @@ public class UserServiceImpl implements UserService {
         int affected = 0;
         int batchSize = 200;
         Long lastId = null;
+        List<Long> roleIds = dto.getRoleIds().stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        if (roleIds.isEmpty()) {
+            throw new BusinessException("请选择要分配的角色");
+        }
+        ensureAssignableRoles(roleIds);
 
         while (true) {
             LambdaQueryWrapper<User> wrapper = buildUserQuery(dto);
+            applyUserDataScope(wrapper, effectiveOperatorId);
             if (lastId != null) {
                 wrapper.lt(User::getId, lastId);
             }
@@ -299,82 +352,101 @@ public class UserServiceImpl implements UserService {
                 break;
             }
 
-            for (User user : users) {
-                Long userId = user.getId();
-                if (isSystemAdminUserId(userId)) {
-                    continue;
-                }
-
-                if (dto.getRoleIds() != null && !dto.getRoleIds().isEmpty()) {
-                    if ("ADD".equals(roleMode)) {
-                        List<Long> existing = userRoleMapper.selectRoleIdsByUserId(userId);
-                        Set<Long> existingSet = existing == null ? new java.util.HashSet<>() : new java.util.HashSet<>(existing);
-                        for (Long roleId : dto.getRoleIds()) {
-                            if (roleId == null || existingSet.contains(roleId)) continue;
+            List<Long> batchUserIds = users.stream()
+                .map(User::getId)
+                .filter(userId -> !isSystemAdminUserId(userId))
+                .collect(Collectors.toList());
+            if (!batchUserIds.isEmpty()) {
+                if ("ADD".equals(roleMode)) {
+                    List<SysUserRole> existing = userRoleMapper.selectByUserIds(batchUserIds);
+                    Set<String> existingPairs = new java.util.HashSet<>();
+                    if (existing != null) {
+                        for (SysUserRole userRole : existing) {
+                            existingPairs.add(userRole.getUserId() + ":" + userRole.getRoleId());
+                        }
+                    }
+                    List<SysUserRole> insertList = new java.util.ArrayList<>();
+                    for (Long userId : batchUserIds) {
+                        for (Long roleId : roleIds) {
+                            String key = userId + ":" + roleId;
+                            if (existingPairs.contains(key)) {
+                                continue;
+                            }
                             SysUserRole userRole = new SysUserRole();
                             userRole.setUserId(userId);
                             userRole.setRoleId(roleId);
-                            userRoleMapper.insert(userRole);
+                            insertList.add(userRole);
                         }
-                    } else {
-                        userRoleMapper.deleteByUserId(userId);
-                        for (Long roleId : dto.getRoleIds()) {
-                            if (roleId == null) continue;
+                    }
+                    if (!insertList.isEmpty()) {
+                        userRoleMapper.batchInsert(insertList);
+                    }
+                } else {
+                    userRoleMapper.deleteByUserIds(batchUserIds);
+                    List<SysUserRole> insertList = new java.util.ArrayList<>();
+                    for (Long userId : batchUserIds) {
+                        for (Long roleId : roleIds) {
                             SysUserRole userRole = new SysUserRole();
                             userRole.setUserId(userId);
                             userRole.setRoleId(roleId);
-                            userRoleMapper.insert(userRole);
+                            insertList.add(userRole);
                         }
+                    }
+                    if (!insertList.isEmpty()) {
+                        userRoleMapper.batchInsert(insertList);
                     }
                 }
 
-                permissionService.clearUserCache(userId);
-                affected++;
+                for (Long userId : batchUserIds) {
+                    permissionService.clearUserCache(userId);
+                }
+                affected += batchUserIds.size();
             }
 
             lastId = users.getLast().getId();
         }
 
-        operLogService.log(operatorId, null, "user", null, "batch_assign", 
+        operLogService.log(effectiveOperatorId, null, "user", null, "batch_assign",
                 "批量分配用户，影响 " + affected + " 人", null, null, null);
         return affected;
     }
 
     private LambdaQueryWrapper<User> buildUserQuery(UserQueryDTO query) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        if (query == null) {
+            return wrapper;
+        }
 
-        if (StringUtils.hasText(query.getUsername())) {
-            wrapper.like(User::getUsername, query.getUsername());
-        }
-        if (StringUtils.hasText(query.getNickname())) {
-            wrapper.like(User::getNickname, query.getNickname());
-        }
-        if (StringUtils.hasText(query.getPhone())) {
-            wrapper.like(User::getPhone, query.getPhone());
-        }
-        if (query.getStatus() != null) {
-            wrapper.eq(User::getStatus, query.getStatus());
-        }
-        if (query.getVerifyStatus() != null) {
-            wrapper.eq(User::getVerifyStatus, query.getVerifyStatus());
-        }
-        if (query.getUserType() != null) {
-            wrapper.eq(User::getUserType, query.getUserType());
-        }
-        if (query.getDeptId() != null) {
-            wrapper.eq(User::getDeptId, query.getDeptId());
-        }
-        if (query.getRoleId() != null) {
-            List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(query.getRoleId());
-            if (userIds == null || userIds.isEmpty()) {
-                wrapper.eq(User::getId, -1L);
-            } else {
-                wrapper.in(User::getId, userIds);
-            }
+        String username = trimToNull(query.getUsername());
+        String nickname = trimToNull(query.getNickname());
+        String phone = trimToNull(query.getPhone());
+        Long roleId = query.getRoleId();
+
+        wrapper.like(StringUtils.hasText(username), User::getUsername, username)
+            .like(StringUtils.hasText(nickname), User::getNickname, nickname)
+            .eq(StringUtils.hasText(phone), User::getPhone, phone)
+            .eq(query.getStatus() != null, User::getStatus, query.getStatus())
+            .eq(query.getVerifyStatus() != null, User::getVerifyStatus, query.getVerifyStatus())
+            .eq(query.getUserType() != null, User::getUserType, query.getUserType())
+            .eq(query.getDeptId() != null, User::getDeptId, query.getDeptId());
+
+        if (roleId != null) {
+            wrapper.exists(
+                "select 1 from sys_user_roles ur where ur.user_id = users.id and ur.role_id = {0}",
+                roleId
+            );
         }
 
         applyLoginDateRange(wrapper, query.getLoginDateStart(), query.getLoginDateEnd());
         return wrapper;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void applyLoginDateRange(LambdaQueryWrapper<User> wrapper, String start, String end) {
@@ -407,6 +479,21 @@ public class UserServiceImpl implements UserService {
         try {
             LocalDate endDate = LocalDate.parse(end);
             return endDate.plusDays(1).atStartOfDay().minusNanos(1);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private LocalDateTime parseDateTime(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value);
+        } catch (Exception ignored) {
+        }
+        try {
+            return LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         } catch (Exception ignored) {
             return null;
         }
@@ -466,6 +553,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void editUser(Long userId, UserEditDTO dto) {
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        ensureCanAccessUser(operatorId, userId, "无权操作该用户");
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.NOT_FOUND);
@@ -505,25 +594,27 @@ public class UserServiceImpl implements UserService {
         if (CollUtil.isEmpty(userIds)) {
             return;
         }
+        Long effectiveOperatorId = operatorId != null ? operatorId : StpUtil.getLoginIdAsLong();
 
         for (Long userId : userIds) {
             User user = userMapper.selectById(userId);
             if (user == null) continue;
+            ensureCanAccessUser(effectiveOperatorId, userId, "无权删除该用户");
 
             // 禁止删除系统管理员
             if (isSystemAdminUserId(user.getId())) {
                 throw new BusinessException("不能删除管理员账号");
             }
             // 禁止删除自己
-            if (operatorId != null && operatorId.equals(userId)) {
+            if (effectiveOperatorId.equals(userId)) {
                 throw new BusinessException("不能删除自己的账号");
             }
 
             // 软删除：使用原生SQL绕过@TableLogic
-            userMapper.softDeleteById(userId, java.time.LocalDateTime.now(), operatorId, reason);
+            userMapper.softDeleteById(userId, java.time.LocalDateTime.now(), effectiveOperatorId, reason);
 
             // 记录审计日志
-            operLogService.log(operatorId, null, "user", userId, "delete", reason, 
+            operLogService.log(effectiveOperatorId, null, "user", userId, "delete", reason,
                     java.util.Map.of("username", user.getUsername()), null, null);
         }
     }
@@ -537,11 +628,13 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void restoreUser(Long userId, Long operatorId, String reason) {
+        Long effectiveOperatorId = operatorId != null ? operatorId : StpUtil.getLoginIdAsLong();
         // 使用原生SQL查询已删除的用户（绕过@TableLogic）
         User user = userMapper.selectDeletedById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在或未被删除");
         }
+        ensureCanAccessUser(effectiveOperatorId, userId, "无权恢复该用户");
 
         // 恢复用户
         user.setDeleted(0);
@@ -554,17 +647,19 @@ public class UserServiceImpl implements UserService {
         }
 
         // 记录审计日志
-        operLogService.log(operatorId, null, "user", userId, "restore", reason, 
+        operLogService.log(effectiveOperatorId, null, "user", userId, "restore", reason,
                 java.util.Map.of("deleted", 1), java.util.Map.of("deleted", 0), null);
     }
 
     @Override
     @Transactional
     public void purgeUser(Long userId, Long operatorId, String reason) {
+        Long effectiveOperatorId = operatorId != null ? operatorId : StpUtil.getLoginIdAsLong();
         User user = userMapper.selectDeletedById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在或未被删除");
         }
+        ensureCanAccessUser(effectiveOperatorId, userId, "无权彻底删除该用户");
         if (isSystemAdminUserId(userId)) {
             throw new BusinessException("管理员账号不允许彻底删除");
         }
@@ -574,17 +669,16 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("彻底删除失败，请重试");
         }
         permissionService.clearUserCache(userId);
-        operLogService.log(operatorId, null, "user", userId, "purge", reason, 
+        operLogService.log(effectiveOperatorId, null, "user", userId, "purge", reason,
                 java.util.Map.of("username", user.getUsername()), null, null);
     }
 
     @Override
     public void exportUsers(UserQueryDTO query, HttpServletResponse response) {
         // 查询所有用户（不分页）
-        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        if (StringUtils.hasText(query.getUsername())) {
-            wrapper.like(User::getUsername, query.getUsername());
-        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        LambdaQueryWrapper<User> wrapper = buildUserQuery(query);
+        applyUserDataScope(wrapper, operatorId);
         wrapper.orderByDesc(User::getCreatedAt);
         List<User> users = userMapper.selectList(wrapper);
 
@@ -628,7 +722,6 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional
     public String importUsers(MultipartFile file, boolean updateExisting) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException("文件不能为空");
@@ -637,56 +730,134 @@ public class UserServiceImpl implements UserService {
         int successCount = 0;
         int failCount = 0;
         StringBuilder errorMsg = new StringBuilder();
+        int batchSize = 200;
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         try {
             ExcelReader reader = ExcelUtil.getReader(file.getInputStream());
             List<Map<String, Object>> rows = reader.readAll();
 
-            for (int i = 0; i < rows.size(); i++) {
-                Map<String, Object> row = rows.get(i);
-                try {
-                    String username = String.valueOf(row.get("用户名"));
-                    String nickname = String.valueOf(row.get("昵称"));
-                    String password = row.get("密码") != null ? String.valueOf(row.get("密码")) : "123456";
+            for (int start = 0; start < rows.size(); start += batchSize) {
+                int end = Math.min(rows.size(), start + batchSize);
+                List<ImportUserRow> batchRows = new ArrayList<>();
 
-                    if (!StringUtils.hasText(username) || !StringUtils.hasText(nickname)) {
-                        failCount++;
-                        errorMsg.append("第").append(i + 2).append("行：用户名或昵称为空\n");
-                        continue;
-                    }
+                for (int i = start; i < end; i++) {
+                    Map<String, Object> row = rows.get(i);
+                    try {
+                        String username = normalizeCell(row.get("用户名"));
+                        String nickname = normalizeCell(row.get("昵称"));
+                        String password = row.get("密码") != null ? String.valueOf(row.get("密码")) : "123456";
+                        String email = normalizeCell(row.get("邮箱"));
+                        String phone = normalizeCell(row.get("手机号"));
 
-                    // 检查用户名是否存在
-                    User existUser = userMapper.selectOne(
-                        new LambdaQueryWrapper<User>().eq(User::getUsername, username)
-                    );
-
-                    if (existUser != null) {
-                        if (updateExisting) {
-                            existUser.setNickname(nickname);
-                            if (row.get("邮箱") != null) existUser.setEmail(String.valueOf(row.get("邮箱")));
-                            if (row.get("手机号") != null) existUser.setPhone(String.valueOf(row.get("手机号")));
-                            userMapper.updateById(existUser);
-                            successCount++;
-                        } else {
+                        if (!StringUtils.hasText(username) || !StringUtils.hasText(nickname)) {
                             failCount++;
-                            errorMsg.append("第").append(i + 2).append("行：用户名已存在\n");
+                            errorMsg.append("第").append(i + 2).append("行：用户名或昵称为空\n");
+                            continue;
                         }
-                    } else {
+                        batchRows.add(new ImportUserRow(i + 2, username, nickname, password, email, phone));
+                    } catch (Exception e) {
+                        failCount++;
+                        errorMsg.append("第").append(i + 2).append("行：").append(e.getMessage()).append("\n");
+                    }
+                }
+
+                if (batchRows.isEmpty()) {
+                    continue;
+                }
+
+                BatchImportResult batchResult = txTemplate.execute(status -> {
+                    int batchSuccess = 0;
+                    int batchFail = 0;
+                    StringBuilder batchErrors = new StringBuilder();
+
+                    List<String> usernames = batchRows.stream()
+                        .map(ImportUserRow::username)
+                        .distinct()
+                        .collect(Collectors.toList());
+                    List<User> existingUsers = userMapper.selectList(
+                        new LambdaQueryWrapper<User>().in(User::getUsername, usernames)
+                    );
+                    Map<String, User> existingMap = existingUsers.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toMap(User::getUsername, user -> user, (a, b) -> a));
+
+                    Map<String, ImportUserInsert> pendingInserts = new LinkedHashMap<>();
+                    List<User> updateList = new ArrayList<>();
+
+                    for (ImportUserRow row : batchRows) {
+                        User existing = existingMap.get(row.username());
+                        if (existing != null) {
+                            if (updateExisting) {
+                                applyUserImportUpdate(existing, row);
+                                updateList.add(existing);
+                                batchSuccess++;
+                            } else {
+                                batchFail++;
+                                batchErrors.append("第").append(row.rowIndex()).append("行：用户名已存在\n");
+                            }
+                            continue;
+                        }
+
+                        ImportUserInsert pending = pendingInserts.get(row.username());
+                        if (pending != null) {
+                            if (updateExisting) {
+                                applyUserImportUpdate(pending.user(), row);
+                                pending.rowIndices().add(row.rowIndex());
+                            } else {
+                                batchFail++;
+                                batchErrors.append("第").append(row.rowIndex()).append("行：用户名已存在\n");
+                            }
+                            continue;
+                        }
+
                         User user = new User();
-                        user.setUsername(username);
-                        user.setNickname(nickname);
-                        user.setPassword(BCrypt.hashpw(password));
-                        if (row.get("邮箱") != null) user.setEmail(String.valueOf(row.get("邮箱")));
-                        if (row.get("手机号") != null) user.setPhone(String.valueOf(row.get("手机号")));
+                        user.setUsername(row.username());
+                        user.setNickname(row.nickname());
+                        user.setPassword(BCrypt.hashpw(row.password()));
+                        if (row.email() != null) user.setEmail(row.email());
+                        if (row.phone() != null) user.setPhone(row.phone());
                         user.setVerifyStatus(0);
                         user.setStatus(0);
                         user.setCreditScore(100);
-                        userMapper.insert(user);
-                        successCount++;
+                        pendingInserts.put(row.username(), new ImportUserInsert(user, new ArrayList<>(List.of(row.rowIndex()))));
                     }
-                } catch (Exception e) {
-                    failCount++;
-                    errorMsg.append("第").append(i + 2).append("行：").append(e.getMessage()).append("\n");
+
+                    for (User updateUser : updateList) {
+                        userMapper.updateById(updateUser);
+                    }
+
+                    if (!pendingInserts.isEmpty()) {
+                        List<ImportUserInsert> insertCandidates = new ArrayList<>(pendingInserts.values());
+                        List<User> insertUsers = insertCandidates.stream().map(ImportUserInsert::user).collect(Collectors.toList());
+                        try {
+                            userMapper.batchInsert(insertUsers);
+                            batchSuccess += insertCandidates.stream().mapToInt(candidate -> candidate.rowIndices().size()).sum();
+                        } catch (Exception ex) {
+                            for (ImportUserInsert candidate : insertCandidates) {
+                                try {
+                                    userMapper.insert(candidate.user());
+                                    batchSuccess += candidate.rowIndices().size();
+                                } catch (Exception e) {
+                                    batchFail += candidate.rowIndices().size();
+                                    for (Integer rowIndex : candidate.rowIndices()) {
+                                        batchErrors.append("第").append(rowIndex).append("行：").append(e.getMessage()).append("\n");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    return new BatchImportResult(batchSuccess, batchFail, batchErrors.toString());
+                });
+
+                if (batchResult != null) {
+                    successCount += batchResult.successCount();
+                    failCount += batchResult.failCount();
+                    if (StringUtils.hasText(batchResult.errorMsg())) {
+                        errorMsg.append(batchResult.errorMsg());
+                    }
                 }
             }
         } catch (IOException e) {
@@ -697,12 +868,39 @@ public class UserServiceImpl implements UserService {
             successCount, failCount, failCount > 0 ? "\n" + errorMsg : "");
     }
 
+    private void applyUserImportUpdate(User user, ImportUserRow row) {
+        user.setNickname(row.nickname());
+        if (row.email() != null) {
+            user.setEmail(row.email());
+        }
+        if (row.phone() != null) {
+            user.setPhone(row.phone());
+        }
+    }
+
+    private String normalizeCell(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private record ImportUserRow(int rowIndex, String username, String nickname, String password, String email, String phone) {
+    }
+
+    private record ImportUserInsert(User user, List<Integer> rowIndices) {
+    }
+
+    private record BatchImportResult(int successCount, int failCount, String errorMsg) {
+    }
+
     @Override
     public void downloadTemplate(HttpServletResponse response) {
         ExcelWriter writer = ExcelUtil.getWriter(true);
         writer.writeHeadRow(CollUtil.newArrayList("用户名", "昵称", "密码", "邮箱", "手机号"));
         // 写入示例数据
-        writer.writeRow(CollUtil.newArrayList("zhangsan", "张三", "123456", "zhangsan@example.com", "13800138000"));
+        writer.writeRow(CollUtil.newArrayList("user01", "张三", "123456", "user01@example.com", "13800138000"));
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8");
         try {
@@ -716,18 +914,82 @@ public class UserServiceImpl implements UserService {
 
     private UserVO toUserVO(User user) {
         Objects.requireNonNull(user, "用户不能为空");
+        List<SysRole> roles = sysRoleMapper.selectAllRolesByUserId(user.getId());
+        List<String> roleLabels = roles == null ? List.of() : roles.stream()
+            .map(role -> formatRoleLabel(role.getRoleName(), role.getStatus()))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+        return toUserVO(user, roleLabels);
+    }
+
+    private UserVO toUserVO(User user, List<String> roleLabels) {
+        Objects.requireNonNull(user, "用户不能为空");
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user, vo);
-        
-        // 获取用户所有角色（包含禁用的），禁用角色显示后缀
-        List<SysRole> roles = sysRoleMapper.selectAllRolesByUserId(user.getId());
-        if (roles != null && !roles.isEmpty()) {
-            vo.setRoles(roles.stream()
-                .map(r -> r.getStatus() == 1 ? r.getRoleName() + "(已禁用)" : r.getRoleName())
-                .collect(Collectors.toList()));
+        if (roleLabels != null && !roleLabels.isEmpty()) {
+            vo.setRoles(roleLabels);
         }
-        
         return vo;
+    }
+
+    private Map<Long, List<String>> loadRoleLabelsByUserIds(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        List<SysRoleWithUserId> rows = sysRoleMapper.selectRolesByUserIds(userIds);
+        if (rows == null || rows.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        return rows.stream()
+            .collect(Collectors.groupingBy(
+                SysRoleWithUserId::getUserId,
+                Collectors.mapping(
+                    row -> formatRoleLabel(row.getRoleName(), row.getStatus()),
+                    Collectors.filtering(Objects::nonNull, Collectors.toList())
+                )
+            ));
+    }
+
+    private String formatRoleLabel(String roleName, Integer status) {
+        if (roleName == null) {
+            return null;
+        }
+        if (status != null && status == 1) {
+            return roleName + "(已禁用)";
+        }
+        return roleName;
+    }
+
+    private void ensureCanAccessUser(Long operatorId, Long targetUserId, String message) {
+        if (operatorId == null || targetUserId == null) {
+            throw new BusinessException(ResultCode.FORBIDDEN, message);
+        }
+        if (!dataScopeService.canAccessUser(operatorId, targetUserId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, message);
+        }
+    }
+
+    private void applyUserDataScope(LambdaQueryWrapper<User> wrapper, Long operatorId) {
+        DataScopeService.DataScope scope = dataScopeService.resolveScope(operatorId);
+        if (scope.isAllowAll()) {
+            return;
+        }
+        List<Long> scopedDeptIds = scope.getScopedDeptIds();
+        boolean hasDeptScope = scopedDeptIds != null && !scopedDeptIds.isEmpty();
+        boolean allowSelf = scope.isAllowSelf() && operatorId != null;
+        if (hasDeptScope && allowSelf) {
+            wrapper.and(w -> w.in(User::getDeptId, scopedDeptIds).or().eq(User::getId, operatorId));
+            return;
+        }
+        if (hasDeptScope) {
+            wrapper.in(User::getDeptId, scopedDeptIds);
+            return;
+        }
+        if (allowSelf) {
+            wrapper.eq(User::getId, operatorId);
+            return;
+        }
+        wrapper.eq(User::getId, -1L);
     }
 
     private boolean isSystemAdminUserId(Long userId) {
@@ -736,5 +998,71 @@ public class UserServiceImpl implements UserService {
         }
         List<String> roleKeys = sysRoleMapper.selectRoleKeysByUserId(userId);
         return roleKeys != null && roleKeys.contains(com.campus.wall.util.SecurityUtil.getSuperAdminRoleKey());
+    }
+
+    private void ensureEmailUnique(Long userId, String email) {
+        if (!StringUtils.hasText(email)) {
+            return;
+        }
+        Long count = userMapper.selectCount(
+            new LambdaQueryWrapper<User>()
+                .eq(User::getDeleted, 0)
+                .and(w -> w.eq(User::getEmail, email).or().eq(User::getEduEmail, email))
+                .ne(User::getId, userId)
+        );
+        if (count != null && count > 0) {
+            throw new BusinessException("邮箱已被使用");
+        }
+    }
+
+    private void ensureAssignableRoles(List<Long> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return;
+        }
+        Long operatorId = StpUtil.getLoginIdAsLong();
+        if (isSystemAdminUserId(operatorId)) {
+            return;
+        }
+
+        List<SysRole> targetRoles = sysRoleMapper.selectBatchIds(roleIds);
+        if (targetRoles == null || targetRoles.isEmpty()) {
+            throw new BusinessException("角色不存在");
+        }
+        String superAdminKey = com.campus.wall.util.SecurityUtil.getSuperAdminRoleKey();
+        for (SysRole role : targetRoles) {
+            if (role != null && superAdminKey.equals(role.getRoleKey())) {
+                throw new BusinessException("不能分配管理员角色");
+            }
+        }
+
+        List<SysRole> operatorRoles = sysRoleMapper.selectRolesByUserId(operatorId);
+        Set<Long> allowedMenuIds = new HashSet<>();
+        if (operatorRoles != null) {
+            for (SysRole role : operatorRoles) {
+                if (role == null || role.getId() == null) {
+                    continue;
+                }
+                List<Long> roleMenuIds = sysMenuMapper.selectMenuIdsByRoleId(role.getId());
+                if (roleMenuIds != null) {
+                    allowedMenuIds.addAll(roleMenuIds);
+                }
+            }
+        }
+        if (allowedMenuIds.isEmpty()) {
+            throw new BusinessException("不能分配超出当前账号权限范围的角色");
+        }
+        for (SysRole role : targetRoles) {
+            if (role == null || role.getId() == null) {
+                continue;
+            }
+            List<Long> roleMenuIds = sysMenuMapper.selectMenuIdsByRoleId(role.getId());
+            if (roleMenuIds == null) {
+                continue;
+            }
+            boolean overGranted = roleMenuIds.stream().anyMatch(menuId -> menuId != null && !allowedMenuIds.contains(menuId));
+            if (overGranted) {
+                throw new BusinessException("不能分配超出当前账号权限范围的角色");
+            }
+        }
     }
 }

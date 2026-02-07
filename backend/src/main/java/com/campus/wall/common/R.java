@@ -2,6 +2,7 @@ package com.campus.wall.common;
 
 import lombok.Data;
 
+import java.io.Serial;
 import java.io.Serializable;
 
 /**
@@ -11,6 +12,7 @@ import java.io.Serializable;
 @SuppressWarnings("serial")
 public class R<T> implements Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private int code;

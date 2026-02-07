@@ -43,63 +43,93 @@
         </div>
       </router-link>
 
-      <div v-if="total > pageSize" class="flex justify-center mt-6">
-        <div class="join">
-          <button 
-            class="join-item btn btn-sm" 
-            :disabled="currentPage === 1"
-            @click="changePage(currentPage - 1)"
-          >«</button>
-          <button class="join-item btn btn-sm">第 {{ currentPage }} 页</button>
-          <button 
-            class="join-item btn btn-sm" 
-            :disabled="currentPage * pageSize >= total"
-            @click="changePage(currentPage + 1)"
-          >»</button>
-        </div>
+      <div v-if="userStore.token" class="flex justify-center mt-6">
+        <button class="btn btn-sm" :disabled="!hasMore || loadingMore" @click="loadMore">
+          <span v-if="loadingMore">加载中...</span>
+          <span v-else-if="hasMore">加载更多</span>
+          <span v-else>没有更多了</span>
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { getPublicNotices, getVisibleNotices, type NoticeVO } from '@/api/system'
+import { getPublicNotices, getVisibleNotices, type NoticeVO, type VisibleNoticeQuery } from '@/api/system'
 
 const userStore = useUserStore()
 const notices = ref<NoticeVO[]>([])
 const loading = ref(true)
-const currentPage = ref(1)
+const loadingMore = ref(false)
 const pageSize = ref(10)
-const total = ref(0)
+const hasMore = ref(true)
+
+const cursor = reactive({
+  lastPinned: undefined as number | undefined,
+  lastPublishedAt: undefined as string | undefined,
+  lastId: undefined as number | undefined
+})
 
 onMounted(() => {
   loadNotices()
 })
 
-const loadNotices = async () => {
-  loading.value = true
+const resetCursor = () => {
+  cursor.lastPinned = undefined
+  cursor.lastPublishedAt = undefined
+  cursor.lastId = undefined
+}
+
+const loadNotices = async ({ append = false } = {}) => {
+  if (append && (loadingMore.value || loading.value)) return
+  if (!append) {
+    resetCursor()
+    hasMore.value = true
+    loading.value = true
+  } else {
+    loadingMore.value = true
+  }
   try {
     if (userStore.token) {
-      const res = await getVisibleNotices(currentPage.value, pageSize.value)
-      notices.value = res.records || []
-      total.value = res.total || 0
+      const params: VisibleNoticeQuery = { size: pageSize.value }
+      if (cursor.lastId !== undefined && cursor.lastPinned !== undefined) {
+        params.lastId = cursor.lastId
+        params.lastPinned = cursor.lastPinned
+        if (cursor.lastPublishedAt) {
+          params.lastPublishedAt = cursor.lastPublishedAt
+        }
+      }
+      const res = await getVisibleNotices(params)
+      const records = res.records || []
+      notices.value = append ? [...notices.value, ...records] : records
+      const lastRecord = records[records.length - 1]
+      if (lastRecord) {
+        cursor.lastPinned = lastRecord.isPinned ? 1 : 0
+        cursor.lastPublishedAt = lastRecord.publishedAt || undefined
+        cursor.lastId = lastRecord.id
+      }
+      hasMore.value = records.length >= pageSize.value
     } else {
       const res = await getPublicNotices(50)
       notices.value = res || []
-      total.value = notices.value.length
+      hasMore.value = false
     }
   } catch (e) {
     console.error('Failed to load notices', e)
   } finally {
-    loading.value = false
+    if (!append) {
+      loading.value = false
+    } else {
+      loadingMore.value = false
+    }
   }
 }
 
-const changePage = (page: number) => {
-  currentPage.value = page
-  loadNotices()
+const loadMore = () => {
+  if (!hasMore.value || loadingMore.value || loading.value) return
+  void loadNotices({ append: true })
 }
 
 const getPreviewContent = (content: string) => {

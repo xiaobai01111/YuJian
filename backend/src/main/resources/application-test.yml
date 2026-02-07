@@ -3,6 +3,11 @@ app:
     primary-provider: LOCAL
     fallback-provider: LOCAL
     signing-secret: test-secret
+  content-moderation:
+    image-audit-enabled: false
+    image-audit-fail-closed: false
+    virus-scan-enabled: false
+    virus-scan-fail-closed: false
 spring:
   task:
     scheduling:

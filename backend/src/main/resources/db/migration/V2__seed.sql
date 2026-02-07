@@ -1,3 +1,4 @@
+-- noinspection SpellCheckingInspection
 -- 校园墙初始化数据（重置版）
 
 -- 1) 系统部门（根）
@@ -36,7 +37,7 @@ INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_or
     (13, 2, '认证规则', '/console/system/auth-rule', 'views/console/auth-rule/index.vue', 1, 'id-card', 5, TRUE, 0),
     (14, 2, '敏感词管理', '/console/system/sensitive-word', 'views/console/sensitive-word/index.vue', 1, 'warning', 6, TRUE, 0),
     (19, 2, '邮件服务配置', '/console/system/email-config', 'views/console/email-config/index.vue', 1, 'email', 7, TRUE, 0),
-    (18, 2, '个人中心', '/console/profile', 'views/console/profile/index.vue', 1, 'user', 99, FALSE, 0);
+    (18, 2, '个人中心', '/console/profile', 'views/console/profile/index.vue', 1, 'user', 99, TRUE, 0);
 
 -- 内容管理子菜单
 INSERT INTO sys_menus (id, parent_id, name, path, component, type, icon, sort_order, visible, status) VALUES
@@ -166,6 +167,10 @@ INSERT INTO sys_menus (id, parent_id, name, perms, type, sort_order, visible, st
     (285, 41, '删除图库', 'system:gallery:delete', 2, 3, TRUE, 0),
     (286, 40, '设置文件权限', 'system:file:permission', 2, 4, TRUE, 0),
     (287, 41, '设置图库权限', 'system:gallery:permission', 2, 4, TRUE, 0),
+    (289, 42, '查询资源', 'system:resource:list', 2, 1, TRUE, 0),
+    (290, 42, '上传资源', 'system:resource:upload', 2, 2, TRUE, 0),
+    (291, 42, '删除资源', 'system:resource:delete', 2, 3, TRUE, 0),
+    (292, 42, '设置资源权限', 'system:resource:permission', 2, 4, TRUE, 0),
     (288, 40, '清理孤儿文件', 'system:file:cleanup', 2, 5, TRUE, 0),
 
     (180, 18, '编辑资料', 'system:profile:edit', 2, 1, TRUE, 0),
@@ -450,6 +455,12 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/console/gallery/*', 'DELETE', 'system:gallery:delete', 'console.gallery.delete', TRUE),
     ('/api/v1/console/gallery/batch-delete', 'POST', 'system:gallery:delete', 'console.gallery.batch.delete', TRUE),
     ('/api/v1/console/gallery/*/visibility', 'POST', 'system:gallery:permission', 'console.gallery.permission', TRUE),
+    ('/api/v1/console/resources', 'GET', 'system:resource:list', 'console.resource.list', TRUE),
+    ('/api/v1/console/resources/categories', 'GET', 'system:resource:list', 'console.resource.categories', TRUE),
+    ('/api/v1/console/resources/upload', 'POST', 'system:resource:upload', 'console.resource.upload', TRUE),
+    ('/api/v1/console/resources/*', 'DELETE', 'system:resource:delete', 'console.resource.delete', TRUE),
+    ('/api/v1/console/resources/batch-delete', 'POST', 'system:resource:delete', 'console.resource.batch.delete', TRUE),
+    ('/api/v1/console/resources/*/visibility', 'POST', 'system:resource:permission', 'console.resource.permission', TRUE),
     ('/api/v1/console/campus/heroes', 'GET', 'campus:hero:list', 'console.hero.list', TRUE),
     ('/api/v1/console/campus/heroes/*', 'GET', 'campus:hero:list', 'console.hero.detail', TRUE),
     ('/api/v1/console/campus/heroes', 'POST', 'campus:hero:add', 'console.hero.add', TRUE),
@@ -484,14 +495,14 @@ INSERT INTO sys_api_permissions (url, http_method, permission, description, stat
     ('/api/v1/system/dept/export', 'GET', 'system:dept:export', 'system.dept.export', TRUE),
     ('/api/v1/system/dept/import', 'POST', 'system:dept:import', 'system.dept.import', TRUE),
     ('/api/v1/system/dept/sync', 'POST', 'system:dept:sync', 'system.dept.sync', TRUE),
-    ('/api/v1/system/auth-rules', 'GET', 'system:auth-rule:list', 'system.authrule.list', TRUE),
-    ('/api/v1/system/auth-rules', 'POST', 'system:auth-rule:add', 'system.authrule.add', TRUE),
-    ('/api/v1/system/auth-rules/*', 'GET', 'system:auth-rule:view', 'system.authrule.detail', TRUE),
-    ('/api/v1/system/auth-rules/*', 'PUT', 'system:auth-rule:edit', 'system.authrule.edit', TRUE),
-    ('/api/v1/system/auth-rules/*/status', 'PATCH', 'system:auth-rule:status', 'system.authrule.status', TRUE),
-    ('/api/v1/system/auth-rules/*/priority', 'PATCH', 'system:auth-rule:sort', 'system.authrule.priority', TRUE),
-    ('/api/v1/system/auth-rules/*/clone', 'POST', 'system:auth-rule:clone', 'system.authrule.clone', TRUE),
-    ('/api/v1/system/auth-rules/*', 'DELETE', 'system:auth-rule:delete', 'system.authrule.delete', TRUE),
+    ('/api/v1/system/auth-rules', 'GET', 'system:auth-rule:list', 'system.auth.rule.list', TRUE),
+    ('/api/v1/system/auth-rules', 'POST', 'system:auth-rule:add', 'system.auth.rule.add', TRUE),
+    ('/api/v1/system/auth-rules/*', 'GET', 'system:auth-rule:view', 'system.auth.rule.detail', TRUE),
+    ('/api/v1/system/auth-rules/*', 'PUT', 'system:auth-rule:edit', 'system.auth.rule.edit', TRUE),
+    ('/api/v1/system/auth-rules/*/status', 'PATCH', 'system:auth-rule:status', 'system.auth.rule.status', TRUE),
+    ('/api/v1/system/auth-rules/*/priority', 'PATCH', 'system:auth-rule:sort', 'system.auth.rule.priority', TRUE),
+    ('/api/v1/system/auth-rules/*/clone', 'POST', 'system:auth-rule:clone', 'system.auth.rule.clone', TRUE),
+    ('/api/v1/system/auth-rules/*', 'DELETE', 'system:auth-rule:delete', 'system.auth.rule.delete', TRUE),
     ('/api/v1/system/sensitive-words', 'GET', 'system:sensitive-word:list', 'system.sensitive.list', TRUE),
     ('/api/v1/system/sensitive-words', 'POST', 'system:sensitive-word:add', 'system.sensitive.add', TRUE),
     ('/api/v1/system/sensitive-words/batch', 'POST', 'system:sensitive-word:batch:add', 'system.sensitive.batch', TRUE),

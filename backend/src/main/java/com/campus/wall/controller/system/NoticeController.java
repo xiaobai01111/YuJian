@@ -44,9 +44,11 @@ public class NoticeController {
     @SaCheckLogin
     @GetMapping("/api/v1/notices")
     public R<PageResult<NoticeVO>> getVisibleNotices(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return R.ok(noticeService.getVisibleNotices(page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer lastPinned,
+            @RequestParam(required = false) String lastPublishedAt,
+            @RequestParam(required = false) Long lastId) {
+        return R.ok(noticeService.getVisibleNotices(size, lastPinned, lastPublishedAt, lastId));
     }
 
     /**

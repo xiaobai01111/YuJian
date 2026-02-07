@@ -4,9 +4,12 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.campus.wall.config.typehandler.JsonbLongListTypeHandler;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @TableName("sys_notice")
@@ -32,7 +35,8 @@ public class SysNotice {
     /**
      * 部门ID或用户ID列表，JSON数组格式
      */
-    private String scopeIds;
+    @TableField(typeHandler = JsonbLongListTypeHandler.class, jdbcType = JdbcType.OTHER)
+    private List<Long> scopeIds;
 
     private Boolean isPinned;
 

@@ -175,10 +175,10 @@ class UserPostPropertyTest {
 
     // 内部测试类
     static class Post {
-        Long id;
-        String title;
-        String content;
-        int status;
+        final Long id;
+        final String title;
+        final String content;
+        final int status;
         boolean isAnonymous;
         Long userId;
 

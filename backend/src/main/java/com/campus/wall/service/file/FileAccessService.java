@@ -6,6 +6,7 @@ import com.campus.wall.config.StorageProperties;
 import com.campus.wall.entity.file.FileRecord;
 import com.campus.wall.enums.file.FileVisibility;
 import com.campus.wall.enums.file.StorageProviderType;
+import com.campus.wall.mapper.file.FileRecordMapper;
 import com.campus.wall.service.storage.StorageProvider;
 import com.campus.wall.service.storage.StorageProviderRegistry;
 import lombok.RequiredArgsConstructor;
@@ -21,28 +22,21 @@ public class FileAccessService {
 
     private final StorageProviderRegistry storageProviderRegistry;
     private final StorageProperties storageProperties;
+    private final FileRecordMapper fileRecordMapper;
 
     public String buildAccessUrl(FileRecord record) {
         if (record == null) {
             return null;
         }
         FileVisibility visibility = FileVisibility.fromCode(record.getVisibility());
-        if (isImage(record.getMimeType())) {
-            return visibility == FileVisibility.PRIVATE
-                    ? buildSignedPreviewUrl(record.getId())
-                    : buildPublicPreviewUrl(record.getId());
-        }
-        StorageProvider provider = getProvider(record.getStorageProvider());
-        if (provider == null) {
+        String publicKey = record.getPublicKey();
+        if (!StringUtils.hasText(publicKey)) {
             return null;
         }
         if (visibility == FileVisibility.PRIVATE) {
-            return buildSignedPreviewUrl(record.getId());
+            return buildSignedPreviewUrl(publicKey);
         }
-        if (provider.getType() == StorageProviderType.LOCAL && !storageProperties.isLocalPublicEnabled()) {
-            return buildPublicPreviewUrl(record.getId());
-        }
-        return provider.buildPublicUrl(record.getPath());
+        return buildPublicPreviewUrl(publicKey);
     }
 
     public StorageProvider getProvider(String providerCode) {
@@ -54,35 +48,42 @@ public class FileAccessService {
         if (fileId == null) {
             return null;
         }
-        long expires = System.currentTimeMillis() / 1000 + storageProperties.getPrivateUrlTtlSeconds();
-        String sig = sign(fileId, expires);
-        return "/api/v1/files/preview/" + fileId + "?expires=" + expires + "&sig=" + sig;
-    }
-
-    public String buildPublicPreviewUrl(Long fileId) {
-        if (fileId == null) {
+        FileRecord record = fileRecordMapper.selectById(fileId);
+        if (record == null) {
             return null;
         }
-        return "/api/v1/files/preview/" + fileId;
+        return buildSignedPreviewUrl(record.getPublicKey());
     }
 
-    private boolean isImage(String mimeType) {
-        return mimeType != null && mimeType.toLowerCase().startsWith("image/");
+    public String buildSignedPreviewUrl(String publicKey) {
+        if (!StringUtils.hasText(publicKey)) {
+            return null;
+        }
+        long expires = System.currentTimeMillis() / 1000 + storageProperties.getPrivateUrlTtlSeconds();
+        String sig = sign(publicKey, expires);
+        return "/api/v1/files/preview/" + publicKey + "?expires=" + expires + "&sig=" + sig;
     }
 
-    public void verifySignature(Long fileId, long expires, String sig) {
+    public String buildPublicPreviewUrl(String publicKey) {
+        if (!StringUtils.hasText(publicKey)) {
+            return null;
+        }
+        return "/api/v1/files/preview/" + publicKey;
+    }
+
+    public void verifySignature(String publicKey, long expires, String sig) {
         long now = System.currentTimeMillis() / 1000;
         if (expires <= now) {
             throw new BusinessException(ResultCode.FORBIDDEN, "链接已过期");
         }
-        String expected = sign(fileId, expires);
+        String expected = sign(publicKey, expires);
         if (!constantTimeEquals(expected, sig)) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无效的访问签名");
         }
     }
 
-    private String sign(Long fileId, long expires) {
-        String payload = fileId + ":" + expires;
+    private String sign(String publicKey, long expires) {
+        String payload = publicKey + ":" + expires;
         String secret = storageProperties.getSigningSecret();
         if (!StringUtils.hasText(secret) || "change-me".equalsIgnoreCase(secret)) {
             throw new BusinessException(ResultCode.INTERNAL_ERROR, "签名密钥未配置");

@@ -11,6 +11,32 @@ type HttpClient = Omit<AxiosInstance, 'get' | 'post' | 'put' | 'delete' | 'patch
 }
 
 let handlingUnauthorized = false
+const DEVICE_ID_STORAGE_KEY = 'campus:device-id'
+
+const resolveDeviceId = (): string => {
+    const fallback = () => {
+        const random = Math.random().toString(36).slice(2, 10)
+        return `web-${Date.now().toString(36)}-${random}`
+    }
+
+    if (typeof window === 'undefined') {
+        return fallback()
+    }
+
+    try {
+        const stored = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY)
+        if (stored) {
+            return stored
+        }
+        const generated = (window.crypto && typeof window.crypto.randomUUID === 'function')
+            ? `web-${window.crypto.randomUUID()}`
+            : fallback()
+        window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated)
+        return generated
+    } catch {
+        return fallback()
+    }
+}
 
 const service: HttpClient = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '',
@@ -20,6 +46,7 @@ const service: HttpClient = axios.create({
 service.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const userStore = useUserStore()
+        config.headers['X-Device-Id'] = resolveDeviceId()
         if (userStore.token) {
             handlingUnauthorized = false
             config.headers['Authorization'] = `Bearer ${userStore.token}`

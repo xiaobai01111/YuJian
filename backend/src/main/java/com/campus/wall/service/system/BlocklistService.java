@@ -18,4 +18,9 @@ public interface BlocklistService {
     void delete(Long id);
 
     BlocklistBatchImportResult importBatch(BlocklistBatchImportDTO dto);
+
+    /**
+     * 判断目标是否在启用中的阻止名单内（忽略已过期和停用记录）
+     */
+    boolean isBlocked(String targetType, String targetValue);
 }

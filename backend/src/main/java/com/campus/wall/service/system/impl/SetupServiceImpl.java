@@ -67,12 +67,22 @@ public class SetupServiceImpl implements SetupService {
                 .orderByDesc(SysSiteSetting::getId)
                 .last("LIMIT 1"));
         SetupStatusVO vo = new SetupStatusVO();
-        if (setting != null && Boolean.TRUE.equals(setting.getSetupCompleted())) {
+        boolean completed = setting != null && Boolean.TRUE.equals(setting.getSetupCompleted());
+        if (!completed && hasAdminUser()) {
+            completed = true;
+        }
+        if (completed) {
             vo.setSetupCompleted(true);
-            vo.setSiteName(setting.getSiteName());
-            vo.setStorageProvider(setting.getStorageProvider());
-            vo.setLocalPath(setting.getLocalPath());
-            vo.setLocalPublicEnabled(setting.getLocalPublicEnabled());
+            if (setting != null) {
+                vo.setSiteName(setting.getSiteName());
+                vo.setStorageProvider(setting.getStorageProvider());
+                vo.setLocalPath(setting.getLocalPath());
+                vo.setLocalPublicEnabled(setting.getLocalPublicEnabled());
+            } else {
+                vo.setStorageProvider(storageProperties.getPrimaryProvider().getCode());
+                vo.setLocalPath(storageProperties.getLocalPath());
+                vo.setLocalPublicEnabled(storageProperties.isLocalPublicEnabled());
+            }
         } else {
             vo.setSetupCompleted(false);
             vo.setStorageProvider(storageProperties.getPrimaryProvider().getCode());
@@ -86,6 +96,9 @@ public class SetupServiceImpl implements SetupService {
     @Transactional
     public void initialize(SetupInitDTO dto) {
         acquireSetupLock();
+        if (hasAdminUser()) {
+            throw new BusinessException("系统已存在管理员账号，禁止重复初始化");
+        }
         if (isSetupCompleted()) {
             throw new BusinessException("系统已完成初始化");
         }
@@ -196,6 +209,13 @@ public class SetupServiceImpl implements SetupService {
                 .orderByDesc(SysSiteSetting::getId)
                 .last("LIMIT 1"));
         return setting != null;
+    }
+
+    private boolean hasAdminUser() {
+        Long count = userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getUserType, 1)
+                .eq(User::getDeleted, 0));
+        return count != null && count > 0;
     }
 
     private String resolveStorageProvider(SetupInitDTO dto) {
