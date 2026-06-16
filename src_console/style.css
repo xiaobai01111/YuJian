@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base Font */
+:root {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Page Transition */
+.page-enter-active,
+.page-leave-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.page-enter-from,
+.page-leave-to {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+/* Glassmorphism Utility */
+.glass-effect {
+    @apply backdrop-blur-md bg-white/70 dark:bg-base-300/70 border-b border-base-content/10;
+}
+
+/* Scrollbar refinement */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    @apply bg-base-200;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-base-content/20 rounded-full hover:bg-base-content/40 transition-colors;
+}
+
+/* Global Theme Transition */
+/* Apply smooth transition to all elements for theme-related properties */
+:root,
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+    transition: none !important;
+}

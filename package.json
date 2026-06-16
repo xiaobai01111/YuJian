@@ -1,0 +1,34 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "check:no-any": "sh -c 'rg -n --pcre2 \"(:\\\\s*any\\\\b|<\\\\s*any\\\\s*>|\\\\bas\\\\s+any\\\\b|\\\\bArray<any>\\\\b|\\\\bPromise<any>\\\\b|\\\\bRecord<[^>]*,\\\\s*any\\\\s*>)\" src --glob \"*.{ts,tsx,vue}\" && { echo \"Explicit any is not allowed.\"; exit 1; } || true'",
+    "check:console-align": "node ./scripts/check-console-alignment.mjs",
+    "typecheck": "vue-tsc -b",
+    "build": "pnpm run check:no-any && pnpm run typecheck && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "dompurify": "^3.3.1",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.24",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.2.0",
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
+    "autoprefixer": "^10.4.23",
+    "daisyui": "4.12.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "3.4.17",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4",
+    "vue-tsc": "^3.1.4"
+  }
+}

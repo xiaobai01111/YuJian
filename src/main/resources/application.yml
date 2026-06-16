@@ -1,0 +1,169 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: Nova-Campus
+
+  # Database Configuration
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/campus_wall
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  # Flyway Configuration
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+    out-of-order: false
+    clean-disabled: true
+
+  # Jackson Configuration
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      base-path: /actuator
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health}
+      discovery:
+        enabled: false
+  endpoint:
+    health:
+      enabled: true
+      show-details: never
+      probes:
+        enabled: true
+  server:
+    add-application-context-header: false
+
+# MyBatis-Plus Configuration
+mybatis-plus:
+  mapper-locations: classpath:/mapper/**/*.xml
+  type-aliases-package: com.campus.wall.entity
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+# Sa-Token Configuration
+sa-token:
+  token-name: Authorization
+  timeout: ${SA_TOKEN_TIMEOUT:43200}
+  active-timeout: ${SA_TOKEN_ACTIVE_TIMEOUT:1800}
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+  is-log: false
+  is-read-header: true
+  is-read-cookie: false
+  token-prefix: Bearer
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+# Logging Configuration
+logging:
+  level:
+    com.campus.wall: info
+    org.springframework.web: info
+    org.mybatis: warn
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
+
+app:
+  storage:
+    primary-provider: ${STORAGE_PRIMARY_PROVIDER:LOCAL}
+    fallback-provider: ${STORAGE_FALLBACK_PROVIDER:LOCAL}
+    local-public-enabled: ${LOCAL_PUBLIC_ENABLED:false}
+    signing-secret: ${STORAGE_SIGNING_SECRET:}
+  async:
+    core-pool-size: ${ASYNC_CORE_POOL_SIZE:4}
+    max-pool-size: ${ASYNC_MAX_POOL_SIZE:8}
+    queue-capacity: ${ASYNC_QUEUE_CAPACITY:200}
+    thread-name-prefix: ${ASYNC_THREAD_NAME_PREFIX:async-}
+    rejection-policy: ${ASYNC_REJECTION_POLICY:caller-runs}
+  file:
+    orphan-clean-cron: ${FILE_ORPHAN_CLEAN_CRON:0 30 3 * * ?}
+    cleanup:
+      mark-orphan-hours: ${FILE_ORPHAN_MARK_HOURS:24}
+      retain-days: ${FILE_ORPHAN_RETAIN_DAYS:7}
+      delete-limit: ${FILE_ORPHAN_DELETE_LIMIT:200}
+  anonymous-cache:
+    ttl-ms: ${ANON_CACHE_TTL_MS:3600000}
+    cleanup-interval-ms: ${ANON_CACHE_CLEAN_INTERVAL_MS:600000}
+  notice:
+    sanitize-on-startup: ${NOTICE_SANITIZE_ON_STARTUP:false}
+  content-moderation:
+    image-audit-enabled: ${IMAGE_AUDIT_ENABLED:true}
+    image-audit-fail-closed: ${IMAGE_AUDIT_FAIL_CLOSED:true}
+    image-audit-api-url: ${IMAGE_AUDIT_API_URL:}
+    image-audit-api-token: ${IMAGE_AUDIT_API_TOKEN:}
+    image-audit-timeout-ms: ${IMAGE_AUDIT_TIMEOUT_MS:5000}
+    virus-scan-enabled: ${VIRUS_SCAN_ENABLED:true}
+    virus-scan-fail-closed: ${VIRUS_SCAN_FAIL_CLOSED:true}
+    clamav-host: ${CLAMAV_HOST:127.0.0.1}
+    clamav-port: ${CLAMAV_PORT:3310}
+    clamav-connect-timeout-ms: ${CLAMAV_CONNECT_TIMEOUT_MS:2000}
+    clamav-read-timeout-ms: ${CLAMAV_READ_TIMEOUT_MS:10000}
+  ip:
+    # 仅在后端部署于可信反向代理之后时开启（建议通过 Docker 环境变量注入）
+    trust-forwarded-headers: ${IP_TRUST_FORWARDED_HEADERS:false}
+    # 允许读取转发头的代理源地址（CIDR或单IP，逗号分隔）
+    trusted-proxies: ${IP_TRUSTED_PROXIES:}
+  security:
+    # 加密密钥（用于SMTP密码等敏感信息加密，生产环境必须配置）
+    crypto-key: ${CAMPUS_CRYPTO_KEY:}
+    super-admin-role-key: ${SUPER_ADMIN_ROLE_KEY:console}
+    api-public-permission-key: ${API_PUBLIC_PERMISSION_KEY:public}
+    api-login-permission-key: ${API_LOGIN_PERMISSION_KEY:login}
+    api-default-mode: ${API_DEFAULT_MODE:deny}
+    api-bootstrap-mode: ${API_BOOTSTRAP_MODE:deny}
+    fail-fast-secrets: ${SECURITY_FAIL_FAST_SECRETS:true}
+    fail-fast-permissions: ${SECURITY_FAIL_FAST_PERMISSIONS:true}
+    rate-limit-fail-closed: ${RATE_LIMIT_FAIL_CLOSED:true}
+    refresh-cookie-force-secure: ${REFRESH_COOKIE_FORCE_SECURE:false}
+    permission-cache-ttl-seconds: ${PERMISSION_CACHE_TTL_SECONDS:1800}
+    permission-cache-max-size: ${PERMISSION_CACHE_MAX_SIZE:20000}
+    actuator-allow-anonymous-health: ${ACTUATOR_ALLOW_ANONYMOUS_HEALTH:false}
+    actuator-require-super-admin: ${ACTUATOR_REQUIRE_SUPER_ADMIN:true}
+
+# CORS（生产环境建议配置为官网域名，例如 https://campus.example.com）
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
